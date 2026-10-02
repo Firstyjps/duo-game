@@ -312,24 +312,24 @@ func _draw_fx() -> void:
 
 
 ## ── AUTOPLAY (อัดคลิป) — บอทแบบ Souls-lite: รอ telegraph → หลบจังหวะท้าย → สวนตอนศัตรู recover ──
+## อ่านได้ทั้งศัตรู mockup และ Slime จริงของระบบ enemy (อ่านอย่างเดียว ไม่แตะ state ของเขา)
 func _bot_think() -> void:
 	bot_move = Vector2.ZERO
 	if state == State.DEAD or main == null:
 		return
-	var body: Vector2 = global_position + Vector2(0, BODY_Y)
 	var target: Node2D = null
 	var best: float = INF
 	for e in main.enemies:
-		if not is_instance_valid(e) or not e.is_targetable():
+		if not main.is_alive(e) or (e is not Slime and not e.is_targetable()):
 			continue
-		if e.is_threatening(body) and e.timer < 0.22 and stamina >= DODGE_COST:
+		if _threat(e) and stamina >= DODGE_COST:
 			if state == State.MOVE or (state == State.ATTACK and attack_phase == 2):
-				var side: Vector2 = (global_position - e.danger_center()).normalized().orthogonal()
+				var side: Vector2 = (global_position - _danger(e)).normalized().orthogonal()
 				bot_move = side if side.dot(Vector2(480, 300) - global_position) > 0.0 else -side
 				bot_dodge = true
 				return
 		var d: float = global_position.distance_to(e.global_position)
-		if e.is_punishable():
+		if _punishable(e):
 			d -= 200.0
 		if d < best:
 			best = d
@@ -338,11 +338,11 @@ func _bot_think() -> void:
 		return
 	var to: Vector2 = target.global_position - global_position
 	aim = (to + Vector2(0, -6)).normalized()
-	var reach: float = 24.0 + target.body_radius()
-	if target.is_punishable() or target.state == target.State.TELEGRAPH:
+	var reach: float = 24.0 + _radius(target)
+	if _punishable(target) or _telegraphing(target):
 		if to.length() > reach:
 			bot_move = to.normalized()
-		elif state == State.MOVE and stamina >= ATTACK_COST and target.is_punishable():
+		elif state == State.MOVE and stamina >= ATTACK_COST and _punishable(target):
 			bot_attack = true
 		return
 	if stamina < DODGE_COST + 5.0:
@@ -351,3 +351,31 @@ func _bot_think() -> void:
 		bot_move = to.normalized()
 	elif state == State.MOVE and stamina >= ATTACK_COST + DODGE_COST:
 		bot_attack = true
+
+
+func _threat(e: Node2D) -> bool:
+	if e is Slime:
+		var t: TelegraphMarker = e.telegraph
+		return e.state == Slime.State.WINDUP and t.progress > 0.6 \
+			and t.global_position.distance_to(global_position) < t.radius + 16.0
+	return e.is_threatening(global_position + Vector2(0, BODY_Y)) and e.timer < 0.22
+
+
+func _danger(e: Node2D) -> Vector2:
+	return e.telegraph.global_position if e is Slime else e.danger_center()
+
+
+func _punishable(e: Node2D) -> bool:
+	if e is Slime:
+		return e.state == Slime.State.RECOVER or e.state == Slime.State.HURT
+	return e.is_punishable()
+
+
+func _telegraphing(e: Node2D) -> bool:
+	if e is Slime:
+		return e.state == Slime.State.WINDUP
+	return e.state == e.State.TELEGRAPH
+
+
+func _radius(e: Node2D) -> float:
+	return 7.0 if e is Slime else e.body_radius()

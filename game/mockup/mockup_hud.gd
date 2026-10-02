@@ -29,7 +29,7 @@ func _ready() -> void:
 	boss_bar.reparent(boss_box)
 	boss_box.visible = false
 	gold_label = _label("GOLD 0", 12, Color(1.0, 0.85, 0.3))
-	hint = _label("WASD move  ·  mouse aim  ·  LMB / J slash  ·  Space dodge (i-frames)  ·  R restart", 9, Color(0.8, 0.85, 0.9, 0.8))
+	hint = _label("WASD move  ·  mouse aim  ·  LMB / J slash  ·  Space dodge (i-frames)  ·  R restart  ·  Tab arena", 9, Color(0.8, 0.85, 0.9, 0.8))
 	EventBus.boss_engaged.connect(_on_boss_engaged)
 	get_viewport().size_changed.connect(_layout)
 	_layout()
@@ -49,7 +49,7 @@ func bind_player(p: Node) -> void:
 	st_bar.value = p.stamina
 	p.stamina_empty.connect(_flash_stamina)
 	if p.autoplay:
-		hint.text = "AUTOPLAY DEMO  ·  mockup (art: Higgsfield)"
+		hint.text = "AUTOPLAY DEMO  ·  mockup (art: Higgsfield + Kling · slime: Few)"
 
 
 func set_gold(g: int) -> void:
