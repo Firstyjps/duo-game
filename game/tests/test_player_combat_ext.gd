@@ -502,3 +502,20 @@ func test_resolve_target_uses_parent_not_scene_owner() -> bool:
 	var ok: bool = Player._resolve_target_entity(hb) == enemy
 	room.free()
 	return ok
+
+
+## ผู้เล่นเปลี่ยนปุ่มแล้ว ensure_input_actions() ต้องไม่เติมปุ่ม default กลับ
+func test_ensure_input_actions_keeps_rebind() -> bool:
+	Player.ensure_input_actions()
+	var saved: Array[InputEvent] = InputMap.action_get_events(&"parry")
+	InputMap.action_erase_events(&"parry")
+	var k := InputEventKey.new()
+	k.physical_keycode = KEY_O
+	InputMap.action_add_event(&"parry", k)
+	Player.ensure_input_actions()
+	var events: Array[InputEvent] = InputMap.action_get_events(&"parry")
+	var ok: bool = events.size() == 1 and (events[0] as InputEventKey).physical_keycode == KEY_O
+	InputMap.action_erase_events(&"parry")
+	for e: InputEvent in saved:
+		InputMap.action_add_event(&"parry", e)
+	return ok

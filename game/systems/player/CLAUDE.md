@@ -15,6 +15,11 @@
 | `debug/player_sandbox.tscn` | sandbox สำหรับเปิดลองเดิน ฟัน ชาร์จ dodge parry และ lock-on กับหุ่นฝึก |
 | `debug/player_sandbox.gd` | ควบคุม UI HUD และรับปุ่ม T เพื่อสั่งหุ่น Dummy โจมตีทดสอบ parry |
 | `debug/dummy.gd` | หุ่นลองรับดาเมจและสั่งโจมตีปล่อย Hitbox เพื่อทดสอบ parry |
+| `iso/dir8.gd` | `Dir8` เลือก 1 ใน 8 ทิศจากเวกเตอร์บนจอ (+ แบบ sticky กันกระพริบตรงรอยต่อ) · ลำดับ = แถวใน atlas |
+| `iso/dir_sprite.gd` | `DirSprite` (AnimatedSprite2D) เล่น `"<ท่า>_<ทิศ>"` · เลี้ยวกลางท่าเล่นต่อเฟรมเดิม · ท่าที่ไม่มี → idle |
+| `art/kintsugi_hero/` | ตัวเอก isometric 64 px 8 ทิศ: `kintsugi_hero.png` (atlas ช่อง 96) + `_frames.tres` (SpriteFrames) + `.json` · ท่า idle/walk/run/dodge/hurt/death — **สร้างจาก tools/ ห้ามแก้มือ** |
+| `tools/fetch_pixellab_character.py` → `tools/build_dir_atlas.py` | pipeline PixelLab → atlas (วิธีใช้อยู่หัวไฟล์) · raw เก็บที่ `kintsugi/assets/sprites/hero_iso/` (นอก game/) · PixelLab character id `af4cec7c-aadf-4901-a9cd-136679db32ae` |
+| `debug/iso/iso_courtyard.tscn` | ลานวัด isometric ทดสอบเดิน 8 ทิศ (WASD · Shift วิ่ง · Space พุ่งหลบ · H โดนตี · K ตาย · R ฟื้น) · `-- --shot` ถ่ายภาพครบ 8 ทิศลง `user://` · tile ชั่วคราวจาก `make_tiles.py` |
 
 ## ส่ง / รับ ข้ามระบบ
 - emit: `EventBus.damage_dealt(target, info, dealt)` — เมื่อผู้เล่นโดนดาเมจและหัก HP แล้ว
@@ -39,6 +44,11 @@
 - ใช้ `is_instance_valid(lock_target)` แทนการเช็ค `!= null` ทุกที่ เนื่องจากใน GDScript 4 วัตถุที่ถูก `free()` ไปแล้วจะเทียบ `== null` เป็น true ทำให้ `_set_lock_target(null)` return ก่อนส่งสัญญาณหากไม่ตรวจ `is_instance_valid`
 - ต่อ `EventBus.enemy_died` ใน `_enter_tree()` และ disconnect ใน `_exit_tree()` (รวมทั้งใน `NOTIFICATION_PREDELETE`) เสมอ
 
+- isometric (#37): ช่อง atlas 96 px เท้าอยู่ที่ y≈80 → `DirSprite.offset.y = -32` · PixelLab ท่า v3 ขยาย canvas (เช่น 92) — pipeline วางกลางช่องให้เท้าตรงกัน
+- ทิศ north ของ kintsugi_hero ผมออกมาเป็นเบจ → `--fix-north-hair` remap เป็นลาเวนเดอร์ (ใช้ทุกครั้งที่ build)
+- ตัวละครนี้อิง sample Merakintsugi ที่ยังไม่เช็คสิทธิ์ → ใช้ทดสอบเท่านั้น ก่อนขายต้องออกแบบใหม่
+
 ## เทสต์
 - `game/tests/test_player_combat.gd` (เทสต์พื้นฐานเดิม)
 - `game/tests/test_player_combat_ext.gd` (Lock-on, Parry, Charge Attack)
+- `game/tests/test_player_dir8.gd` (Dir8 / DirSprite)

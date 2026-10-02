@@ -197,12 +197,13 @@ static func ensure_input_actions() -> void:
 	_register_action_if_missing(&"lock_on", [_key(KEY_TAB), _mouse(MOUSE_BUTTON_MIDDLE)])
 
 
+## ใส่ปุ่ม default เฉพาะตอนสร้าง action ใหม่ — action ที่มีอยู่แล้ว (ผู้เล่นเปลี่ยนปุ่มไว้) ห้ามเติม default กลับ
 static func _register_action_if_missing(action: StringName, events: Array[InputEvent]) -> void:
-	if not InputMap.has_action(action):
-		InputMap.add_action(action)
+	if InputMap.has_action(action):
+		return
+	InputMap.add_action(action)
 	for event: InputEvent in events:
-		if not InputMap.action_has_event(action, event):
-			InputMap.action_add_event(action, event)
+		InputMap.action_add_event(action, event)
 
 
 static func _key(keycode: Key) -> InputEventKey:
