@@ -10,7 +10,7 @@
 | ไฟล์ | หน้าที่ |
 |---|---|
 | `slime/slime.tscn` + `slime.gd` | สไลม์: IDLE → CHASE (เด้ง) → WINDUP (ย่อตัว + กระพริบแดง) → LEAP (Hitbox เปิด) → RECOVER · HURT · DEAD |
-| `slime/slime_sheet.png` | sprite 11 เฟรม 32×32 — สร้างจาก `slime/tools/gen_slime_sheet.gd` (placeholder art, แก้สีแล้วรันใหม่) |
+| `slime/slime_sheet.png` | sprite 17 เฟรม 32×32 (idle 0–7, กระพริบตา 8–9, windup 10–11, leap 12, land 13, death 14–16) — สร้างจาก `slime/tools/gen_slime_sheet.gd` (placeholder art, แก้สีแล้วรันใหม่) |
 | `common/telegraph_marker.gd` | `TelegraphMarker` วงเตือนบนพื้น — ยังไม่มีศัตรูตัวไหนใช้ (สไลม์เลิกใช้แล้ว) |
 | `debug/enemy_sandbox.tscn` | scene ลองศัตรู (F6) มีหุ่นแทนผู้เล่น: ลูกศรเดิน, Space ฟัน |
 

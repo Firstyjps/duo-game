@@ -88,3 +88,29 @@ func test_windup_before_leap() -> bool:
 	slime.free()
 	dummy.free()
 	return chasing and winding and leaping
+
+
+## เฟรมทุกท่าต้องอยู่ใน sprite sheet (กัน sheet กับ ANIMS ไม่ตรงกันหลัง regen)
+func test_anim_frames_within_sheet() -> bool:
+	var slime: Slime = _spawn()
+	var total: int = slime.sprite.hframes * slime.sprite.vframes
+	var ok: bool = slime.sprite.texture.get_width() == slime.sprite.hframes * 32
+	for anim: StringName in Slime.ANIMS:
+		for fr: int in Slime.ANIMS[anim]["frames"]:
+			ok = ok and fr >= 0 and fr < total
+	slime.free()
+	return ok
+
+
+func test_idle_loops_and_can_blink() -> bool:
+	var slime: Slime = _spawn()
+	slime.blink_chance = 1.0
+	slime._play(&"idle")
+	# เกิน 1 รอบหายใจ → รอบใหม่ต้องเป็นรอบกระพริบตา
+	slime._tick_anim(1.05)
+	var blinking: bool = slime._anim == &"idle_blink"
+	slime.blink_chance = 0.0
+	slime._tick_anim(1.0)
+	var normal: bool = slime._anim == &"idle"
+	slime.free()
+	return blinking and normal

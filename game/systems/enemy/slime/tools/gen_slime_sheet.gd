@@ -17,19 +17,27 @@ const C_EYE := Color("ffffff")
 const C_EYE_EDGE := Color("ffffff")
 const C_EYE_RING := Color("14306e")
 
-## ลำดับต้องตรงกับ Slime.FRAMES — w = ครึ่งความกว้าง, h = ความสูง (px), eye = ความสูงตา (0 = ไม่มีตา)
+## ลำดับต้องตรงกับ Slime.ANIMS — w = ครึ่งความกว้าง, h = ความสูง (px), eye = ความสูงตา (0 = ไม่มีตา, -1 = หลับตา)
 const FRAME_DEFS: Array[Dictionary] = [
-	{"w": 11.0, "h": 17.0, "eye": 4},  # 0 idle
-	{"w": 11.5, "h": 16.0, "eye": 4},  # 1 idle
-	{"w": 12.0, "h": 15.0, "eye": 3},  # 2 idle
-	{"w": 11.5, "h": 16.0, "eye": 4},  # 3 idle
-	{"w": 13.0, "h": 13.0, "eye": 3},  # 4 windup
-	{"w": 14.0, "h": 11.0, "eye": 2},  # 5 windup (ย่อสุด = ใกล้พุ่ง)
-	{"w": 9.0, "h": 21.0, "eye": 5},   # 6 leap
-	{"w": 13.5, "h": 12.5, "eye": 3},  # 7 land
-	{"w": 14.0, "h": 9.0, "eye": 2},   # 8 death
-	{"w": 15.0, "h": 6.0, "eye": 0},   # 9 death
-	{"w": 15.0, "h": 3.0, "eye": 0},   # 10 death (แอ่ง)
+	# 0–7 idle: หายใจ ยืดขึ้น → ย่อลง → กลับ (ลูปไม่สะดุด)
+	{"w": 11.5, "h": 16.0, "eye": 4},  # 0
+	{"w": 11.0, "h": 16.5, "eye": 4},  # 1
+	{"w": 10.5, "h": 17.5, "eye": 4},  # 2 ยืดสุด
+	{"w": 11.0, "h": 16.5, "eye": 4},  # 3
+	{"w": 11.5, "h": 16.0, "eye": 4},  # 4
+	{"w": 12.0, "h": 15.0, "eye": 3},  # 5
+	{"w": 12.5, "h": 14.5, "eye": 3},  # 6 ย่อสุด
+	{"w": 12.0, "h": 15.0, "eye": 3},  # 7
+	# 8–9 กระพริบตา (ทรงเดียวกับเฟรม 4–5)
+	{"w": 11.5, "h": 16.0, "eye": -1}, # 8
+	{"w": 12.0, "h": 15.0, "eye": -1}, # 9
+	{"w": 13.0, "h": 13.0, "eye": 3},  # 10 windup
+	{"w": 14.0, "h": 11.0, "eye": 2},  # 11 windup (ย่อสุด = ใกล้พุ่ง)
+	{"w": 9.0, "h": 21.0, "eye": 5},   # 12 leap
+	{"w": 13.5, "h": 12.5, "eye": 3},  # 13 land
+	{"w": 14.0, "h": 9.0, "eye": 2},   # 14 death
+	{"w": 15.0, "h": 6.0, "eye": 0},   # 15 death
+	{"w": 15.0, "h": 3.0, "eye": 0},   # 16 death (แอ่ง)
 ]
 const BASE_Y: float = 30.0
 
@@ -89,6 +97,14 @@ func _draw_frame(img: Image, ox: int, d: Dictionary) -> void:
 		var gap: int = 3 if w < 10.0 else 4
 		_eye(img, ox + int(cx) - gap - 1, ey, d["eye"])
 		_eye(img, ox + int(cx) + gap - 1, ey, d["eye"])
+	elif d["eye"] < 0:
+		# หลับตา = เส้นโค้งสั้น ๆ ตรงกลางตา
+		var ly: int = int(round(cy + h * 0.02)) + 1
+		for gx: int in [int(cx) - 4 - 1, int(cx) + 4 - 1]:
+			for xx: int in range(gx - 1, gx + 3):
+				img.set_pixel(ox + xx, ly, C_EYE_RING)
+			img.set_pixel(ox + gx - 1, ly - 1, C_EYE_RING)
+			img.set_pixel(ox + gx + 2, ly - 1, C_EYE_RING)
 
 
 ## แสงมาจากบนซ้าย · ล่างกลางมืดสุด (โพรงใสของเจลลี่)
