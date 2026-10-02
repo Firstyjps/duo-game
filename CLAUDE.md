@@ -5,9 +5,10 @@ repo นี้มีคน 2 คน แต่ละคนใช้ Claude Code �
 
 ## เกมนี้คืออะไร
 <!-- สรุปไม่เกิน 5 บรรทัด อัปเดตเมื่อ docs/DESIGN.md เปลี่ยนเรื่องใหญ่ -->
-- ชื่อ: _TBD_ · engine: Godot 4.7 · platform: _TBD_
-- pitch: _TBD_
-- core loop: _TBD_
+- ชื่อ: _TBD_ · engine: Godot 4.7 · platform: PC (Steam) เมาส์+คีย์บอร์ด/จอย · single-player
+- pitch: ARPG real-time pixel art top-down 3/4 — ต่อสู้ Souls-lite (อ่าน telegraph, dodge, stamina) + ล่าของ/สร้าง build แบบ Diablo ในดันเจี้ยนมืดที่มีแสงสวย
+- core loop: สู้ → เคลียร์ห้อง เก็บดรอป → ปรับ build → ดันเจี้ยนยากขึ้น/บอส
+- art: tile 32 px · ฐาน 960×540 integer scale + aspect expand · filter nearest — ห้ามเปลี่ยนโดยไม่ตกลง (`game/tests/test_core_display.gd` กันไว้)
 - รายละเอียด: `docs/DESIGN.md` · ข้อตัดสินใจ: `docs/DECISIONS.md` (อ่านก่อนเสนออะไรที่ขัดกับของเดิม)
 
 ## ใครดูแลอะไร + คำศัพท์ในเกม

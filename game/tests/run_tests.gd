@@ -8,7 +8,11 @@ func _init() -> void:
 	for file: String in DirAccess.get_files_at("res://tests"):
 		if not (file.begins_with("test_") and file.ends_with(".gd")):
 			continue
-		var suite: Object = load("res://tests/" + file).new()
+		var script: GDScript = load("res://tests/" + file)
+		if script == null or not script.can_instantiate():
+			failed.append("%s (โหลด script ไม่ได้)" % file)
+			continue
+		var suite: Object = script.new()
 		for m: Dictionary in suite.get_method_list():
 			var name: String = m["name"]
 			if not name.begins_with("test_"):
