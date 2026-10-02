@@ -11,9 +11,12 @@ const ANIMS: Dictionary = {
 	## idle รอบที่กระพริบตา (เฟรม 8–9 = ทรงเดียวกับ 4–5 แต่หลับตา)
 	&"idle_blink": {"frames": [0, 1, 2, 3, 8, 9, 6, 7], "fps": 8.0, "loop": true},
 	&"windup": {"frames": [10, 11], "fps": 5.0, "loop": false},
-	&"leap": {"frames": [12], "fps": 1.0, "loop": false},
+	## ลอยใช้ตัวกลม (เฟรม 0) แล้วยืดเป็นวงรีด้วยโค้ด (leap_pose) · เฟรม 12 วาดไว้ ยังไม่ใช้
+	&"leap": {"frames": [0], "fps": 1.0, "loop": false},
 	&"land": {"frames": [13, 0], "fps": 8.0, "loop": false},
 	&"death": {"frames": [14, 15, 16], "fps": 8.0, "loop": false},
+	## โดนตี: ตาหยี 0.2 วิ แล้วลืมตา · ตัวสั่นแบบเยลลี่ด้วยโค้ด (hurt_pose)
+	&"hurt": {"frames": [17, 17, 0], "fps": 10.0, "loop": false},
 }
 const FLASH_HURT := Color(3.0, 3.0, 3.0)
 const FLASH_WINDUP := Color(1.8, 0.75, 0.7)
@@ -34,11 +37,42 @@ const FLASH_WINDUP := Color(1.8, 0.75, 0.7)
 ## เวลา telegraph ก่อนพุ่ง — ยาวพอให้ผู้เล่น dodge ทัน
 @export var windup_time: float = 0.6
 @export var leap_distance: float = 80.0
-@export var leap_time: float = 0.35
+@export var leap_time: float = 0.28
 @export var leap_height: float = 14.0
-@export var recover_time: float = 0.8
+## พักหลังเด้งต่อจบ (ช่วงเด้งต่อ ~0.2 วิ ผู้เล่นก็สวนได้อยู่แล้ว)
+@export var recover_time: float = 0.6
 @export var hurt_time: float = 0.25
 @export var corpse_time: float = 1.2
+@export_group("Leap Shape")
+## ยืดเป็นวงรีชี้ไปทางที่พุ่งตลอดทาง (0.35 = ยาวขึ้น 35% บางลงให้พื้นที่เท่าเดิม) · ไม่หมุนตัว ตาตั้งตรง
+@export var stretch_amount: float = 0.35
+## ยืดเพิ่มตอนออกตัว/ใกล้ตก (เร็วสุด)
+@export var stretch_speed_bonus: float = 0.15
+## แบนตอนตกพื้น — เด้งต่อแบนน้อยลงตามความสูง
+@export var squash_amount: float = 0.5
+@export var squash_time: float = 0.05
+## เด้งต่อ 1 ครั้งหลังตกพื้น (Hitbox ปิดแล้ว)
+@export var rebound_height: float = 5.0
+@export var rebound_time: float = 0.12
+@export var rebound_distance: float = 8.0
+@export_group("Hop & Hurt Shape")
+## เดิน: ยืดตอนลอย · แบนตอนลง · ย่อเตรียมก่อนเด้ง (เบากว่าท่าโจมตี)
+@export var hop_stretch: float = 0.2
+@export var hop_squash: float = 0.25
+## โดนตี: บี้ตามทิศที่โดน แล้วสั่นกลับแบบเยลลี่ (แรง, ความถี่ rad/s, หายเร็วแค่ไหน)
+@export var hurt_wobble: float = 0.35
+@export var hurt_wobble_freq: float = 30.0
+@export var hurt_wobble_decay: float = 9.0
+@export_group("VFX")
+@export var vfx_enabled: bool = true
+## ระยะห่างระหว่างเงาตามตัว (after-image) ตอนพุ่ง
+@export var afterimage_interval: float = 0.05
+@export var afterimage_life: float = 0.22
+@export var afterimage_color: Color = Color(0.45, 0.8, 1.0, 0.55)
+## รัศมีคลื่นกระแทกตอนตกพื้น (ประมาณขนาด Hitbox)
+@export var impact_ring_radius: float = 18.0
+@export var impact_droplets: int = 10
+@export var takeoff_dust: int = 6
 
 var state: State = State.IDLE
 var target: Node2D = null
@@ -50,6 +84,11 @@ var _anim: StringName = &""
 var _anim_t: float = 0.0
 var _flash_t: float = 0.0
 var _died_emitted: bool = false
+var _afterimage_t: float = 0.0
+## ความสูงจากพื้นตอนนี้ (เงาใช้)
+var _lift: float = 0.0
+var _landings: int = 0
+var _hurt_dir: Vector2 = Vector2.RIGHT
 
 var sprite: Sprite2D
 var health: Health
@@ -120,13 +159,14 @@ func tick(delta: float) -> void:
 			if _state_t >= windup_time:
 				_enter(State.LEAP)
 		State.LEAP:
-			_tick_leap()
+			_tick_leap(delta)
 		State.RECOVER:
 			velocity = Vector2.ZERO
 			if _state_t >= recover_time:
 				_enter(State.CHASE if _has_target() else State.IDLE)
 		State.HURT:
 			velocity = velocity.move_toward(Vector2.ZERO, knockback_friction * delta)
+			_apply_pose(hurt_pose(_state_t, _hurt_dir))
 			if _state_t >= hurt_time:
 				_enter(State.CHASE if _has_target() else State.IDLE)
 		State.DEAD:
@@ -143,7 +183,7 @@ func _process(delta: float) -> void:
 
 ## เงาบนพื้น — เล็กลงตอนตัวลอย
 func _draw() -> void:
-	var lift: float = clampf(-sprite.position.y / maxf(leap_height, 1.0), 0.0, 1.0)
+	var lift: float = clampf(_lift / maxf(leap_height, 1.0), 0.0, 1.0)
 	var w: float = lerpf(11.0, 7.0, lift)
 	draw_set_transform(Vector2(0, -1), 0.0, Vector2(1.0, 0.4))
 	draw_circle(Vector2.ZERO, w, Color(0, 0, 0, 0.35 - 0.15 * lift))
@@ -156,20 +196,117 @@ func _tick_chase() -> void:
 	var to_target: Vector2 = target.global_position - global_position
 	var phase: float = fmod(_state_t, hop_interval) / hop_interval
 	var airborne: bool = phase < 0.5
-	sprite.position.y = -sin(phase * 2.0 * PI) * hop_height if airborne else 0.0
+	var pose: Dictionary = hop_pose(phase, to_target.normalized())
+	_lift = pose["lift"]
+	_apply_pose(pose["basis"])
 	if not airborne and to_target.length() <= attack_range:
 		_enter(State.WINDUP)
 		return
 	velocity = to_target.normalized() * hop_speed if airborne else Vector2.ZERO
 
 
-func _tick_leap() -> void:
-	var k: float = clampf(_state_t / leap_time, 0.0, 1.0)
-	sprite.position.y = -sin(k * PI) * leap_height
-	velocity = (_leap_to - _leap_from) / leap_time
-	if k >= 1.0:
+## ยืดตามแกน u (unit) ให้พื้นที่เท่าเดิม — matrix สมมาตร ไม่มีการหมุน ตาจึงไม่เอียง
+## แบนลงกว้างออก (ยึดเท้า) ให้พื้นที่เท่าเดิม
+static func squash_basis(amount: float) -> Transform2D:
+	return Transform2D(Vector2(1.0 + amount, 0), Vector2(0, 1.0 / (1.0 + amount)), Vector2.ZERO)
+
+
+## เดิน 1 รอบเด้ง (phase 0–1): 0–0.5 ลอย (ยืดตามทิศ) · 0.5–0.6 ลงพื้นแบน · 0.85–1 ย่อเตรียมเด้ง
+func hop_pose(phase: float, dir: Vector2) -> Dictionary:
+	var pose: Dictionary = {"lift": 0.0, "basis": Transform2D.IDENTITY}
+	if phase < 0.5:
+		var k: float = phase / 0.5
+		pose["lift"] = sin(k * PI) * hop_height
+		var v: Vector2 = dir * hop_speed + Vector2(0, -hop_height * PI * cos(k * PI) / (hop_interval * 0.5))
+		if v.length() > 0.01:
+			pose["basis"] = stretch_basis(v.normalized(), hop_stretch * (0.5 + 0.5 * absf(cos(k * PI))))
+	elif phase < 0.6:
+		pose["basis"] = squash_basis(hop_squash * (1.0 - (phase - 0.5) / 0.1))
+	elif phase > 0.85:
+		pose["basis"] = squash_basis(hop_squash * 0.8 * (phase - 0.85) / 0.15)
+	return pose
+
+
+## โดนตี t วินาที: บี้ตามทิศที่โดน (u) แล้วสั่นกลับไปมาจนนิ่ง
+func hurt_pose(t: float, u: Vector2) -> Transform2D:
+	var a: float = hurt_wobble * exp(-hurt_wobble_decay * t) * cos(hurt_wobble_freq * t)
+	return stretch_basis(u, -a)
+
+
+static func stretch_basis(u: Vector2, amount: float) -> Transform2D:
+	var along: float = 1.0 + amount
+	var across: float = 1.0 / along
+	var x_axis := Vector2(across + (along - across) * u.x * u.x, (along - across) * u.x * u.y)
+	var y_axis := Vector2((along - across) * u.x * u.y, across + (along - across) * u.y * u.y)
+	return Transform2D(x_axis, y_axis, Vector2.ZERO)
+
+
+## ท่าพุ่ง ณ เวลา t: โค้งหลัก (วงรีชี้ไปข้างหน้า) → แบน → เด้งต่อ 1 ครั้ง → แบน → จบ
+## คืน lift, travel (ระยะตามทิศพุ่ง), basis (Transform2D ยืด/แบน), landings (แตะพื้นกี่ครั้ง), done
+func leap_pose(t: float, distance: float, dir: Vector2) -> Dictionary:
+	var arcs: Array[Vector3] = [Vector3(leap_time, leap_height, distance),
+		Vector3(rebound_time, rebound_height, rebound_distance)]
+	var pose: Dictionary = {"lift": 0.0, "travel": 0.0, "basis": Transform2D.IDENTITY, "landings": 0, "done": false}
+	var tt: float = t
+	for i: int in arcs.size():
+		var dur: float = arcs[i].x
+		var h: float = arcs[i].y
+		var d: float = arcs[i].z
+		var power: float = h / maxf(leap_height, 1.0)
+		if tt < dur:
+			var k: float = tt / dur
+			pose["lift"] = sin(k * PI) * h
+			pose["travel"] += d * k
+			# ทิศที่ลอยบนจอ = ไปข้างหน้า + ขึ้น/ลง → ยอดโค้งชี้ไปข้างหน้าตรงๆ
+			var v: Vector2 = dir * (d / dur) + Vector2(0, -h * PI * cos(k * PI) / dur)
+			if v.length() > 0.01:
+				var st: float = (stretch_amount + stretch_speed_bonus * absf(cos(k * PI))) * power
+				pose["basis"] = stretch_basis(v.normalized(), st)
+			return pose
+		tt -= dur
+		pose["travel"] += d
+		pose["landings"] = i + 1
+		if tt < squash_time:
+			pose["basis"] = squash_basis(squash_amount * power * (1.0 - tt / squash_time))
+			return pose
+		tt -= squash_time
+	pose["done"] = true
+	return pose
+
+
+func _tick_leap(delta: float) -> void:
+	var offset: Vector2 = _leap_to - _leap_from
+	var dir: Vector2 = offset.normalized() if offset.length() > 0.01 else Vector2.ZERO
+	var pose: Dictionary = leap_pose(_state_t, offset.length(), dir)
+	_lift = pose["lift"]
+	_apply_pose(pose["basis"])
+	var desired: Vector2 = _leap_from + dir * float(pose["travel"])
+	velocity = (desired - global_position) / delta if delta > 0.0 else Vector2.ZERO
+	var landings: int = pose["landings"]
+	if landings > _landings:
+		_landings = landings
+		if landings == 1:
+			# ตกพื้นครั้งแรก = จังหวะโจมตี · เด้งต่อไม่ทำดาเมจ
+			hitbox.deactivate()
+			if _vfx_ok():
+				SlimeVfx.spawn_impact(get_parent(), global_position, impact_ring_radius, impact_droplets)
+		elif _vfx_ok():
+			SlimeVfx.spawn_dust(get_parent(), global_position, 2)
+	if _landings == 0:
+		_afterimage_t += delta
+		if _afterimage_t >= afterimage_interval:
+			_afterimage_t = 0.0
+			_spawn_afterimage()
+	if pose["done"]:
 		velocity = Vector2.ZERO
 		_enter(State.RECOVER)
+
+
+## ใส่รูปทรง — ลอย: ยืดรอบกลางตัว · อยู่พื้น: ยึดเท้า (แบนแล้วไม่จมดิน)
+func _apply_pose(basis: Transform2D) -> void:
+	var pivot: Vector2 = Vector2(0, -8) if _lift > 0.0 else Vector2.ZERO
+	basis.origin = Vector2(0, -_lift) + pivot - basis.basis_xform(pivot)
+	sprite.transform = basis
 
 
 func _enter(next: State) -> void:
@@ -182,7 +319,8 @@ func _enter(next: State) -> void:
 		sprite.self_modulate = Color.WHITE
 	state = next
 	_state_t = 0.0
-	sprite.position.y = 0.0
+	_lift = 0.0
+	_apply_pose(Transform2D.IDENTITY)
 	match next:
 		State.IDLE, State.CHASE:
 			_play(&"idle")
@@ -194,10 +332,14 @@ func _enter(next: State) -> void:
 			_leap_from = global_position
 			hitbox.activate()
 			_play(&"leap")
+			_afterimage_t = 0.0
+			_landings = 0
+			if _vfx_ok():
+				SlimeVfx.spawn_dust(get_parent(), global_position, takeoff_dust)
 		State.RECOVER:
-			_play(&"land")
+			_play(&"idle")
 		State.HURT:
-			_play(&"land")
+			_play(&"hurt")
 		State.DEAD:
 			_play(&"death")
 
@@ -209,6 +351,8 @@ func _on_hurt(info: DamageInfo) -> void:
 	EventBus.damage_dealt.emit(self, info, dealt)
 	_flash_t = 0.08
 	velocity = info.knockback
+	if info.knockback.length() > 0.01:
+		_hurt_dir = info.knockback.normalized()
 	# ตอนพุ่งอยู่ไม่ถูกขัดท่า (super armor) · ท่าอื่นถูกขัด
 	if not health.is_dead and state != State.LEAP:
 		_enter(State.HURT)
@@ -258,6 +402,28 @@ func _tick_anim(delta: float) -> void:
 	var i: int = int(_anim_t * a["fps"])
 	i = i % frames.size() if a["loop"] else mini(i, frames.size() - 1)
 	sprite.frame = frames[i]
+
+
+func _vfx_ok() -> bool:
+	return vfx_enabled and is_inside_tree() and get_parent() != null
+
+
+## เงาตามตัวตอนพุ่ง — สำเนาเฟรมปัจจุบัน ค้างไว้ที่เดิมแล้วจางหาย
+func _spawn_afterimage() -> void:
+	if not _vfx_ok():
+		return
+	var ghost := Sprite2D.new()
+	ghost.texture = sprite.texture
+	ghost.hframes = sprite.hframes
+	ghost.frame = sprite.frame
+	ghost.offset = sprite.offset
+	ghost.modulate = afterimage_color
+	get_parent().add_child(ghost)
+	# ทรงเดียวกับตัวตอนนั้น · y น้อยกว่าตัว (ลอยอยู่) → y-sort วาดไว้หลังสไลม์
+	ghost.global_transform = global_transform * sprite.transform
+	var tw: Tween = ghost.create_tween()
+	tw.tween_property(ghost, "modulate:a", 0.0, afterimage_life)
+	tw.tween_callback(ghost.queue_free)
 
 
 func _tick_flash(delta: float) -> void:

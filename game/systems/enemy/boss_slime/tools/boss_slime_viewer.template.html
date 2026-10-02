@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Boss Slime Viewer</title>
+<style>
+:root{--bg:#14161f;--panel:#1d2030;--line:#2c3048;--fg:#e6e8f0;--mut:#8a90a8;--acc:#43b8f0}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,"Segoe UI",sans-serif;padding:16px}
+h1{font-size:16px;margin:0 0 12px}
+.bossbar{max-width:460px;margin:4px 0 6px;text-align:center}
+.bname{font:700 15px/1.2 Georgia,"Times New Roman",serif;letter-spacing:.18em;color:#e8f6ff;text-shadow:0 0 8px #3fb4fa}
+.bname span{font:12px system-ui,sans-serif;letter-spacing:0;color:var(--mut);text-shadow:none}
+.hp{height:10px;margin-top:6px;border:1px solid #7a5a2a;background:#1a0f14;border-radius:2px;box-shadow:0 0 0 1px #000 inset}
+.hp i{display:block;height:100%;width:78%;background:linear-gradient(#ff5a6e,#b0204f);box-shadow:0 0 6px #ff3b6b}
+.grid{display:grid;grid-template-columns:1fr;gap:10px;max-width:460px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;min-width:0}
+.card h2{font-size:13px;margin:0 0 6px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px}
+.card h2 span{color:var(--mut);font-weight:normal}
+canvas{image-rendering:pixelated;display:block;width:100%;height:auto;border-radius:4px}
+.strip canvas{width:64px;height:64px}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0;align-items:center}
+button{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;font:inherit}
+label{color:var(--mut);font-size:13px;display:flex;gap:6px;align-items:center}
+.strip{display:flex;flex-wrap:wrap;gap:4px}
+.strip canvas{background:var(--panel);border:1px solid var(--line);border-radius:4px}
+.strip canvas.cur{border-color:var(--acc)}
+.mut{color:var(--mut);font-size:13px;margin:12px 0 6px}
+</style></head><body>
+<h1>บอสสไลม์ — sprite + VFX viewer <span style="color:var(--mut);font-weight:normal;font-size:13px">(เฟรม 128×128 · ร่าง 8: กลับมาเป็นสไลม์ — สายเมือกในปาก · คริสตัลจมในตัว · ดาบปักคา · ตาแดงเรือง)</span></h1>
+<div class="bossbar"><div class="bname">ABYSSAL MAW <span>· ปากเหวเมือก (ชื่อชั่วคราว)</span></div><div class="hp"><i></i></div></div>
+<div class="row">
+  <button id="play">⏸ หยุด</button>
+  <button id="slow">🐢 ช้า ×0.25: ปิด</button>
+  <label><input type="checkbox" id="vfx" checked> VFX</label>
+</div>
+<div class="grid">
+  <div class="card"><h2>1 · Idle <span id="i_idle"></span></h2><canvas id="c_idle"></canvas></div>
+  <div class="card"><h2>2 · เดิน (เด้งหนักๆ) <span id="i_walk"></span></h2><canvas id="c_walk"></canvas></div>
+  <div class="card"><h2>3 · ทุบ (ยืดเสา → ทุบแผ่) <span id="i_slam"></span></h2><canvas id="c_slam"></canvas></div>
+  <div class="card"><h2>4 · กระโดดทับ <span id="i_attack"></span></h2><canvas id="c_attack"></canvas></div>
+  <div class="card"><h2>5 · โดนตี <span id="i_hurt"></span></h2><canvas id="c_hurt"></canvas></div>
+  <div class="card"><h2>6 · ตาย <span id="i_death"></span></h2><canvas id="c_death"></canvas></div>
+</div>
+<div class="mut">เฟรมทั้งหมดใน sheet (กรอบฟ้า = เฟรมที่ช่องโจมตีใช้อยู่)</div>
+<div class="strip" id="strip"></div>
+<script>
+// ร่างแรกของบอส — ยังไม่มี boss_slime.gd ค่าพวกนี้คือค่าที่เสนอ (ใช้สูตรเดียวกับ slime.gd)
+const FS=128,FEET=120,PIV=40,SHADOW=58;
+const ANIMS={
+ idle:{frames:[0,1,2,3,4,5,6,7],fps:6,loop:true},
+ idle_blink:{frames:[0,1,2,3,8,9,6,7],fps:6,loop:true},
+ windup:{frames:[10,11],fps:3,loop:false},
+ leap:{frames:[0],fps:1,loop:false},
+ death:{frames:[17,18,19],fps:4,loop:false},
+ hurt:{frames:[16,16,0],fps:10,loop:false},
+};
+const P={blink_chance:.3,windup_time:.9,leap_time:.5,leap_height:34,leap_distance:110,recover_time:.9,corpse_time:1.8,
+ stretch_amount:.22,stretch_speed_bonus:.12,squash_amount:.45,squash_time:.09,rebound_height:6,rebound_time:.16,rebound_distance:6,
+ hop_speed:40,hop_interval:1.0,hop_height:7,hop_stretch:.15,hop_squash:.22,hurt_time:.3,knockback:60,knockback_friction:600,hurt_wobble:.22,hurt_wobble_freq:30,hurt_wobble_decay:9,
+ afterimage_interval:.05,afterimage_life:.22,afterimage_color:[110,220,255,.5],
+ impact_ring_radius:55,impact_droplets:20,takeoff_dust:10,ring_time:.38,gravity:260};
+const C_SPLASH=['#2fa2f2','#4cc4ff','#b8f6ff'],C_RING=[234,250,255],C_RING2=[67,184,240],C_DUST='#cfc6b4';
+const img=new Image();img.src="data:image/png;base64,__B64__";
+const tmp=document.createElement('canvas');tmp.width=tmp.height=FS;const tx=tmp.getContext('2d');
+let playing=true,slow=false,zoom=4;
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const vfxOn=()=>document.getElementById('vfx').checked;
+function frameOf(a,tt){const A=ANIMS[a];let i=Math.floor(tt*A.fps);i=A.loop?i%A.frames.length:Math.min(i,A.frames.length-1);return A.frames[i]}
+function spriteImg(f,tint){tx.clearRect(0,0,FS,FS);tx.drawImage(img,f*FS,0,FS,FS,0,0,FS,FS);
+ if(tint){tx.globalCompositeOperation='source-atop';tx.fillStyle=tint;tx.fillRect(0,0,FS,FS);tx.globalCompositeOperation='source-over'}return tmp}
+
+// ── ช่องแสดงผล 1 ช่อง: พื้น + เงา + VFX + สไลม์ ──
+class Stage{
+ constructor(id,w,h){this.c=document.getElementById('c_'+id);this.x=this.c.getContext('2d');this.w=w;this.h=h;this.g=h-12;
+  this.c.width=w;this.c.height=h;this.info=document.getElementById('i_'+id);this.fx=[];this.ghosts=[]}
+ resize(){}
+ spawnImpact(at){const e={x:at,ring:P.ring_time,rt:0,ps:[]},n=P.impact_droplets;
+  for(let i=0;i<n;i++){const a=Math.PI*2*(i+Math.random()*.6)/n,dx=Math.cos(a),dy=Math.sin(a),r=rnd(3,6),v=rnd(40,85);
+   e.ps.push({x:dx*r,y:dy*r,z:0,vx:dx*v,vy:dy*v,vz:rnd(50,90),life:rnd(.7,1),s:1+(Math.random()*2|0),c:C_SPLASH[Math.random()*3|0]})}
+  e.ps.forEach(p=>p.max=p.life);this.fx.push(e)}
+ spawnDust(at){const e={x:at,ring:0,rt:0,ps:[]};
+  for(let i=0;i<P.takeoff_dust;i++){const s=i%2?1:-1;e.ps.push({x:s*rnd(3,7),y:0,z:0,vx:s*rnd(15,35),vy:rnd(-4,4),vz:rnd(8,20),life:rnd(.3,.45),s:2,c:C_DUST})}
+  e.ps.forEach(p=>p.max=p.life);this.fx.push(e)}
+ tickFx(dt){this.shake=Math.max(0,(this.shake||0)-dt);for(const e of this.fx){e.rt+=dt;for(const p of e.ps){p.life-=dt;
+   if(p.z>0||p.vz>0){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vz-=P.gravity*dt;p.z=Math.max(0,p.z+p.vz*dt);if(p.z===0)p.vz=0}
+   else{p.vx*=.85;p.vy*=.85;p.x+=p.vx*dt;p.y+=p.vy*dt}}
+   e.ps=e.ps.filter(p=>p.life>0)}
+  this.fx=this.fx.filter(e=>e.ps.length||e.rt<e.ring);
+  for(const g of this.ghosts)g.a-=dt/P.afterimage_life;this.ghosts=this.ghosts.filter(g=>g.a>0)}
+ draw(s){const x=this.x,G=this.g;x.clearRect(0,0,this.w,this.h);
+  // จอสั่นตอนทุบ (หนักแค่ไหนตามเวลาที่เหลือ)
+  const sk=this.shake>0?Math.ceil(this.shake*8):0;this.c.style.transform=sk?"translate("+((Math.random()*2-1)*sk)+"px,"+((Math.random()*2-1)*sk)+"px)":"";
+  // พื้นถ้ำมืด + แสงฟ้าจากตัวบอสตกกระทบพื้น (บอสเป็นแหล่งแสงของฉาก)
+  for(let yy=0;yy<this.h;yy+=16)for(let xx=0;xx<this.w;xx+=16){x.fillStyle=((xx+yy)/16)%2?'#10172a':'#0d1324';x.fillRect(xx,yy,16,16)}
+  if(s.alpha>0){const gl=x.createRadialGradient(Math.round(s.x),G-6,4,Math.round(s.x),G-6,SHADOW*2.6);
+   gl.addColorStop(0,'rgba(80,200,255,'+(.32*s.alpha)+')');gl.addColorStop(.5,'rgba(60,140,255,'+(.12*s.alpha)+')');gl.addColorStop(1,'rgba(40,90,200,0)');
+   x.save();x.translate(0,G-6);x.scale(1,.45);x.fillStyle=gl;x.fillRect(0,-(G-6)/.45,this.w,this.h/.45*2);x.restore()}
+  const sx=Math.round(s.x),lk=Math.min(s.lift/P.leap_height,1),sw=SHADOW*(1-.36*lk);
+  x.fillStyle='rgba(0,0,0,'+((.35-.15*lk)*s.alpha)+')';x.beginPath();x.ellipse(sx,G-1,sw,sw*.4,0,0,Math.PI*2);x.fill();
+  for(const e of this.fx){const ox=Math.round(e.x),oy=G-1;
+   if(e.rt<e.ring){const k=e.rt/e.ring,r=4+(P.impact_ring_radius-4)*(1-Math.pow(1-k,3));
+    const col=C_RING.map((v,i)=>Math.round(v+(C_RING2[i]-v)*k));x.fillStyle='rgba('+col.join(',')+','+(1-k)+')';
+    const steps=Math.max(12,r*3|0),seen=new Set();
+    for(let i=0;i<steps;i++){const a=Math.PI*2*i/steps,px=Math.round(Math.cos(a)*r),py=Math.round(Math.sin(a)*r*.45),key=px+','+py;
+     if(seen.has(key))continue;seen.add(key);x.fillRect(ox+px,oy+py,1,1)}}
+   for(const p of e.ps){x.globalAlpha=Math.min(1,Math.max(0,p.life/p.max*1.5));x.fillStyle=p.c;x.fillRect(ox+Math.round(p.x),oy+Math.round(p.y-p.z),p.s,p.s)}
+   x.globalAlpha=1}
+  const ac=P.afterimage_color;
+  for(const g of this.ghosts){x.globalAlpha=ac[3]*g.a;this.sprite(g,'rgba('+ac[0]+','+ac[1]+','+ac[2]+',.6)')}
+  x.globalAlpha=s.alpha;this.sprite(s,s.tint);x.globalAlpha=1}
+ // ยืด/แบน/เอียงแบบ _apply_pose: ลอย = หมุนรอบกลางตัว · พื้น = ยึดเท้า
+ sprite(s,tint){const x=this.x,air=s.lift>0,pv=air?PIV:0;x.save();
+  x.translate(Math.round(s.x),Math.round(this.g-s.lift-pv));const b=s.basis||[1,0,0,1];x.transform(b[0],b[1],b[2],b[3],0,0);
+  x.drawImage(spriteImg(s.f,tint),-FS/2,-FEET+pv);x.restore()}
+}
+
+// ── 1 · Idle: หายใจวน + สุ่มกระพริบตาทุกรอบ (blink_chance) ──
+const idle={st:new Stage('idle',360,180),anim:'idle',t:0,
+ tick(dt){this.t+=dt;const len=8/8;if(this.t>=len){this.t%=len;this.anim=Math.random()<P.blink_chance?'idle_blink':'idle'}
+  const f=frameOf(this.anim,this.t);this.st.tickFx(dt);this.st.draw({x:180,lift:0,f,tint:null,alpha:1});
+  this.st.info.textContent=this.anim+' · เฟรม '+f}};
+
+// ── leap_pose / stretch_basis — พอร์ตตรงจาก slime.gd · basis = [x.x, x.y, y.x, y.y] ──
+function stretchBasis(ux,uy,amt){const al=1+amt,ac=1/al,k=al-ac;return [ac+k*ux*ux,k*ux*uy,k*ux*uy,ac+k*uy*uy]}
+function leapPose(t,distance,dir){
+ const arcs=[[P.leap_time,P.leap_height,distance],[P.rebound_time,P.rebound_height,P.rebound_distance]];
+ const pose={lift:0,travel:0,basis:[1,0,0,1],landings:0,done:false};let tt=t;
+ for(let i=0;i<arcs.length;i++){const [dur,h,d]=arcs[i],power=h/P.leap_height;
+  if(tt<dur){const k=tt/dur,c=Math.cos(k*Math.PI);pose.lift=Math.sin(k*Math.PI)*h;pose.travel+=d*k;
+   const vx=dir*d/dur,vy=-h*Math.PI*c/dur,len=Math.hypot(vx,vy);
+   if(len>.01)pose.basis=stretchBasis(vx/len,vy/len,(P.stretch_amount+P.stretch_speed_bonus*Math.abs(c))*power);return pose}
+  tt-=dur;pose.travel+=d;pose.landings=i+1;
+  if(tt<P.squash_time){const sq=P.squash_amount*power*(1-tt/P.squash_time);pose.basis=[1+sq,0,0,1/(1+sq)];return pose}
+  tt-=P.squash_time}
+ pose.done=true;return pose}
+
+// ── 2 · โจมตี: windup (กระพริบแดง) → พุ่งเป็นวงรีชี้ไปข้างหน้า (ฝุ่น + เงาตามตัว) → ตกแบน (คลื่นกระแทก) → เด้งต่อ 1 ครั้ง → พัก ──
+const atk={st:new Stage("attack",360,180),state:"idle",t:0,x:90,dir:1,from:0,lift:0,gt:0,f:0,anim:'idle',basis:[1,0,0,1],landings:0,
+ enter(s){this.state=s;this.t=0;this.lift=0;this.basis=[1,0,0,1];
+  if(s==='idle'||s==='recover')this.anim='idle';
+  if(s==='windup')this.anim='windup';
+  if(s==='leap'){this.anim='leap';this.from=this.x;this.gt=0;this.landings=0;if(vfxOn())this.st.spawnDust(this.x)}},
+ tick(dt){this.t+=dt;const s=this.state;
+  if(s==='idle'&&this.t>=.4)this.enter('windup');
+  else if(s==='windup'&&this.t>=P.windup_time)this.enter('leap');
+  else if(s==='leap'){const p=leapPose(this.t,P.leap_distance,this.dir);
+   this.x=this.from+this.dir*p.travel;this.lift=p.lift;this.basis=p.basis;
+   if(p.landings>this.landings){this.landings=p.landings;
+    if(vfxOn()){if(p.landings===1){this.st.spawnImpact(this.x);this.st.shake=.35}else{const n=P.takeoff_dust;P.takeoff_dust=2;this.st.spawnDust(this.x);P.takeoff_dust=n}}}
+   if(this.landings===0){this.gt+=dt;if(this.gt>=P.afterimage_interval&&vfxOn()){this.gt=0;
+    this.st.ghosts.push({x:this.x,lift:this.lift,f:0,a:1,basis:this.basis})}}
+   if(p.done){this.dir=-this.dir;this.enter('recover')}}
+  else if(s==='recover'&&this.t>=P.recover_time)this.enter('idle');
+  this.f=frameOf(this.anim,this.t);let tint=null;
+  if(this.state==='windup'){const k=this.t/P.windup_time,p=.5+.5*Math.sin(this.t*(10+20*k));tint='rgba(255,60,50,'+(.45*p)+')'}
+  this.st.tickFx(dt);this.st.draw({x:this.x,lift:this.lift,f:this.f,tint,alpha:1,basis:this.basis});
+  const b=this.basis,sh=this.state!=='leap'?'':this.landings===0||this.lift>0?' · วงรีพุ่ง':b[0]>1.02?' · แบน':'';
+  this.st.info.textContent=this.state+(this.state==='leap'?' (แตะพื้น '+this.landings+')':'')+sh+' · เฟรม '+this.f}};
+
+// ── hop_pose / hurt_pose — พอร์ตตรงจาก slime.gd ──
+const squashBasis=a=>[1+a,0,0,1/(1+a)];
+function hopPose(phase,dir){const pose={lift:0,basis:[1,0,0,1]};
+ if(phase<.5){const k=phase/.5,c=Math.cos(k*Math.PI);pose.lift=Math.sin(k*Math.PI)*P.hop_height;
+  const vx=dir*P.hop_speed,vy=-P.hop_height*Math.PI*c/(P.hop_interval*.5),len=Math.hypot(vx,vy);
+  pose.basis=stretchBasis(vx/len,vy/len,P.hop_stretch*(.5+.5*Math.abs(c)))}
+ else if(phase<.6)pose.basis=squashBasis(P.hop_squash*(1-(phase-.5)/.1));
+ else if(phase>.85)pose.basis=squashBasis(P.hop_squash*.8*(phase-.85)/.15);
+ return pose}
+function hurtPose(t,ux,uy){const a=P.hurt_wobble*Math.exp(-P.hurt_wobble_decay*t)*Math.cos(P.hurt_wobble_freq*t);return stretchBasis(ux,uy,-a)}
+
+// ── เดิน (CHASE): เด้งไปข้างหน้าทีละก้าว — ย่อเตรียม → ลอยยืด → ลงแบน · วนข้ามช่อง ──
+const walk={st:new Stage('walk',360,180),t:Math.random(),x:20,
+ tick(dt){this.t+=dt;const phase=(this.t%P.hop_interval)/P.hop_interval,p=hopPose(phase,1);
+  if(phase<.5)this.x+=P.hop_speed*dt;if(this.x>424)this.x=-64;
+  const f=frameOf('idle',this.t);this.st.tickFx(dt);this.st.draw({x:this.x,lift:p.lift,f,tint:null,alpha:1,basis:p.basis});
+  const sh=phase<.5?'ลอย · ยืด':phase<.6?'ลงพื้น · แบน':phase>.85?'ย่อเตรียมเด้ง':'พื้น';
+  this.st.info.textContent='chase · '+sh}};
+
+// ── โดนตี (HURT): โดนฟันจากซ้าย → กระพริบขาว + ตาหยี + กระเด็น → สั่นเยลลี่จนนิ่ง → ยืนต่อ ──
+const hurt={st:new Stage("hurt",360,180),t:0,x:165,vx:0,
+ tick(dt){this.t+=dt;const pre=.7,end=pre+P.hurt_time+.8;if(this.t>=end){this.t=0;this.x=165}
+  let f,tint=null,basis=[1,0,0,1],label;
+  if(this.t<pre){f=frameOf('idle',this.t);label='idle';this.vx=0;this.hit=false}
+  else{const d=this.t-pre;
+   if(d<P.hurt_time){if(!this.hit){this.hit=true;this.vx=P.knockback}f=frameOf('hurt',d);basis=hurtPose(d,1,0);label='hurt'+(f===16?' · ตาหยี':'');
+    if(d<.08)tint='rgba(255,255,255,.85)'}
+   else{f=frameOf('idle',d);label='idle (หลังโดน)'}
+   this.x+=this.vx*dt;this.vx=Math.max(0,this.vx-P.knockback_friction*dt)}
+  this.st.tickFx(dt);this.st.draw({x:this.x,lift:0,f,tint,alpha:1,basis});
+  this.st.info.textContent=label+' · เฟรม '+f}};
+
+// ── ทุบ (ท่าเด่นแบบ Droop): ย่อ → ยืดขึ้นเป็นเสา (telegraph กระพริบแดง) → ทุบลงแผ่เป็นแฉก + คลื่นกระแทกใหญ่ → เด้งกลับ → พัก ──
+const SLAM=[['idle',.7,'idle'],['windup',.35,'ย่อตัว'],['rise',.7,'ยืดเป็นเสา (telegraph)'],['slam',.14,'ทุบ! แผ่แฉก'],['bounce',.2,'เด้งกลับ'],['recover',.9,'พัก']];
+const slam={st:new Stage('slam',360,180),i:0,t:0,
+ tick(dt){this.t+=dt;let [name,dur]=SLAM[this.i];
+  if(this.t>=dur){this.t-=dur;this.i=(this.i+1)%SLAM.length;name=SLAM[this.i][0];
+   if(name==='slam'&&vfxOn()){const r=P.impact_ring_radius,n=P.impact_droplets;P.impact_ring_radius=r*1.5;P.impact_droplets=n*1.5|0;this.st.spawnImpact(180);this.st.shake=.45;P.impact_ring_radius=r;P.impact_droplets=n}}
+  const t=this.t;let f,tint=null,basis=[1,0,0,1];
+  if(name==='idle'||name==='recover')f=frameOf('idle',t);
+  else if(name==='windup')f=t<.17?10:11;
+  else if(name==='rise'){f=t<.2?12:13;const p=.5+.5*Math.sin(t*(12+28*t/.7));tint='rgba(255,60,50,'+(.4*p)+')'}
+  else if(name==='slam'){f=14;basis=[1+.15*(1-t/.14),0,0,1/(1+.15*(1-t/.14))]}
+  else if(name==='bounce')f=15;
+  this.st.tickFx(dt);this.st.draw({x:180,lift:0,f,tint,alpha:1,basis});
+  this.st.info.textContent=SLAM[this.i][2]+' · เฟรม '+f}};
+
+// ── 3 · ตาย: idle → โดนตี (กระพริบขาว) → death → จางหาย (ครึ่งหลังของ corpse_time) → เริ่มใหม่ ──
+const death={st:new Stage('death',360,180),t:0,
+ tick(dt){this.t+=dt;const pre=.7,hold=.6,end=pre+P.corpse_time+hold;if(this.t>=end)this.t=0;
+  let f,tint=null,alpha=1,label;
+  if(this.t<pre){f=frameOf('idle',this.t);label='idle'}
+  else{const d=this.t-pre;f=frameOf('death',d);label='death';
+   if(d<.08)tint='rgba(255,255,255,.85)';
+   alpha=1-Math.min(1,Math.max(0,(d-P.corpse_time*.5)/(P.corpse_time*.5)))}
+  this.st.tickFx(dt);this.st.draw({x:180,lift:0,f,tint,alpha});
+  this.st.info.textContent=label+' · เฟรม '+f}};
+
+const panels=[idle,walk,slam,atk,hurt,death];
+function size(){}
+document.getElementById('play').onclick=e=>{playing=!playing;e.target.textContent=playing?'⏸ หยุด':'▶ เล่น'};
+document.getElementById('slow').onclick=e=>{slow=!slow;e.target.textContent='🐢 ช้า ×0.25: '+(slow?'เปิด':'ปิด')};
+let last=performance.now();
+function step(now){let dt=Math.min((now-last)/1000,.1);last=now;if(slow)dt*=.25;if(!playing)dt=0;
+ panels.forEach(p=>p.tick(dt));
+ document.querySelectorAll('#strip canvas').forEach((s,i)=>s.classList.toggle('cur',i===atk.f));
+ requestAnimationFrame(step)}
+img.onload=()=>{panels.forEach(p=>p.st.x.imageSmoothingEnabled=false);const stp=document.getElementById('strip');
+ for(let i=0;i<img.width/FS;i++){const s=document.createElement("canvas");s.width=s.height=FS;s.style.width=s.style.height="64px";s.title='เฟรม '+i;
+  s.getContext("2d").drawImage(img,i*FS,0,FS,FS,0,0,FS,FS);stp.append(s)}
+ size();requestAnimationFrame(step)};
+</script></body></html>

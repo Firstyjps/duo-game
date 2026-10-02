@@ -17,7 +17,7 @@ const C_EYE := Color("ffffff")
 const C_EYE_EDGE := Color("ffffff")
 const C_EYE_RING := Color("14306e")
 
-## ลำดับต้องตรงกับ Slime.ANIMS — w = ครึ่งความกว้าง, h = ความสูง (px), eye = ความสูงตา (0 = ไม่มีตา, -1 = หลับตา)
+## ลำดับต้องตรงกับ Slime.ANIMS — w = ครึ่งความกว้าง, h = ความสูง (px), eye = ความสูงตา (0 = ไม่มีตา, -1 = หลับตา, -2 = ตาหยี > <)
 const FRAME_DEFS: Array[Dictionary] = [
 	# 0–7 idle: หายใจ ยืดขึ้น → ย่อลง → กลับ (ลูปไม่สะดุด)
 	{"w": 11.5, "h": 16.0, "eye": 4},  # 0
@@ -38,16 +38,18 @@ const FRAME_DEFS: Array[Dictionary] = [
 	{"w": 14.0, "h": 9.0, "eye": 2},   # 14 death
 	{"w": 15.0, "h": 6.0, "eye": 0},   # 15 death
 	{"w": 15.0, "h": 3.0, "eye": 0},   # 16 death (แอ่ง)
+	{"w": 12.0, "h": 15.0, "eye": -2}, # 17 hurt (ตาหยี — ยืด/บี้ด้วยโค้ดใน Slime)
 ]
 const BASE_Y: float = 30.0
+const DEATH_LAST: int = 16
 
 
 func _init() -> void:
 	var sheet := Image.create_empty(SIZE * FRAME_DEFS.size(), SIZE, false, Image.FORMAT_RGBA8)
 	for i: int in FRAME_DEFS.size():
 		_draw_frame(sheet, i * SIZE, FRAME_DEFS[i])
-	# หยดน้ำกระเด็นตอนตายเฟรมสุดท้าย
-	var last: int = (FRAME_DEFS.size() - 1) * SIZE
+	# หยดน้ำกระเด็นตอนตาย (เฟรม 16)
+	var last: int = DEATH_LAST * SIZE
 	for p: Vector2i in [Vector2i(5, 22), Vector2i(27, 21), Vector2i(9, 19)]:
 		sheet.set_pixel(last + p.x, p.y, C_MID)
 		sheet.set_pixel(last + p.x, p.y + 1, C_OUTLINE)
@@ -97,6 +99,17 @@ func _draw_frame(img: Image, ox: int, d: Dictionary) -> void:
 		var gap: int = 3 if w < 10.0 else 4
 		_eye(img, ox + int(cx) - gap - 1, ey, d["eye"])
 		_eye(img, ox + int(cx) + gap - 1, ey, d["eye"])
+	elif d["eye"] == -2:
+		# ตาหยี = ">" ซ้าย "<" ขวา สีขาว ขอบเข้ม
+		var my: int = int(round(cy + h * 0.02))
+		for side: int in [-1, 1]:
+			var gx: int = int(cx) + side * 4 - (1 if side < 0 else 0)
+			for p: Vector2i in [Vector2i(-1, -2), Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 2)]:
+				var px: int = gx + p.x * -side
+				for o: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+					if img.get_pixel(ox + px + o.x, my + p.y + o.y) != C_EYE:
+						img.set_pixel(ox + px + o.x, my + p.y + o.y, C_EYE_RING)
+				img.set_pixel(ox + px, my + p.y, C_EYE)
 	elif d["eye"] < 0:
 		# หลับตา = เส้นโค้งสั้น ๆ ตรงกลางตา
 		var ly: int = int(round(cy + h * 0.02)) + 1
