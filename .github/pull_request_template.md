@@ -9,6 +9,6 @@ Closes #
 
 ## กระทบอีกฝั่งไหม
 - [ ] ไม่แตะ `game/core/` · `project.godot` · `docs/contracts/` · folder ของเพื่อน
-- [ ] แตะ → ใส่ label `core`/`contract` + request review แล้ว · อธิบาย:
+- [ ] แตะ → ใส่ label `core`/`contract` + เขียนใน ⚠️ ของ handoff แล้ว · อธิบาย:
 
 ## รูป / คลิป (ถ้ามีภาพเปลี่ยน)

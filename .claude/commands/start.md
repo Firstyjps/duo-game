@@ -15,10 +15,10 @@ description: เริ่ม session — sync main, อ่าน handoff ขอ�
    - pin ไม่ได้ (สิทธิ์ไม่พอ) → ข้ามได้ บอก user
    - อ่าน Handoff ของ**เพื่อน**: `gh issue view <เลข> --comments` (3 comment ล่าสุด) และของตัวเองล่าสุด 1 comment · ของเพื่อนยังไม่มี → บอก user ว่า "เพื่อนยังไม่เคย /start"
 4. ดูงาน: `gh issue list --assignee @me --state open` · PR รอฉันรีวิว `gh pr list --search "review-requested:@me"` · PR ของเพื่อนที่เปิดอยู่ `gh pr list`
-5. `git log --oneline -10 origin/main` — มีอะไร merge เข้ามาใหม่ที่แตะ `game/core/` หรือ `docs/contracts/` ไหม (ถ้ามี อ่าน diff นั้น)
+5. **รีวิวย้อนหลัง** (PR auto merge ไม่มีใครรีวิวก่อน): `gh pr list --state merged --author <GitHub เพื่อน> -L 10` เทียบกับ handoff ล่าสุดของฉัน → PR ของเพื่อนที่ merge ตั้งแต่ session ก่อน อ่าน diff โดยเฉพาะที่ label `core`/`contract` หรือแตะ folder เรา · เจอปัญหา → เสนอ user ให้ comment ใน PR นั้นหรือเปิด issue
 6. สรุปให้ user ไม่เกิน 10 บรรทัด:
    - เพื่อนทำอะไรไปล่าสุด + อะไรที่กระทบระบบเรา
-   - PR ที่รอเรารีวิว (แนะนำให้รีวิวก่อนเริ่มงานใหม่)
+   - PR ของเพื่อนที่ merge เข้ามา + ผลรีวิวย้อนหลัง (มีอะไรน่าห่วงไหม)
    - `blocked` ที่รอเรา
    - งานที่แนะนำทำต่อ 1–3 อัน
 7. เมื่อ user เลือกงาน: ถ้ายังไม่มี issue ให้สร้าง (`gh issue create`, template งาน, label `system:*`, assign @me) → `git switch -c <ชื่อ>/<issue>-<slug> origin/main`
