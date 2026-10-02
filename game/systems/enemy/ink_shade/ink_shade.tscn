@@ -1,0 +1,64 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://systems/enemy/ink_shade/ink_shade.gd" id="1_ink_shade"]
+[ext_resource type="Texture2D" path="res://systems/enemy/ink_shade/ink_shade_sheet.png" id="2_sheet"]
+[ext_resource type="Script" path="res://core/combat/health.gd" id="3_health"]
+[ext_resource type="Script" path="res://core/combat/hurtbox.gd" id="4_hurtbox"]
+[ext_resource type="Script" path="res://core/combat/hitbox.gd" id="5_hitbox"]
+
+[sub_resource type="CircleShape2D" id="Shape_body"]
+radius = 8.0
+
+[sub_resource type="CapsuleShape2D" id="Shape_hurt"]
+radius = 10.0
+height = 36.0
+
+[sub_resource type="CircleShape2D" id="Shape_hit"]
+radius = 18.0
+
+[sub_resource type="CircleShape2D" id="Shape_detect"]
+radius = 150.0
+
+[node name="InkShade" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 5
+motion_mode = 1
+script = ExtResource("1_ink_shade")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+texture = ExtResource("2_sheet")
+hframes = 24
+vframes = 8
+offset = Vector2(0, -24)
+
+[node name="Body" type="CollisionShape2D" parent="."]
+position = Vector2(0, -6)
+shape = SubResource("Shape_body")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("3_health")
+max_hp = 18
+
+[node name="Hurtbox" type="Area2D" parent="."]
+script = ExtResource("4_hurtbox")
+team = 1
+
+[node name="Shape" type="CollisionShape2D" parent="Hurtbox"]
+position = Vector2(0, -22)
+shape = SubResource("Shape_hurt")
+
+[node name="Hitbox" type="Area2D" parent="."]
+script = ExtResource("5_hitbox")
+team = 1
+damage = 3
+knockback_force = 200.0
+stagger = 1.0
+
+[node name="Shape" type="CollisionShape2D" parent="Hitbox"]
+position = Vector2(0, -18)
+shape = SubResource("Shape_hit")
+
+[node name="Detect" type="Area2D" parent="."]
+
+[node name="Shape" type="CollisionShape2D" parent="Detect"]
+shape = SubResource("Shape_detect")

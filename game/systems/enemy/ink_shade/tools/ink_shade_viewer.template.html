@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ink Shade Viewer</title>
+<style>
+:root{--bg:#121019;--panel:#1c1828;--line:#2e2640;--fg:#f0eaf8;--mut:#9588ac;--acc:#ffd700}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,"Segoe UI",sans-serif;padding:16px}
+h1{font-size:16px;margin:0 0 12px}
+h1 span{color:var(--mut);font-weight:normal;font-size:13px}
+.bar{max-width:480px;margin:4px 0 10px;text-align:center}
+.bname{font:700 15px/1.2 Georgia,serif;letter-spacing:.15em;color:#ffe680;text-shadow:0 0 8px #996515}
+.grid{display:grid;grid-template-columns:1fr;gap:10px;max-width:480px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;min-width:0}
+.card h2{font-size:13px;margin:0 0 6px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px}
+.card h2 span{color:var(--mut);font-weight:normal}
+canvas{image-rendering:pixelated;display:block;width:100%;height:auto;border-radius:4px}
+#c_free{cursor:crosshair}
+.compass{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.compass div{background:#151220;border-radius:4px;position:relative}
+.compass div span{position:absolute;left:4px;top:2px;font-size:11px;color:var(--mut)}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0;align-items:center}
+button{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;font:inherit}
+.hint{color:var(--mut);font-size:12px;margin-top:6px}
+.btns{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.btns button{padding:3px 7px;font-size:12px}
+.btns button.active{border-color:var(--acc);color:var(--acc)}
+</style></head><body>
+<h1>เงาหมึก (Ink Shade) — sprite viewer <span>(เฟรม 64×64 · 8 ทิศ · idle 4, walk 6, windup 3, slash 3, hurt 2, dead 6)</span></h1>
+<div class="bar"><div class="bname">INK SHADE · เงาหมึก</div></div>
+<div class="row">
+  <button id="play">⏸ หยุด</button>
+  <button id="slow">🐢 ช้า ×0.25: ปิด</button>
+</div>
+<div class="grid">
+  <div class="card"><h2>1 · เดินอิสระ <span id="i_free"></span></h2><canvas id="c_free"></canvas>
+    <div class="hint">คลิกบนพื้นเพื่อสั่งให้เดินไปตรงนั้น · ไม่คลิกจะเดินวนสุ่มเอง</div></div>
+  <div class="card"><h2>2 · ครบ 8 ทิศ <span>วางตามเข็มทิศ (กลาง = idle)</span></h2><div class="compass" id="compass"></div></div>
+  <div class="card"><h2>3 · แอนิเมชันแต่ละท่า <span id="i_anim"></span></h2>
+    <div class="btns" id="anim_btns"></div>
+    <div class="btns" id="dir_btns"></div>
+    <canvas id="c_anim"></canvas>
+    <div class="hint">windup = ค้างง้าง + กระพริบทอง (telegraph) · slash = พุ่งฟันเปิด Hitbox</div></div>
+</div>
+<script>
+const FS=64,FEET=56,COLS=24;
+const DIRS=['S','SE','E','NE','N','NW','W','SW'];
+const ANIMS={
+  idle:{start:0,len:4,fps:6,loop:true},
+  walk:{start:4,len:6,fps:8,loop:true},
+  windup:{start:10,len:3,fps:5,loop:false},
+  slash:{start:13,len:3,fps:10,loop:false},
+  hurt:{start:16,len:2,fps:8,loop:false},
+  dead:{start:18,len:6,fps:7,loop:false},
+};
+const img=new Image();img.src="data:image/png;base64,__B64__";
+let playing=true,slow=false;
+
+function drawFrame(ctx,dir,col,cx,feetY,scale=2){
+  ctx.drawImage(img,col*FS,dir*FS,FS,FS,Math.round(cx-FS/2*scale),Math.round(feetY-FEET*scale),FS*scale,FS*scale);
+}
+function floor(ctx,w,h){
+  for(let yy=0;yy<h;yy+=16)for(let xx=0;xx<w;xx+=16){
+    ctx.fillStyle=((xx+yy)/16)%2?'#181424':'#13101c';
+    ctx.fillRect(xx,yy,16,16);
+  }
+}
+function dirOf(dx,dy){
+  const a=Math.atan2(dx,dy)*180/Math.PI;
+  return ((Math.round(a/45)%8)+8)%8;
+}
+
+// 1. เดินอิสระ
+const FW=360,FH=220;
+const cf=document.getElementById('c_free'),xf=cf.getContext('2d');cf.width=FW;cf.height=FH;xf.imageSmoothingEnabled=false;
+const mob={x:FW/2,y:FH/2+20,tx:null,ty:null,dir:0,t:0,idleT:0};
+cf.addEventListener('click',e=>{
+  const r=cf.getBoundingClientRect();
+  mob.tx=(e.clientX-r.left)*FW/r.width;
+  mob.ty=(e.clientY-r.top)*FH/r.height;
+  mob.idleT=0;
+});
+
+// 2. เข็มทิศ 8 ทิศ
+const cmp=document.getElementById('compass');
+const cmpC=[],cmpX=[];
+const cellDirs=[5,4,3,6,-1,2,7,0,1];
+const cellLabels=['NW','N','NE','W','IDLE','E','SW','S','SE'];
+for(let i=0;i<9;i++){
+  const d=document.createElement('div');
+  const sp=document.createElement('span');sp.textContent=cellLabels[i];d.appendChild(sp);
+  const cv=document.createElement('canvas');cv.width=80;cv.height=80;cv.style.imageSmoothingEnabled=false;
+  d.appendChild(cv);cmp.appendChild(d);
+  cmpC.push(cv);cmpX.push(cv.getContext('2d'));
+}
+
+// 3. ท่าเดี่ยว
+const ca=document.getElementById('c_anim'),xa=ca.getContext('2d');ca.width=280;ca.height=140;xa.imageSmoothingEnabled=false;
+let curAnim='windup',curDir=0,animT=0;
+const abtns=document.getElementById('anim_btns');
+Object.keys(ANIMS).forEach(k=>{
+  const b=document.createElement('button');b.textContent=k;
+  if(k===curAnim)b.classList.add('active');
+  b.onclick=()=>{curAnim=k;animT=0;document.querySelectorAll('#anim_btns button').forEach(x=>x.classList.remove('active'));b.classList.add('active')};
+  abtns.appendChild(b);
+});
+const dbtns=document.getElementById('dir_btns');
+DIRS.forEach((d,i)=>{
+  const b=document.createElement('button');b.textContent=d;
+  if(i===curDir)b.classList.add('active');
+  b.onclick=()=>{curDir=i;document.querySelectorAll('#dir_btns button').forEach(x=>x.classList.remove('active'));b.classList.add('active')};
+  dbtns.appendChild(b);
+});
+
+document.getElementById('play').onclick=()=>{playing=!playing;document.getElementById('play').textContent=playing?'⏸ หยุด':'▶ เล่น'};
+document.getElementById('slow').onclick=()=>{slow=!slow;document.getElementById('slow').textContent=slow?'🐢 ช้า ×0.25: เปิด':'🐢 ช้า ×0.25: ปิด'};
+
+let last=performance.now();
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt=Math.min(0.1,(now-last)/1000)*(slow?0.25:1.0);last=now;
+  if(!playing)return;
+
+  // Render 1
+  floor(xf,FW,FH);
+  if(mob.tx===null&&mob.idleT<=0){
+    mob.tx=FW/2+(Math.random()-0.5)*180;
+    mob.ty=FH/2+(Math.random()-0.5)*100;
+  }
+  let moving=false;
+  if(mob.tx!==null){
+    const dx=mob.tx-mob.x,dy=mob.ty-mob.y;
+    const dist=Math.hypot(dx,dy);
+    if(dist>3){
+      moving=true;
+      mob.dir=dirOf(dx,dy);
+      const spd=60*dt;
+      mob.x+=dx/dist*spd;mob.y+=dy/dist*spd;
+      mob.t+=dt;
+    }else{
+      mob.tx=null;mob.ty=null;mob.idleT=1.5;
+    }
+  }else{
+    mob.idleT-=dt;
+    mob.t+=dt;
+  }
+  const col1=moving?(4+Math.floor(mob.t*8)%6):(Math.floor(mob.t*6)%4);
+  drawFrame(xf,mob.dir,col1,mob.x,mob.y,2);
+
+  // Render 2
+  for(let i=0;i<9;i++){
+    const x=cmpX[i];
+    x.clearRect(0,0,80,80);
+    const d=cellDirs[i];
+    if(d===-1){
+      const c=Math.floor(mob.t*6)%4;
+      drawFrame(x,0,c,40,65,1.2);
+    }else{
+      const c=4+Math.floor(mob.t*8)%6;
+      drawFrame(x,d,c,40,65,1.2);
+    }
+  }
+
+  // Render 3
+  xa.clearRect(0,0,ca.width,ca.height);
+  floor(xa,ca.width,ca.height);
+  animT+=dt;
+  const a=ANIMS[curAnim];
+  let idx=Math.floor(animT*a.fps);
+  idx=a.loop?(idx%a.len):Math.min(idx,a.len-1);
+  drawFrame(xa,curDir,a.start+idx,ca.width/2,ca.height/2+35,2);
+  document.getElementById('i_anim').textContent=`เฟรม ${idx+1}/${a.len} (col ${a.start+idx})`;
+}
+requestAnimationFrame(loop);
+</script></body></html>

@@ -1,0 +1,62 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://systems/enemy/ink_shade/debug/ink_shade_sandbox.gd" id="1_sb"]
+[ext_resource type="Script" path="res://systems/enemy/debug/target_dummy.gd" id="2_dummy"]
+[ext_resource type="PackedScene" path="res://systems/enemy/ink_shade/ink_shade.tscn" id="3_ink_shade"]
+[ext_resource type="Script" path="res://core/combat/hurtbox.gd" id="4_hurt"]
+[ext_resource type="Script" path="res://core/combat/hitbox.gd" id="5_hit"]
+[ext_resource type="Script" path="res://core/combat/health.gd" id="6_hp"]
+
+[sub_resource type="CircleShape2D" id="Shape_dummy"]
+radius = 6.0
+
+[sub_resource type="CircleShape2D" id="Shape_swing"]
+radius = 24.0
+
+[node name="InkShadeSandbox" type="Node2D"]
+y_sort_enabled = true
+script = ExtResource("1_sb")
+
+[node name="Floor" type="ColorRect" parent="."]
+z_index = -10
+offset_right = 960.0
+offset_bottom = 540.0
+color = Color(0.12, 0.1, 0.16, 1)
+
+[node name="Dummy" type="CharacterBody2D" parent="."]
+position = Vector2(480, 270)
+motion_mode = 1
+script = ExtResource("2_dummy")
+
+[node name="Body" type="CollisionShape2D" parent="Dummy"]
+shape = SubResource("Shape_dummy")
+
+[node name="Health" type="Node" parent="Dummy"]
+script = ExtResource("6_hp")
+max_hp = 999
+
+[node name="Hurtbox" type="Area2D" parent="Dummy"]
+script = ExtResource("4_hurt")
+
+[node name="Shape" type="CollisionShape2D" parent="Dummy/Hurtbox"]
+position = Vector2(0, -10)
+shape = SubResource("Shape_dummy")
+
+[node name="Hitbox" type="Area2D" parent="Dummy"]
+script = ExtResource("5_hit")
+damage = 4
+knockback_force = 220.0
+
+[node name="Shape" type="CollisionShape2D" parent="Dummy/Hitbox"]
+position = Vector2(0, -8)
+shape = SubResource("Shape_swing")
+
+[node name="InkShade" parent="." instance=ExtResource("3_ink_shade")]
+position = Vector2(380, 240)
+
+[node name="InkShade2" parent="." instance=ExtResource("3_ink_shade")]
+position = Vector2(580, 290)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(480, 270)
+zoom = Vector2(2, 2)
