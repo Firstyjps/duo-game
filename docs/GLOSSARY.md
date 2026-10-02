@@ -6,14 +6,17 @@
 |---|---|---|---|
 | _ตัวอย่าง:_ ห้อง | `Room` | พื้นที่ 1 จอ ปิดประตูจนกว่าศัตรูหมด | world |
 | ข้อมูลดาเมจ | `DamageInfo` | ข้อมูลการโจมตี 1 ครั้ง (ดาเมจก่อนหัก defense, knockback, stagger) | core/combat |
+| ท่าชาร์จ | `Charge Attack` · `charge_time` · `charge_mult` | ท่าโจมตีหนักด้วยการกดค้าง ≥ `charge_time` แล้วปล่อย คูณดาเมจ/knockback/stagger และใช้ stamina เพิ่ม | player |
+| ท่าเตรียม | telegraph · `TelegraphMarker` (วงเตือนบนพื้น) | ท่า/VFX บอกล่วงหน้าก่อนศัตรูโจมตี (บังคับทุกท่า) | enemy |
 | ฝั่ง / ทีม | `Combat.Team` | PLAYER / ENEMY / NEUTRAL — ฝั่งเดียวกันไม่โดนกัน | core/combat |
 | พลังชีวิต / HP | `Health` | HP ของผู้เล่น/ศัตรู/ของทำลายได้ | core/combat |
+| แพรี่ / ปัดป้อง | `Parry` · `Player.State.PARRY` · `parried` | การตั้งการ์ดปัดป้องในหน้าต่าง `parry_window` เพื่อไม่เสีย HP และได้ stamina คืน พลาดจะโดนตีเต็มช่วง recovery | player |
+| ล็อคเป้า | `Lock-on` · `lock_target` · `lock_target_changed` | การล็อคเป้าศัตรูในระยะ `lock_range` ให้ `aim` หันตามเป้าเสมอ สลับเป้าได้ และปลดเมื่อเป้าตายหรือหลุดระยะ | player |
 | ช่วง active | — | ช่วงเฟรมที่ Hitbox ของท่าเปิดอยู่ (`activate()` → `deactivate()`) | core/combat |
 | i-frames / อมตะชั่วคราว | `Hurtbox.invulnerable` | ช่วงที่โดนตีไม่เข้า เช่นระหว่าง dodge | core/combat |
 | ตัวรับดาเมจ | `Hurtbox` | พื้นที่บนตัวที่โดนตีได้ | core/combat |
 | ตัวทำดาเมจ | `Hitbox` | พื้นที่ของท่าโจมตีที่ทำดาเมจ | core/combat |
 | เซ / poise | `DamageInfo.stagger` | แรงขัดท่า — ผู้รับตัดสินเองว่าเซไหม | core/combat |
-| ท่าเตรียม | telegraph · `TelegraphMarker` (วงเตือนบนพื้น) | ท่า/VFX บอกล่วงหน้าก่อนศัตรูโจมตี (บังคับทุกท่า) | enemy |
 | สไลม์ | `Slime` · `enemy_id = &"slime"` | ศัตรูตัวแรก: เด้งเข้าหา → ย่อตัว + กระพริบแดง (telegraph) → พุ่งทับ | enemy |
 | เงาตามตัว | after-image · `_spawn_afterimage()` | สำเนาสไปรต์จาง ๆ ที่ทิ้งไว้ระหว่างพุ่ง | enemy |
 | บอสมิโนทอร์ | `boss_minotaur` (ยังไม่มีคลาส) | ผู้สมัครบอส MVP: วัวถือขวานสงคราม 8 ทิศ (ยังไม่ได้ตัดสินว่าเป็นบอสตัวจริง) | enemy |
