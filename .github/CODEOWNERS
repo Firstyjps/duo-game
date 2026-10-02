@@ -1,6 +1,8 @@
 # GitHub ขอรีวิวจากเจ้าของอัตโนมัติ — บรรทัดระบบ: เติมชื่อระบบแล้วเอา # ออก
 # /game/systems/<ระบบ A>/   @Firstyjps
-# /game/systems/<ระบบ B>/   @kronkawin2549-create
+/game/systems/dungeon/   @kronkawin2549-create
+/game/systems/enemy/     @kronkawin2549-create
+/game/systems/loot/      @kronkawin2549-create
 /game/core/              @Firstyjps @kronkawin2549-create
 /game/project.godot      @Firstyjps @kronkawin2549-create
 /docs/contracts/         @Firstyjps @kronkawin2549-create
