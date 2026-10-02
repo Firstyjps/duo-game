@@ -295,8 +295,11 @@ func test_wander_stuck_repicks_target() -> bool:
 	shade.global_position = Vector2(100, 100)
 	shade.spawn_position = Vector2(100, 100)
 	shade._wander_pause_t = 0.0
-	shade._pick_wander_target()
+	seed(40)
+	# จุดหมายไกลเกิน 4 px เสมอ (ใกล้กว่านั้นจะหยุดพักแทนเดิน) — ไม่ขึ้นกับการสุ่ม
+	shade._wander_target = shade.global_position + Vector2(60, 0)
 	var initial_target: Vector2 = shade._wander_target
+	shade.tick(0.05)  # tick แรกบันทึกระยะตั้งต้น (ระยะลด → stuck_t = 0)
 
 	# tick ผ่านไป 0.6s (น้อยกว่า wander_stuck_time 1.2s) โดยที่ตำแหน่งติดอยู่กับที่ไม่ขยับ
 	shade.tick(0.6)
@@ -304,7 +307,7 @@ func test_wander_stuck_repicks_target() -> bool:
 
 	# tick เพิ่มอีก 0.7s (รวม 1.3s > wander_stuck_time) โดยไม่ขยับ -> สุ่มจุดใหม่
 	shade.tick(0.7)
-	var stuck_triggered: bool = (shade._wander_target != initial_target) or (shade._wander_stuck_t < 0.2)
+	var stuck_triggered: bool = shade._wander_target != initial_target
 
 	shade.free()
 	return still_same_target and stuck_triggered
