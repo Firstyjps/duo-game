@@ -48,8 +48,15 @@ const FLASH_GOLD: Color = Color(2.5, 2.0, 0.6)
 @export var wander_speed: float = 35.0
 @export var wander_radius: float = 60.0
 @export var wander_pause_time: float = 1.5
+@export var wander_stuck_time: float = 1.2
 @export var chase_speed: float = 75.0
-@export var detect_range: float = 150.0
+@export var detect_range: float = 150.0:
+	set(val):
+		detect_range = val
+		if detect != null:
+			var detect_col: CollisionShape2D = detect.get_node_or_null("Shape") as CollisionShape2D
+			if detect_col != null and detect_col.shape is CircleShape2D:
+				(detect_col.shape as CircleShape2D).radius = detect_range
 @export var knockback_friction: float = 800.0
 
 @export_group("Combat")
@@ -71,6 +78,7 @@ var facing_dir: int = Dir.SOUTH:
 		facing_dir = val
 		_update_sprite_frame()
 var spawn_position: Vector2 = Vector2.ZERO
+var is_attack_active: bool = false
 
 var _state_t: float = 0.0
 var _anim: StringName = &""
@@ -81,6 +89,8 @@ var _died_emitted: bool = false
 var _attack_dir: Vector2 = Vector2.DOWN
 var _wander_target: Vector2 = Vector2.ZERO
 var _wander_pause_t: float = 0.0
+var _wander_stuck_t: float = 0.0
+var _wander_last_dist: float = INF
 var _poise_damage: float = 0.0
 
 var sprite: Sprite2D
@@ -117,8 +127,17 @@ func setup() -> void:
 	detect.body_entered.connect(_on_body_entered)
 	detect.body_exited.connect(_on_body_exited)
 
+	var detect_col: CollisionShape2D = detect.get_node_or_null("Shape") as CollisionShape2D
+	if detect_col != null and detect_col.shape is CircleShape2D:
+		var dup_shape := detect_col.shape.duplicate() as CircleShape2D
+		dup_shape.radius = detect_range
+		detect_col.shape = dup_shape
+
+	is_attack_active = false
 	spawn_position = global_position
 	_wander_target = spawn_position
+	_wander_last_dist = INF
+	_wander_stuck_t = 0.0
 	facing_dir = Dir.SOUTH
 	_enter(State.WANDER)
 
@@ -212,20 +231,32 @@ func _tick_wander(delta: float) -> void:
 		return
 
 	var to_dest: Vector2 = _wander_target - global_position
-	if to_dest.length() <= 4.0:
+	var dist: float = to_dest.length()
+	if dist <= 4.0:
 		velocity = Vector2.ZERO
 		_wander_pause_t = wander_pause_time
+		_wander_stuck_t = 0.0
+		_wander_last_dist = INF
 		_play(&"idle")
 	else:
 		facing_dir = vector_to_dir(to_dest)
 		velocity = to_dest.normalized() * wander_speed
 		_play(&"walk")
+		if dist < _wander_last_dist - 0.01:
+			_wander_last_dist = dist
+			_wander_stuck_t = 0.0
+		else:
+			_wander_stuck_t += delta
+			if _wander_stuck_t >= wander_stuck_time:
+				_pick_wander_target()
 
 
 func _pick_wander_target() -> void:
 	var angle: float = randf() * TAU
 	var dist: float = randf() * wander_radius
 	_wander_target = spawn_position + Vector2(cos(angle), sin(angle)) * dist
+	_wander_last_dist = (_wander_target - global_position).length()
+	_wander_stuck_t = 0.0
 
 
 func _tick_chase() -> void:
@@ -251,6 +282,7 @@ func _enter(next: State) -> void:
 		return
 
 	if prev == State.SLASH:
+		is_attack_active = false
 		hitbox.deactivate()
 		hitbox.position = Vector2.ZERO
 	if prev == State.WINDUP:
@@ -261,11 +293,16 @@ func _enter(next: State) -> void:
 
 	match next:
 		State.WANDER:
+			is_attack_active = false
 			_wander_pause_t = 0.5
+			_wander_stuck_t = 0.0
+			_wander_last_dist = INF
 			_play(&"idle")
 		State.CHASE:
+			is_attack_active = false
 			_play(&"walk")
 		State.WINDUP:
+			is_attack_active = false
 			velocity = Vector2.ZERO
 			hitbox.deactivate()
 			if _has_target():
@@ -275,18 +312,22 @@ func _enter(next: State) -> void:
 				facing_dir = vector_to_dir(_attack_dir)
 			_play(&"windup")
 		State.SLASH:
+			is_attack_active = true
 			hitbox.position = _attack_dir * slash_reach
 			hitbox.activate()
 			_play(&"slash")
 		State.RECOVER:
+			is_attack_active = false
 			velocity = Vector2.ZERO
 			hitbox.deactivate()
 			hitbox.position = Vector2.ZERO
 			_play(&"idle")
 		State.HURT:
+			is_attack_active = false
 			hitbox.deactivate()
 			_play(&"hurt")
 		State.DEAD:
+			is_attack_active = false
 			velocity = Vector2.ZERO
 			hitbox.deactivate()
 			_play(&"dead")

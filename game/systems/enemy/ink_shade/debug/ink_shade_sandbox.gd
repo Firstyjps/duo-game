@@ -3,6 +3,15 @@ extends Node2D
 ## ควบคุม Dummy: ลูกศร/WASD เดิน, Space ฟันโจมตี
 
 func _ready() -> void:
+	var dummy: Node2D = get_node_or_null("Dummy") as Node2D
+	if dummy != null:
+		var hurt: Hurtbox = dummy.get_node_or_null("Hurtbox") as Hurtbox
+		if hurt != null:
+			hurt.team = Combat.Team.PLAYER
+		var hit: Hitbox = dummy.get_node_or_null("Hitbox") as Hitbox
+		if hit != null:
+			hit.team = Combat.Team.PLAYER
+			hit.source = dummy
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("--shot="):
 			_shoot(arg.trim_prefix("--shot="))

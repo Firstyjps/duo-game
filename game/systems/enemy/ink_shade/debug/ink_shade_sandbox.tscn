@@ -37,6 +37,7 @@ max_hp = 999
 
 [node name="Hurtbox" type="Area2D" parent="Dummy"]
 script = ExtResource("4_hurt")
+team = 0
 
 [node name="Shape" type="CollisionShape2D" parent="Dummy/Hurtbox"]
 position = Vector2(0, -10)
@@ -44,6 +45,7 @@ shape = SubResource("Shape_dummy")
 
 [node name="Hitbox" type="Area2D" parent="Dummy"]
 script = ExtResource("5_hit")
+team = 0
 damage = 4
 knockback_force = 220.0
 

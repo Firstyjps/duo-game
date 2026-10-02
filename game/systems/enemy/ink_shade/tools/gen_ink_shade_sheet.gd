@@ -237,7 +237,7 @@ func _dead_pose(i: int) -> Dictionary:
 		"hand_r": Vector3(7.0 + dis * 6.0, 20.0 - dis * 18.0, 4.0 + dis * 5.0),
 		"sword_dir": Vector3(0.4, -0.8 + dis * 0.5, 0.5).normalized(),
 		"hand_l": Vector3(-7.0 - dis * 4.0, 20.0 - dis * 16.0, 3.0),
-		"glow_power": maxf(0.0, 1.3 - dis * 1.5),
+		"glow_power": 0.0 if dis >= 0.75 else maxf(0.0, 1.3 - dis * 1.5),
 		"wisps_spread": 1.0 + dis * 2.0,
 		"dead": true,
 		"dissolve": dis,
@@ -257,7 +257,7 @@ func _build(p: Dictionary) -> void:
 
 	_lift = bob
 
-	if dis >= 0.8:
+	if dis >= 0.85:
 		# เฟรมสุดท้ายแทบจางหมด เหลือแอ่งหมึกจาง ๆ
 		_parts.append({"d": 0.0, "fn": _draw_pool.bind(dis)})
 		return
@@ -473,11 +473,12 @@ func _cap_line(a: Vector2, b: Vector2, r: float, c: Color) -> void:
 func _draw_pool(dis: float) -> void:
 	var cx: int = int(CX)
 	var cy: int = int(FEET)
-	var rx: float = 14.0 * dis
-	var ry: float = 6.0 * dis
-	var alpha: float = clampf(1.0 - (dis - 0.2) / 0.8, 0.0, 1.0)
+	var rx: float = 14.0 * (1.0 - (dis - 0.5) * 0.25 if dis > 0.5 else dis * 1.5)
+	var ry: float = rx * 0.42
+	# เฟรมสุดท้ายยังมีภาพจาง ๆ ให้เห็นแอ่งหมึกสลายตัว (~0.22 alpha)
+	var alpha: float = clampf(1.0 - (dis - 0.2) * 0.95, 0.22, 1.0)
 	var pool_col := Color(INK_DARK.r, INK_DARK.g, INK_DARK.b, alpha)
-	var rim_col := Color(GOLD_MID.r, GOLD_MID.g, GOLD_MID.b, alpha * 0.7)
+	var rim_col := Color(GOLD_MID.r, GOLD_MID.g, GOLD_MID.b, alpha * 0.6)
 
 	for y: int in range(int(cy - ry) - 1, int(cy + ry) + 2):
 		for x: int in range(int(cx - rx) - 1, int(cx + rx) + 2):
@@ -494,6 +495,8 @@ func _draw_pool(dis: float) -> void:
 # ─────────────────────────── ขอบเรืองแสงทอง (Golden Rim Outline) ───────────────────────────
 
 func _outline(glow_p: float) -> void:
+	if glow_p <= 0.05:
+		return
 	var solid: Array[bool] = []
 	solid.resize(SIZE * SIZE)
 	for y: int in SIZE:
