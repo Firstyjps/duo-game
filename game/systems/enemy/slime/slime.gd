@@ -7,17 +7,21 @@ enum State { IDLE, CHASE, WINDUP, LEAP, RECOVER, HURT, DEAD }
 
 ## เฟรมใน slime_sheet.png (ลำดับตาม tools/gen_slime_sheet.gd)
 const ANIMS: Dictionary = {
-	&"idle": {"frames": [0, 1, 2, 3], "fps": 6.0, "loop": true},
-	&"windup": {"frames": [4, 5], "fps": 5.0, "loop": false},
-	&"leap": {"frames": [6], "fps": 1.0, "loop": false},
-	&"land": {"frames": [7, 0], "fps": 8.0, "loop": false},
-	&"death": {"frames": [8, 9, 10], "fps": 8.0, "loop": false},
+	&"idle": {"frames": [0, 1, 2, 3, 4, 5, 6, 7], "fps": 8.0, "loop": true},
+	## idle รอบที่กระพริบตา (เฟรม 8–9 = ทรงเดียวกับ 4–5 แต่หลับตา)
+	&"idle_blink": {"frames": [0, 1, 2, 3, 8, 9, 6, 7], "fps": 8.0, "loop": true},
+	&"windup": {"frames": [10, 11], "fps": 5.0, "loop": false},
+	&"leap": {"frames": [12], "fps": 1.0, "loop": false},
+	&"land": {"frames": [13, 0], "fps": 8.0, "loop": false},
+	&"death": {"frames": [14, 15, 16], "fps": 8.0, "loop": false},
 }
 const FLASH_HURT := Color(3.0, 3.0, 3.0)
 const FLASH_WINDUP := Color(1.8, 0.75, 0.7)
 
 @export var enemy_id: StringName = &"slime"
 @export var defense: int = 0
+## โอกาสกระพริบตาต่อ 1 รอบหายใจ (1 วิ)
+@export_range(0.0, 1.0) var blink_chance: float = 0.3
 @export_group("Movement")
 @export var hop_speed: float = 55.0
 ## เวลา 1 รอบเด้ง (ครึ่งแรกลอย/เคลื่อนที่ ครึ่งหลังหยุด)
@@ -75,6 +79,8 @@ func setup() -> void:
 	detect.body_entered.connect(_on_body_entered)
 	detect.body_exited.connect(_on_body_exited)
 	_play(&"idle")
+	# สุ่มจังหวะหายใจ สไลม์หลายตัวจะได้ไม่เด้งพร้อมกัน
+	_anim_t = randf() * ANIMS[&"idle"]["frames"].size() / float(ANIMS[&"idle"]["fps"])
 
 
 ## ดาเมจหลังหัก defense — โดนแล้วขั้นต่ำ 1 (contract damage)
@@ -241,6 +247,14 @@ func _tick_anim(delta: float) -> void:
 	var a: Dictionary = ANIMS[_anim]
 	var frames: Array = a["frames"]
 	_anim_t += delta
+	var loop_len: float = frames.size() / float(a["fps"])
+	if a["loop"] and _anim_t >= loop_len:
+		_anim_t = fmod(_anim_t, loop_len)
+		# จบ 1 รอบหายใจ → สุ่มว่ารอบหน้ากระพริบตาไหม
+		if _anim == &"idle" or _anim == &"idle_blink":
+			_anim = &"idle_blink" if randf() < blink_chance else &"idle"
+			a = ANIMS[_anim]
+			frames = a["frames"]
 	var i: int = int(_anim_t * a["fps"])
 	i = i % frames.size() if a["loop"] else mini(i, frames.size() - 1)
 	sprite.frame = frames[i]
