@@ -267,10 +267,12 @@ func test_bind_real_player_scene() -> bool:
 	if health != null:
 		health.reset()
 
+	player.stamina_max = 140.0  # ไม่ใช่ค่า default ของหลอด (100) → พิสูจน์ว่าอ่าน stamina_max จริง
+	player.stamina = 140.0
 	hud.bind_player(health, player)
 
 	var hp_max_ok: bool = hud.hp_bar.max_value == 12.0 and hud.hp_bar.value == 12.0
-	var stamina_max_ok: bool = hud.stamina_bar.max_value == 100.0 and hud.stamina_bar.value == 100.0
+	var stamina_max_ok: bool = hud.stamina_bar.max_value == 140.0 and hud.stamina_bar.value == 140.0
 
 	player.free()
 	hud.free()
@@ -471,3 +473,17 @@ func test_lock_marker_show_hide_and_free() -> bool:
 	target.free()
 	hud.free()
 	return marker_init_hidden and marker_shown and pos_ok and marker_hidden_on_null and marker_reshown and marker_hidden_on_exiting and marker_reshown2 and marker_hidden_on_free
+
+
+## ผู้เล่นตาย → เครื่องหมายเป้า lock-on หาย
+func test_player_died_hides_lock_marker() -> bool:
+	var hud: GameHud = (load("res://systems/hud/hud.tscn") as PackedScene).instantiate()
+	hud.setup()
+	var target := Node2D.new()
+	hud.set_lock_target(target)
+	var shown: bool = hud._lock_target == target
+	hud._on_player_died()
+	var hidden: bool = hud._lock_target == null
+	target.free()
+	hud.free()
+	return shown and hidden

@@ -289,8 +289,8 @@ func _cleanup_bindings() -> void:
 			_boss_health.changed.disconnect(_on_boss_health_changed)
 		if _boss_health.died.is_connected(_on_boss_died):
 			_boss_health.died.disconnect(_on_boss_died)
-		if _boss_health.tree_exiting.is_connected(hide_boss):
-			_boss_health.tree_exiting.disconnect(hide_boss)
+		if _boss_health.tree_exiting.is_connected(_on_boss_tree_exiting):
+			_boss_health.tree_exiting.disconnect(_on_boss_tree_exiting)
 	_boss_health = null
 
 	if _lock_source != null and is_instance_valid(_lock_source):
@@ -415,7 +415,7 @@ func show_boss(display_name: String, health: Health) -> void:
 	if _boss_health != null:
 		_boss_health.changed.connect(_on_boss_health_changed)
 		_boss_health.died.connect(_on_boss_died)
-		_boss_health.tree_exiting.connect(hide_boss)
+		_boss_health.tree_exiting.connect(_on_boss_tree_exiting)
 
 
 func hide_boss() -> void:
@@ -433,6 +433,20 @@ func hide_boss() -> void:
 	_boss_health = null
 
 
+## บอสออกจาก tree: ตายแล้วกำลังรอ boss_hide_delay → ให้รอต่อ (ตัด signal จาก health ที่จะถูก free) · ยังไม่ตาย → ซ่อนทันที
+func _on_boss_tree_exiting() -> void:
+	if not is_boss_hide_pending():
+		hide_boss()
+		return
+	if _boss_health != null and is_instance_valid(_boss_health):
+		if _boss_health.changed.is_connected(_on_boss_health_changed):
+			_boss_health.changed.disconnect(_on_boss_health_changed)
+		if _boss_health.died.is_connected(_on_boss_died):
+			_boss_health.died.disconnect(_on_boss_died)
+		_boss_health.tree_exiting.disconnect(_on_boss_tree_exiting)
+	_boss_health = null
+
+
 func is_boss_hide_pending() -> bool:
 	return _boss_hide_tween != null and _boss_hide_tween.is_valid()
 
@@ -446,6 +460,7 @@ func _on_boss_engaged(_boss: Node, health: Health, display_name: String) -> void
 
 func _on_player_died() -> void:
 	hide_boss()
+	set_lock_target(null)
 
 
 func _on_boss_health_changed(current: int, maximum: int) -> void:
@@ -478,8 +493,12 @@ func bind_lock_source(source: Object) -> void:
 	if _lock_source != null and is_instance_valid(_lock_source):
 		if _lock_source.has_signal(&"lock_target_changed") and _lock_source.is_connected(&"lock_target_changed", _on_lock_target_changed):
 			_lock_source.disconnect(&"lock_target_changed", _on_lock_target_changed)
+	if _lock_source is Node and is_instance_valid(_lock_source) and (_lock_source as Node).tree_exiting.is_connected(_on_lock_source_exiting):
+		(_lock_source as Node).tree_exiting.disconnect(_on_lock_source_exiting)
 	_lock_source = source
 	if _lock_source != null:
+		if _lock_source is Node:  # ผู้เล่นถูก free/ออกจากฉาก → เลิกโชว์เป้า
+			(_lock_source as Node).tree_exiting.connect(_on_lock_source_exiting)
 		if _lock_source.has_signal(&"lock_target_changed"):
 			_lock_source.connect(&"lock_target_changed", _on_lock_target_changed)
 		var cur_target: Variant = _lock_source.get(&"lock_target")
@@ -489,6 +508,10 @@ func bind_lock_source(source: Object) -> void:
 			set_lock_target(null)
 	else:
 		set_lock_target(null)
+
+
+func _on_lock_source_exiting() -> void:
+	set_lock_target(null)
 
 
 func set_lock_target(target: Node2D) -> void:
