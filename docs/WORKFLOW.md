@@ -4,35 +4,38 @@
 
 ## หลักการ 4 ข้อ
 1. **GitHub = ความจริงหนึ่งเดียว** — โค้ด งาน และข้อตัดสินใจอยู่บน GitHub คุยใน LINE ได้ แต่ข้อสรุปต้องลง Issue หรือ `docs/DECISIONS.md`
-2. **แบ่งตามระบบ เจ้าของชัด** — แต่ละคนเป็นเจ้าของ folder ของตัวเอง (`docs/OWNERS.md`) แก้ของอีกคน = เปิด PR ให้เจ้าของรีวิว
+2. **แบ่งตามระบบ เจ้าของชัด** — แต่ละคนเป็นเจ้าของ folder ของตัวเอง (`docs/OWNERS.md`) แก้ของอีกคน = ถาม/บอกเจ้าของก่อน แล้วแจ้งใน handoff
 3. **คุยกันผ่าน contract** — ระบบเรียกกันผ่าน signal บน `EventBus` หรือ interface ที่เขียนไว้ใน `docs/contracts/` ห้ามเอื้อมเข้าไปเรียก node ภายในระบบอีกฝั่งตรง ๆ
 4. **ส่งต่องานผ่าน Handoff issue** — คนละ 1 issue (label `handoff`, ปักหมุดไว้ · `/start` ครั้งแรกสร้างให้เอง) จบ session ทุกครั้งเพิ่ม comment สั้น ๆ อีกคนได้แจ้งเตือนทันที และ Claude ของอีกฝั่งอ่านตอน `/start`
 
 ## โครงสร้าง
 ```
 game/
-  core/            ของร่วม (EventBus, autoload, utils, asset ที่ใช้ร่วม) — ต้องรีวิวทั้งคู่
+  core/            ของร่วม (EventBus, autoload, utils, asset ที่ใช้ร่วม) — แก้แล้วต้องแจ้ง ⚠️ ใน handoff
   systems/<ระบบ>/   เจ้าของคนเดียว: script + scene + asset ของระบบนั้น
   tests/           เทสต์ (test_*.gd)
-docs/contracts/    ข้อตกลงระหว่างระบบ — ต้องรีวิวทั้งคู่
+docs/contracts/    ข้อตกลงระหว่างระบบ — แก้แล้วต้องแจ้ง ⚠️ ใน handoff
 ```
 
 ## 1 รอบงาน
 ```
-Issue ─▶ branch ─▶ /start ─▶ ทำ + เทสต์ ─▶ /wrap (PR + handoff) ─▶ อีกคนรีวิว ─▶ squash merge
+Issue ─▶ branch ─▶ /start ─▶ ทำ + เทสต์ ─▶ /wrap (PR ─▶ CI ผ่าน ─▶ auto squash merge เข้า main ─▶ handoff)
 ```
 1. ทุกงานเริ่มจาก **Issue** (template "งาน") ใส่ label `system:*` และ assign ตัวเอง
 2. branch จาก `main` ชื่อ `<ชื่อ>/<issue#>-<สั้น ๆ>` เช่น `kron/12-dash-attack`
 3. ทำงานใน folder ตัวเอง · เทสต์ผ่านก่อน push
-4. `/wrap` → PR (มี template) + comment ใน Handoff issue
-5. อีกคนรีวิว **ภายใน 24 ชม.** → squash merge → ลบ branch
+4. `/wrap` → เปิด PR (มี template) → รอ CI → **ผ่าน = squash merge เข้า `main` เองทันที** (ไม่ต้องรอรีวิว) → ลบ branch → comment ใน Handoff issue
+5. CI ไม่ผ่าน = **ไม่ merge** — แก้จนผ่าน หรือทิ้งเป็น draft PR แล้วบอกใน handoff
+6. **รีวิวย้อนหลัง:** `/start` ของอีกคนอ่าน PR ที่ merge เข้ามาตั้งแต่ครั้งก่อน เจอปัญหา → comment ใน PR นั้น หรือเปิด issue/PR แก้
 
 ## กติกา Git
 - `main` ต้องเปิดเกมได้และเทสต์ผ่านเสมอ · ไม่ commit ตรงเข้า `main`
 - PR เล็ก: ไม่เกิน ~1 วันงาน (~400 บรรทัด) — PR ใหญ่ = ชนง่าย รีวิวยาก
 - sync กับ main ทุกครั้งที่เริ่มงาน: `git fetch && git rebase origin/main` (`/start` ทำให้)
-- **merge เองได้** ถ้า PR แตะแค่ folder ตัวเอง + CI ผ่าน + อีกคนไม่ตอบเกิน 24 ชม. (เขียนใน PR ว่า self-merge)
-- **ห้าม merge เอง** ถ้าแตะ `game/core/`, `docs/contracts/`, `project.godot`, `CLAUDE.md` หรือ folder ของอีกคน
+- **Auto merge:** ทุก PR merge เองได้เมื่อ CI ผ่าน (`/wrap` ทำให้) — ยังผ่าน PR เสมอ เพื่อให้ CI กัน `main` พัง และอีกคนเห็นทุกการเปลี่ยนแปลง
+- งานยังไม่เสร็จ → `--draft` (ไม่ merge)
+- แตะ `game/core/`, `docs/contracts/`, `project.godot`, `CLAUDE.md` หรือ folder ของอีกคน → merge ได้ แต่ต้อง label `core`/`contract` + เขียนใน ⚠️ ของ handoff ว่ากระทบอะไร
+- PR ของอีกคนที่ยังเปิดอยู่ → อย่า merge ให้เขา (เจ้าของ PR merge เอง)
 
 ## จุดชนประจำของ Godot
 | ไฟล์ | กติกา |
@@ -68,8 +71,8 @@ comment ใน Handoff issue ของตัวเอง (`/wrap` เขีย�
 | label | ใช้เมื่อ |
 |---|---|
 | `system:<ชื่อ>` | งานของระบบนั้น (สร้างเพิ่มตอนแบ่งระบบ) |
-| `core` | แตะ `game/core/` หรือ `project.godot` — ต้องรีวิวทั้งคู่ |
-| `contract` | สร้าง/แก้ contract — ต้องรีวิวทั้งคู่ |
+| `core` | แตะ `game/core/` หรือ `project.godot` — อีกคนต้องรีวิวย้อนหลัง |
+| `contract` | สร้าง/แก้ contract — อีกคนต้องรีวิวย้อนหลัง |
 | `bug` · `design` · `art` | ตามชื่อ |
 | `blocked` | รออีกคน/รอตัดสินใจ |
 | `handoff` | Handoff issue ประจำตัว (มีคนละ 1 อัน) |
@@ -90,4 +93,4 @@ comment ใน Handoff issue ของตัวเอง (`/wrap` เขีย�
 - [ ] แบ่งระบบ → `docs/OWNERS.md` + `.github/CODEOWNERS` + สร้าง label `system:*`
 - [ ] เขียน contract แรก (ของที่ 2 ระบบต้องคุยกันแน่ ๆ)
 - [ ] เชิญเพื่อนเข้า repo · เพื่อน `/start` ครั้งแรก → Claude สร้าง Handoff issue + ปักหมุด + ผูกแจ้งเตือนทั้งสองฝั่งให้เอง
-- [ ] ต่างคนต่าง `/start` ทำ issue แรก → ลองรอบ PR → รีวิว → merge ให้ครบ 1 รอบ
+- [ ] ต่างคนต่าง `/start` ทำ issue แรก → ลองรอบ `/wrap` (PR → CI → auto merge) ให้ครบ 1 รอบ

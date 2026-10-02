@@ -34,15 +34,15 @@ AI ของอีกคนรู้**เฉพาะสิ่งที่อย
 
 ## ขอบเขต
 - แก้ได้เลย: folder ที่ user เป็นเจ้าของใน `docs/OWNERS.md` + `game/tests/` ของระบบนั้น
-- **ถาม user ก่อน** ถ้าจะแตะ: `game/core/`, `game/project.godot`, `docs/contracts/`, `CLAUDE.md`, `docs/WORKFLOW.md` หรือ folder ของอีกคน — และถ้าแตะ PR ต้องมี label `core`/`contract` + request review อีกคน
+- **ถาม user ก่อน** ถ้าจะแตะ: `game/core/`, `game/project.godot`, `docs/contracts/`, `CLAUDE.md`, `docs/WORKFLOW.md` หรือ folder ของอีกคน — และถ้าแตะ PR ต้องมี label `core`/`contract` + เขียนใน ⚠️ ของ handoff
 - ข้ามระบบ = ผ่าน signal ใน `game/core/event_bus.gd` ตาม `docs/contracts/` เท่านั้น ห้าม `get_node()` เข้าไปในระบบอีกฝั่ง
 - ห้ามแก้ `.tscn`/`.tres` ของอีกคน — instance แทน
 
 ## Git
-- ไม่ commit/push ตรงเข้า `main` · branch = `<ชื่อเล่นตัวพิมพ์เล็ก>/<issue#>-<slug>`
+- ทุกการเปลี่ยนแปลงเข้า `main` ผ่าน PR (ไม่ `git push` ตรงเข้า `main`) · branch = `<ชื่อเล่นตัวพิมพ์เล็ก>/<issue#>-<slug>`
 - commit message: `[<ระบบ>] <ทำอะไร> (#<issue>)`
 - PR ใช้ template · squash merge · ห้าม `push --force` บน branch ของอีกคน
-- ห้าม merge PR เองถ้าเข้าเงื่อนไข "ห้าม merge เอง" ใน `docs/WORKFLOW.md`
+- **Auto merge:** PR ของ user เอง merge ได้ทันทีเมื่อ CI ผ่าน (`/wrap`) ไม่ต้องรอรีวิว · CI ไม่ผ่าน = ห้าม merge · draft = ห้าม merge · ห้าม merge PR ของอีกคน
 
 ## ก่อน push ทุกครั้ง
 ```bash
