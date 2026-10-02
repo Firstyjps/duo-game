@@ -28,7 +28,7 @@ const ATTACK_COLS: Dictionary = {
 	AttackType.RISING: {"start": 24, "tele": 25, "hit": 27, "recover": 29},
 	AttackType.CHARGE: {"start": 30, "tele": 31, "hit": 34, "recover": 35},
 	AttackType.STOMP: {"start": 36, "tele": 37, "hit": 38, "recover": 41},
-	AttackType.LEAP: {"start": 42, "tele": 43, "hit": 46, "recover": 47},
+	AttackType.LEAP: {"start": 42, "tele": 42, "hit": 46, "recover": 47},
 }
 
 const COL_HURT_START: int = 48
@@ -52,8 +52,8 @@ const FLASH_WINDUP := Color(1.8, 0.65, 0.6)
 
 @export_group("Ranges")
 @export var near_attack_range: float = 70.0
-@export var mid_attack_range: float = 140.0
-@export var far_attack_range: float = 260.0
+@export var mid_attack_range: float = 110.0
+@export var far_attack_range: float = 240.0
 
 @export_group("Attack Windup Times")
 @export var cleave_windup: float = 0.65
@@ -65,7 +65,7 @@ const FLASH_WINDUP := Color(1.8, 0.65, 0.6)
 
 @export_group("Attack Active Times")
 @export var melee_active_time: float = 0.22
-@export var charge_duration: float = 0.38
+@export var charge_duration: float = 0.60
 @export var stomp_active_time: float = 0.25
 @export var leap_time: float = 0.35
 @export var leap_active_time: float = 0.25
@@ -91,7 +91,7 @@ const FLASH_WINDUP := Color(1.8, 0.65, 0.6)
 @export var rising_stagger: float = 35.0
 
 @export_group("Charge Attack")
-@export var charge_speed: float = 270.0
+@export var charge_speed: float = 340.0
 @export var charge_damage: int = 18
 @export var charge_knockback: float = 360.0
 @export var charge_stagger: float = 50.0
@@ -100,7 +100,7 @@ const FLASH_WINDUP := Color(1.8, 0.65, 0.6)
 @export var stomp_damage: int = 16
 @export var stomp_knockback: float = 300.0
 @export var stomp_stagger: float = 45.0
-@export var stomp_radius: float = 56.0
+@export var stomp_radius: float = 120.0
 
 @export_group("Leap Attack")
 @export var leap_damage: int = 22
@@ -145,6 +145,7 @@ var hitbox_shape: CollisionShape2D
 var detect: Area2D
 var telegraph_marker: TelegraphMarker
 var _hit_circle: CircleShape2D
+var _hit_poly: ConvexPolygonShape2D
 
 
 func _ready() -> void:
@@ -176,7 +177,14 @@ func setup() -> void:
 	hurtbox.team = Combat.Team.ENEMY
 
 	_hit_circle = CircleShape2D.new()
+	_hit_poly = ConvexPolygonShape2D.new()
 	hitbox_shape.shape = _hit_circle
+
+	if stomp_radius < mid_attack_range + 10.0:
+		stomp_radius = mid_attack_range + 10.0
+	var charge_hit_reach: float = 18.0 + 26.0
+	if charge_speed * charge_duration + charge_hit_reach < far_attack_range:
+		charge_speed = (far_attack_range - charge_hit_reach) / maxf(charge_duration, 0.01)
 
 	hurtbox.hurt.connect(_on_hurt)
 	health.died.connect(_on_died)
@@ -226,6 +234,24 @@ func get_attack_candidates(dist: float) -> Array[AttackType]:
 	return []
 
 
+func get_attack_reach(atk: AttackType) -> float:
+	match atk:
+		AttackType.CLEAVE:
+			return 38.0 + 32.0
+		AttackType.SWEEP:
+			return 72.0
+		AttackType.RISING:
+			return 36.0 + 34.0
+		AttackType.STOMP:
+			return stomp_radius
+		AttackType.CHARGE:
+			return charge_speed * charge_duration + 18.0 + 26.0
+		AttackType.LEAP:
+			return far_attack_range + leap_radius
+		_:
+			return 0.0
+
+
 func choose_attack(dist: float, record: bool = false) -> AttackType:
 	var candidates: Array[AttackType] = get_attack_candidates(dist)
 	if candidates.is_empty():
@@ -242,8 +268,13 @@ func choose_attack(dist: float, record: bool = false) -> AttackType:
 			AttackType.CHARGE, AttackType.STOMP, AttackType.LEAP
 		]
 		for atk: AttackType in all_atks:
-			if atk != last_attack:
+			if atk != last_attack and get_attack_reach(atk) >= dist:
 				valid.append(atk)
+
+		if valid.is_empty():
+			for atk: AttackType in all_atks:
+				if atk != last_attack:
+					valid.append(atk)
 
 	var chosen: AttackType = valid[randi() % valid.size()]
 	if record:
@@ -300,7 +331,7 @@ func tick(delta: float) -> void:
 		State.WINDUP:
 			velocity = Vector2.ZERO
 			var windup_dur: float = get_windup_time(current_attack)
-			if current_attack == AttackType.LEAP and telegraph_marker:
+			if (current_attack == AttackType.LEAP or current_attack == AttackType.STOMP) and telegraph_marker:
 				telegraph_marker.progress = _state_t / maxf(windup_dur, 0.001)
 			if _state_t >= windup_dur:
 				_enter(State.ACTIVE)
@@ -383,6 +414,10 @@ func _tick_active(delta: float) -> void:
 				sprite.offset = Vector2(0, -46.0 - arc)
 				_update_sprite_frame(44)
 			else:
+				if not is_attack_active:
+					is_attack_active = true
+					_setup_hitbox_for_attack(AttackType.LEAP, _attack_facing_vec)
+					hitbox.activate()
 				global_position = _leap_to
 				sprite.offset = Vector2(0, -46.0)
 				_update_sprite_frame(ATTACK_COLS[AttackType.LEAP]["hit"])
@@ -413,41 +448,95 @@ func _on_recover_finished() -> void:
 	_enter(State.CHASE if _has_target() else State.IDLE)
 
 
+func _clamp_leap_position(target_pos: Vector2, from_pos: Vector2) -> Vector2:
+	if not is_inside_tree():
+		return target_pos
+	var world_2d: World2D = get_world_2d()
+	if world_2d == null:
+		return target_pos
+	var space_state: PhysicsDirectSpaceState2D = world_2d.direct_space_state
+	if space_state == null:
+		return target_pos
+
+	var curr_pos: Vector2 = target_pos
+	var to_boss: Vector2 = from_pos - curr_pos
+	var total_dist: float = to_boss.length()
+	if total_dist < 0.001:
+		return target_pos
+
+	var step_dir: Vector2 = to_boss / total_dist
+	var max_steps: int = int(total_dist / 8.0)
+
+	var query := PhysicsPointQueryParameters2D.new()
+	query.collision_mask = Combat.LAYER_WORLD
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+
+	for _i: int in max_steps:
+		query.position = curr_pos
+		var hits: Array[Dictionary] = space_state.intersect_point(query, 1)
+		if hits.is_empty():
+			break
+		curr_pos += step_dir * 8.0
+
+	return curr_pos
+
+
 func _setup_hitbox_for_attack(atk: AttackType, facing: Vector2) -> void:
 	if hitbox == null or hitbox_shape == null:
 		return
+	var marker_squash: float = telegraph_marker.squash if telegraph_marker != null else 0.55
 	match atk:
 		AttackType.CLEAVE:
+			hitbox_shape.shape = _hit_circle
+			hitbox_shape.scale = Vector2.ONE
 			hitbox.damage = cleave_damage
 			hitbox.knockback_force = cleave_knockback
 			hitbox.stagger = cleave_stagger
 			hitbox_shape.position = facing * 38.0 + Vector2(0, -12)
 			_hit_circle.radius = 32.0
 		AttackType.SWEEP:
+			hitbox_shape.shape = _hit_poly
+			hitbox_shape.scale = Vector2.ONE
 			hitbox.damage = sweep_damage
 			hitbox.knockback_force = sweep_knockback
 			hitbox.stagger = sweep_stagger
-			hitbox_shape.position = facing * 24.0 + Vector2(0, -12)
-			_hit_circle.radius = 48.0
+			hitbox_shape.position = Vector2(0, -12)
+			var base_angle: float = facing.angle()
+			var sweep_pts := PackedVector2Array()
+			sweep_pts.append(Vector2.ZERO)
+			const SEGMENTS: int = 12
+			for i in range(SEGMENTS + 1):
+				var a: float = base_angle - PI * 0.5 + (float(i) / float(SEGMENTS)) * PI
+				sweep_pts.append(Vector2.from_angle(a) * 72.0)
+			_hit_poly.points = Geometry2D.convex_hull(sweep_pts)
 		AttackType.RISING:
+			hitbox_shape.shape = _hit_circle
+			hitbox_shape.scale = Vector2.ONE
 			hitbox.damage = rising_damage
 			hitbox.knockback_force = rising_knockback
 			hitbox.stagger = rising_stagger
-			hitbox_shape.position = facing * 32.0 + Vector2(0, -14)
-			_hit_circle.radius = 28.0
+			hitbox_shape.position = facing * 36.0 + Vector2(0, -14)
+			_hit_circle.radius = 34.0
 		AttackType.CHARGE:
+			hitbox_shape.shape = _hit_circle
+			hitbox_shape.scale = Vector2.ONE
 			hitbox.damage = charge_damage
 			hitbox.knockback_force = charge_knockback
 			hitbox.stagger = charge_stagger
 			hitbox_shape.position = facing * 18.0 + Vector2(0, -14)
 			_hit_circle.radius = 26.0
 		AttackType.STOMP:
+			hitbox_shape.shape = _hit_circle
+			hitbox_shape.scale = Vector2(1.0, marker_squash)
 			hitbox.damage = stomp_damage
 			hitbox.knockback_force = stomp_knockback
 			hitbox.stagger = stomp_stagger
 			hitbox_shape.position = Vector2(0, -6)
 			_hit_circle.radius = stomp_radius
 		AttackType.LEAP:
+			hitbox_shape.shape = _hit_circle
+			hitbox_shape.scale = Vector2(1.0, marker_squash)
 			hitbox.damage = leap_damage
 			hitbox.knockback_force = leap_knockback
 			hitbox.stagger = leap_stagger
@@ -502,27 +591,33 @@ func _enter(next: State) -> void:
 					_leap_to = global_position + offset
 				else:
 					_leap_to = global_position + _attack_facing_vec * (near_attack_range * 1.5)
+				_leap_to = _clamp_leap_position(_leap_to, _leap_from)
 				if telegraph_marker:
 					telegraph_marker.radius = leap_radius
 					telegraph_marker.show_at(_leap_to)
+			elif current_attack == AttackType.STOMP:
+				if telegraph_marker:
+					telegraph_marker.radius = stomp_radius
+					telegraph_marker.show_at(global_position)
 
 			var tele_col: int = ATTACK_COLS[current_attack]["tele"]
 			_update_sprite_frame(tele_col)
 
 		State.ACTIVE:
-			is_attack_active = true
-			_setup_hitbox_for_attack(current_attack, _attack_facing_vec)
-			hitbox.activate()
+			if current_attack != AttackType.LEAP:
+				is_attack_active = true
+				_setup_hitbox_for_attack(current_attack, _attack_facing_vec)
+				hitbox.activate()
+			else:
+				is_attack_active = false
+				hitbox.deactivate()
 
 			if current_attack == AttackType.CHARGE:
 				velocity = _charge_dir * charge_speed
-			elif current_attack == AttackType.LEAP:
-				if telegraph_marker:
-					telegraph_marker.visible = false
 			else:
 				velocity = Vector2.ZERO
 
-			var hit_col: int = ATTACK_COLS[current_attack]["hit"]
+			var hit_col: int = 44 if current_attack == AttackType.LEAP else ATTACK_COLS[current_attack]["hit"]
 			_update_sprite_frame(hit_col)
 
 		State.RECOVER:
@@ -576,8 +671,8 @@ func _on_hurt(info: DamageInfo) -> void:
 	accumulated_stagger += info.stagger
 	if accumulated_stagger >= poise:
 		accumulated_stagger = 0.0
-		velocity = info.knockback * 0.5
 		_enter(State.HURT)
+		velocity = info.knockback * 0.5
 
 
 func _on_died() -> void:

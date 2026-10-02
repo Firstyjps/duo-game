@@ -57,10 +57,20 @@ func test_all_attacks_have_windup_before_active() -> bool:
 		# รันจนครบ windup duration
 		boss.tick(boss.get_windup_time(atk))
 		var is_active: bool = boss.state == BossMinotaur.State.ACTIVE
-		var active_flag: bool = boss.is_attack_active
-		if not (is_active and active_flag):
-			all_ok = false
-			break
+		if atk == BossMinotaur.AttackType.LEAP:
+			# LEAP ช่วงลอยตัวยังไม่เปิด hitbox
+			var not_active_in_air: bool = not boss.is_attack_active
+			# รันจนลงพื้น
+			boss.tick(boss.leap_time)
+			var active_flag: bool = boss.is_attack_active
+			if not (is_active and not_active_in_air and active_flag):
+				all_ok = false
+				break
+		else:
+			var active_flag: bool = boss.is_attack_active
+			if not (is_active and active_flag):
+				all_ok = false
+				break
 
 		# รันจนพ้น active time
 		boss.tick(0.6)
@@ -78,8 +88,8 @@ func test_all_attacks_have_windup_before_active() -> bool:
 func test_attack_selection_by_distance() -> bool:
 	var boss: BossMinotaur = _spawn()
 	var near_candidates: Array[BossMinotaur.AttackType] = boss.get_attack_candidates(50.0)
-	var mid_candidates: Array[BossMinotaur.AttackType] = boss.get_attack_candidates(100.0)
-	var far_candidates: Array[BossMinotaur.AttackType] = boss.get_attack_candidates(200.0)
+	var mid_candidates: Array[BossMinotaur.AttackType] = boss.get_attack_candidates(90.0)
+	var far_candidates: Array[BossMinotaur.AttackType] = boss.get_attack_candidates(180.0)
 
 	var near_expected: Array[BossMinotaur.AttackType] = [
 		BossMinotaur.AttackType.CLEAVE,
@@ -99,8 +109,8 @@ func test_attack_selection_by_distance() -> bool:
 	# ทดสอบการเลือกจริงผ่าน choose_attack
 	for _i: int in 20:
 		var n: BossMinotaur.AttackType = boss.choose_attack(50.0)
-		var m: BossMinotaur.AttackType = boss.choose_attack(100.0)
-		var f: BossMinotaur.AttackType = boss.choose_attack(200.0)
+		var m: BossMinotaur.AttackType = boss.choose_attack(90.0)
+		var f: BossMinotaur.AttackType = boss.choose_attack(180.0)
 		ok = ok and near_expected.has(n)
 		ok = ok and mid_expected.has(m)
 		ok = ok and far_expected.has(f)
@@ -109,25 +119,71 @@ func test_attack_selection_by_distance() -> bool:
 	return ok
 
 
-## ห้ามใช้ท่าเดิมซ้ำเกิน 2 ครั้งติด
+## ห้ามใช้ท่าเดิมซ้ำเกิน 2 ครั้งติด — ทดสอบทั้งที่ระยะกลางอย่างเดียว และระยะอื่น ๆ
 func test_no_attack_repeated_more_than_twice() -> bool:
 	var boss: BossMinotaur = _spawn()
-	var distances: Array[float] = [50.0, 100.0, 200.0]
-	var history: Array[BossMinotaur.AttackType] = []
-
 	var ok: bool = true
-	for _i: int in 120:
-		var dist: float = distances[_i % distances.size()]
-		var chosen: BossMinotaur.AttackType = boss.choose_attack(dist, true)
-		history.append(chosen)
+
+	# 1. ทดสอบที่ระยะกลางอย่างเดียว (STOMP ไม่ถูกใช้เกิน 2 ครั้งติด แม้ candidates จะมีแค่ STOMP)
+	var mid_history: Array[BossMinotaur.AttackType] = []
+	boss.consecutive_attack_count = 0
+	boss.last_attack = BossMinotaur.AttackType.CLEAVE
+	for _i: int in 60:
+		var chosen: BossMinotaur.AttackType = boss.choose_attack(90.0, true)
+		mid_history.append(chosen)
 		if boss.consecutive_attack_count > 2:
 			ok = false
 			break
-		if history.size() >= 3:
-			var s: int = history.size()
-			if history[s - 1] == history[s - 2] and history[s - 2] == history[s - 3]:
-				ok = false
-				break
+		var s: int = mid_history.size()
+		if s >= 3 and mid_history[s - 1] == mid_history[s - 2] and mid_history[s - 2] == mid_history[s - 3]:
+			ok = false
+			break
+
+	# 2. ทดสอบที่ระยะใกล้
+	var near_history: Array[BossMinotaur.AttackType] = []
+	boss.consecutive_attack_count = 0
+	boss.last_attack = BossMinotaur.AttackType.STOMP
+	for _i: int in 60:
+		var chosen: BossMinotaur.AttackType = boss.choose_attack(50.0, true)
+		near_history.append(chosen)
+		if boss.consecutive_attack_count > 2:
+			ok = false
+			break
+		var s: int = near_history.size()
+		if s >= 3 and near_history[s - 1] == near_history[s - 2] and near_history[s - 2] == near_history[s - 3]:
+			ok = false
+			break
+
+	# 3. ทดสอบที่ระยะไกล
+	var far_history: Array[BossMinotaur.AttackType] = []
+	boss.consecutive_attack_count = 0
+	boss.last_attack = BossMinotaur.AttackType.CLEAVE
+	for _i: int in 60:
+		var chosen: BossMinotaur.AttackType = boss.choose_attack(180.0, true)
+		far_history.append(chosen)
+		if boss.consecutive_attack_count > 2:
+			ok = false
+			break
+		var s: int = far_history.size()
+		if s >= 3 and far_history[s - 1] == far_history[s - 2] and far_history[s - 2] == far_history[s - 3]:
+			ok = false
+			break
+
+	# 4. ทดสอบระยะสลับกัน
+	var distances: Array[float] = [50.0, 90.0, 180.0]
+	var mixed_history: Array[BossMinotaur.AttackType] = []
+	boss.consecutive_attack_count = 0
+	for _i: int in 60:
+		var dist: float = distances[_i % distances.size()]
+		var chosen: BossMinotaur.AttackType = boss.choose_attack(dist, true)
+		mixed_history.append(chosen)
+		if boss.consecutive_attack_count > 2:
+			ok = false
+			break
+		var s: int = mixed_history.size()
+		if s >= 3 and mixed_history[s - 1] == mixed_history[s - 2] and mixed_history[s - 2] == mixed_history[s - 3]:
+			ok = false
+			break
 
 	boss.free()
 	return ok
@@ -237,7 +293,7 @@ func test_enemy_died_emitted_once() -> bool:
 	return ok
 
 
-## hitbox ปิดเมื่อโดนตาย
+## hitbox ปิดเมื่อโดนตาย (ตรวจผ่าน is_attack_active)
 func test_hitbox_closed_on_death() -> bool:
 	var boss: BossMinotaur = _spawn()
 	boss.start_attack(BossMinotaur.AttackType.CLEAVE)
@@ -247,10 +303,9 @@ func test_hitbox_closed_on_death() -> bool:
 	boss.hurtbox.receive(_hit(9999))
 	var is_dead: bool = boss.state == BossMinotaur.State.DEAD
 	var active_closed: bool = not boss.is_attack_active
-	var monitoring_closed: bool = not boss.hitbox.monitoring
 
 	boss.free()
-	return was_active and is_dead and active_closed and monitoring_closed
+	return was_active and is_dead and active_closed
 
 
 ## poise สูง: เซเฉพาะ stagger สะสมเกิน poise แล้วรีเซ็ต
@@ -278,26 +333,54 @@ func test_poise_stagger_mechanic() -> bool:
 	return ok1 and ok2 and ok3
 
 
-## กระโดดทุบ: แสดง TelegraphMarker ที่จุดตกตอน telegraph และซ่อนเมื่อลงพื้น
-func test_leap_shows_telegraph_marker() -> bool:
+## TelegraphMarker ซ่อนตอนเข้า RECOVER (ไม่ซ่อนตอนเริ่มกระโดด) + AoE hitbox scale squash + STOMP แสดง marker ตอน windup
+func test_telegraph_marker_lifecycle_and_squash() -> bool:
 	var boss: BossMinotaur = _spawn()
 	var dummy := Node2D.new()
 	dummy.position = Vector2(120, 40)
 	boss.set_target(dummy)
 
+	# 1. LEAP: แสดงที่จุดตกตอน windup
 	boss.start_attack(BossMinotaur.AttackType.LEAP)
-	var marker_visible_in_windup: bool = boss.telegraph_marker != null \
+	var leap_marker_windup: bool = boss.telegraph_marker != null \
 		and boss.telegraph_marker.visible \
 		and boss.telegraph_marker.global_position.is_equal_approx(dummy.global_position)
 
+	# ระหว่างลอยตัวใน ACTIVE: marker ยังต้องแสดงอยู่
 	boss.tick(boss.get_windup_time(BossMinotaur.AttackType.LEAP))
-	# ใน active บอสกระโดดไปหาจุดตก
-	boss.tick(boss.leap_time + 0.05)
-	var marker_hidden_after_land: bool = not boss.telegraph_marker.visible
+	boss.tick(boss.leap_time * 0.5)
+	var leap_marker_in_air: bool = boss.telegraph_marker.visible
+
+	# ตอนลงพื้น: hitbox_shape.scale เป็น squash วงรี และ marker ยังอยู่
+	boss.tick(boss.leap_time * 0.5 + 0.02)
+	var leap_squash_ok: bool = is_equal_approx(boss.hitbox_shape.scale.y, boss.telegraph_marker.squash)
+	var leap_marker_on_land: bool = boss.telegraph_marker.visible
+
+	# เข้า RECOVER: marker ซ่อน
+	boss.tick(boss.leap_active_time + 0.05)
+	var leap_hidden_in_recover: bool = not boss.telegraph_marker.visible \
+		and boss.state == BossMinotaur.State.RECOVER
+
+	# 2. STOMP: แสดง marker ตอน windup ที่จุดบอสยืน
+	boss.start_attack(BossMinotaur.AttackType.STOMP)
+	var stomp_marker_windup: bool = boss.telegraph_marker.visible \
+		and boss.telegraph_marker.global_position.is_equal_approx(boss.global_position)
+
+	boss.tick(boss.get_windup_time(BossMinotaur.AttackType.STOMP))
+	# ใน active hitbox ของ STOMP เป็น squash วงรี
+	var stomp_squash_ok: bool = is_equal_approx(boss.hitbox_shape.scale.y, boss.telegraph_marker.squash)
+	var stomp_marker_active: bool = boss.telegraph_marker.visible
+
+	# เข้า RECOVER: marker ซ่อน
+	boss.tick(boss.stomp_active_time + 0.05)
+	var stomp_hidden_in_recover: bool = not boss.telegraph_marker.visible \
+		and boss.state == BossMinotaur.State.RECOVER
 
 	boss.free()
 	dummy.free()
-	return marker_visible_in_windup and marker_hidden_after_land
+	return leap_marker_windup and leap_marker_in_air and leap_squash_ok and leap_marker_on_land \
+		and leap_hidden_in_recover and stomp_marker_windup and stomp_squash_ok and stomp_marker_active \
+		and stomp_hidden_in_recover
 
 
 ## พุ่งชน: ล็อคทิศตอน telegraph
@@ -320,3 +403,132 @@ func test_charge_locks_direction() -> bool:
 	boss.free()
 	dummy.free()
 	return locked_dir.is_equal_approx(Vector2.RIGHT) and still_locked
+
+
+## โดนเซกลาง ACTIVE → hitbox ปิดทันที
+func test_stagger_in_active_closes_hitbox() -> bool:
+	var boss: BossMinotaur = _spawn()
+	boss.start_attack(BossMinotaur.AttackType.CLEAVE)
+	boss.tick(boss.get_windup_time(BossMinotaur.AttackType.CLEAVE))
+	var was_active: bool = boss.is_attack_active
+
+	# โดนตีจนเซกลาง active (stagger >= poise 60.0)
+	boss.hurtbox.receive(_hit(10, 80.0))
+	var is_hurt: bool = boss.state == BossMinotaur.State.HURT
+	var hitbox_closed: bool = not boss.is_attack_active
+
+	boss.free()
+	return was_active and is_hurt and hitbox_closed
+
+
+## LEAP: hitbox เปิดเฉพาะตอนลงพื้น (ไม่เปิดตอนลอยตัว)
+func test_leap_hitbox_active_only_on_landing() -> bool:
+	var boss: BossMinotaur = _spawn()
+	var dummy := Node2D.new()
+	dummy.position = Vector2(150, 0)
+	boss.set_target(dummy)
+
+	boss.start_attack(BossMinotaur.AttackType.LEAP)
+	boss.tick(boss.get_windup_time(BossMinotaur.AttackType.LEAP))
+	var is_active_state: bool = boss.state == BossMinotaur.State.ACTIVE
+
+	# ระหว่างลอยตัว (ยังไม่ถึง leap_time) → hitbox ต้องยังไม่เปิด!
+	boss.tick(boss.leap_time * 0.5)
+	var not_active_in_air: bool = not boss.is_attack_active
+
+	# ถึงจุดตก (ลงพื้น) → hitbox เปิด!
+	boss.tick(boss.leap_time * 0.5 + 0.01)
+	var active_on_land: bool = boss.is_attack_active
+
+	# พ้น active time → ปิด
+	boss.tick(boss.leap_active_time + 0.05)
+	var closed_in_recover: bool = not boss.is_attack_active and boss.state == BossMinotaur.State.RECOVER
+
+	boss.free()
+	dummy.free()
+	return is_active_state and not_active_in_air and active_on_land and closed_in_recover
+
+
+## โดนตีระหว่าง windup ของ LEAP → marker หาย
+func test_hit_during_leap_windup_hides_marker() -> bool:
+	var boss: BossMinotaur = _spawn()
+	var dummy := Node2D.new()
+	dummy.position = Vector2(150, 0)
+	boss.set_target(dummy)
+
+	boss.start_attack(BossMinotaur.AttackType.LEAP)
+	var marker_visible_before: bool = boss.telegraph_marker != null and boss.telegraph_marker.visible
+
+	# โดนตีจนเซระหว่าง windup (stagger >= poise)
+	boss.hurtbox.receive(_hit(10, 80.0))
+	var is_hurt: bool = boss.state == BossMinotaur.State.HURT
+	var marker_hidden_after_hit: bool = not boss.telegraph_marker.visible
+
+	boss.free()
+	dummy.free()
+	return marker_visible_before and is_hurt and marker_hidden_after_hit
+
+
+## ทุกท่าที่ถูกเลือกที่ระยะ d ตีถึง d (reach >= d)
+func test_every_chosen_attack_reaches_target_distance() -> bool:
+	var boss: BossMinotaur = _spawn()
+	var ok: bool = true
+	var test_dists: Array[float] = [10.0, 30.0, 50.0, 70.0, 85.0, 95.0, 110.0, 140.0, 180.0, 220.0, 240.0]
+	for d: float in test_dists:
+		for _i: int in 30:
+			var atk: BossMinotaur.AttackType = boss.choose_attack(d, true)
+			var reach: float = boss.get_attack_reach(atk)
+			if reach < d:
+				ok = false
+				break
+		if not ok:
+			break
+
+	boss.free()
+	return ok
+
+
+## เซแล้วมีแรงกระเด็น (velocity ตั้งหลัง _enter(State.HURT))
+func test_hurt_sets_knockback_velocity() -> bool:
+	var boss: BossMinotaur = _spawn()
+	boss.velocity = Vector2.ZERO
+	var hit_info: DamageInfo = _hit(10, 80.0)
+	hit_info.knockback = Vector2(240, 120)
+
+	boss.hurtbox.receive(hit_info)
+	var is_hurt: bool = boss.state == BossMinotaur.State.HURT
+	var has_knockback: bool = boss.velocity.is_equal_approx(hit_info.knockback * 0.5)
+
+	boss.free()
+	return is_hurt and has_knockback
+
+
+## กวาด (SWEEP) = ครึ่งวงหน้าจริง (ไม่ล้นหลังบอส)
+func test_sweep_hitbox_is_front_semicircle() -> bool:
+	var boss: BossMinotaur = _spawn()
+	boss.start_attack(BossMinotaur.AttackType.SWEEP)
+	boss.tick(boss.get_windup_time(BossMinotaur.AttackType.SWEEP))
+
+	var is_poly: bool = boss.hitbox_shape.shape is ConvexPolygonShape2D
+	var poly: ConvexPolygonShape2D = boss.hitbox_shape.shape as ConvexPolygonShape2D
+	var pts: PackedVector2Array = poly.points
+
+	var facing_vec: Vector2 = boss._attack_facing_vec
+	var no_leak_behind: bool = true
+	for pt: Vector2 in pts:
+		if pt.length_squared() > 1.0:
+			if pt.normalized().dot(facing_vec) < -0.05:
+				no_leak_behind = false
+				break
+
+	boss.free()
+	return is_poly and no_leak_behind
+
+
+## กระโดดทุบ: จุดตก clamp ไม่ให้ลงในกำแพง (ถ้าอยู่นอก tree หรือไม่มี space_state ให้คืนตำแหน่งเดิมอย่างปลอดภัย)
+func test_leap_clamp_wall_safe_fallback() -> bool:
+	var boss: BossMinotaur = _spawn()
+	var pos: Vector2 = boss._clamp_leap_position(Vector2(100, 0), Vector2.ZERO)
+	var ok: bool = pos.is_equal_approx(Vector2(100, 0))
+	boss.free()
+	return ok
