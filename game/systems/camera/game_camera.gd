@@ -12,6 +12,18 @@ const DEFAULT_HITSTOP_SCALE: float = 0.05
 ## ขอบเขตการเคลื่อนที่ของกล้อง (Rect2() = ไม่จำกัด)
 @export var bounds: Rect2 = Rect2()
 
+@export_group("Focus Target")
+## เป้าหมายที่สองสำหรับจัดเฟรมแบบ lock-on (framing ระหว่าง target กับ focus_target)
+@export var focus_target: Node2D = null
+## น้ำหนักการให้น้ำหนักไปทาง focus_target (0.0 = อยู่ที่ผู้เล่น, 1.0 = อยู่ที่เป้าหมาย)
+@export var focus_weight: float = 0.35
+## ระยะขยับสูงสุดของเฟรมกล้องจากผู้เล่น (pixel)
+@export var max_focus_offset: float = 64.0
+
+@export_group("Slide")
+## เกิดเมื่อ slide_to ดำเนินการจนเสร็จสิ้น
+signal slide_completed
+
 @export_group("Trauma & Shake")
 ## อัตราการลด trauma ต่อวินาที
 @export var trauma_decay: float = 1.2
@@ -34,6 +46,12 @@ const DEFAULT_HITSTOP_SCALE: float = 0.05
 
 var trauma: float = 0.0
 var _internal_pos: Vector2 = Vector2.ZERO
+var _is_sliding: bool = false
+var _slide_start_pos: Vector2 = Vector2.ZERO
+var _slide_target_pos: Vector2 = Vector2.ZERO
+var _slide_target_rect: Rect2 = Rect2()
+var _slide_duration: float = 0.0
+var _slide_elapsed: float = 0.0
 
 static var _hitstop_count: int = 0
 
@@ -73,8 +91,40 @@ func follow(new_target: Node2D, snap: bool = false) -> void:
 ## วาร์ปตำแหน่งกล้องไปยังเป้าหมายทันทีโดยไม่ lerp
 func snap_to_target() -> void:
 	if target != null and is_instance_valid(target):
-		_internal_pos = clamp_to_bounds(target.global_position, bounds)
+		var target_pos: Vector2 = target.global_position
+		if focus_target != null and is_instance_valid(focus_target):
+			target_pos = compute_focus_point(target.global_position, focus_target.global_position, focus_weight, max_focus_offset)
+		_internal_pos = clamp_to_bounds(target_pos, bounds)
 		position = _internal_pos.round()
+
+
+## กำหนดเป้าหมายโฟกัสร่วม (framing ระหว่าง target กับ focus_target) — ส่ง null เพื่อเลิก
+func set_focus_target(node: Node2D) -> void:
+	focus_target = node
+
+
+## เริ่มเลื่อนกล้องไปยังห้องใหม่ (rect) แบบนุ่มนวล โดยระหว่างเลื่อนจะไม่ follow ผู้เล่น
+## เมื่อเลื่อนถึงปลายทางแล้ว จะตั้ง set_bounds(rect)
+func slide_to(rect: Rect2, duration: float) -> void:
+	if duration <= 0.0:
+		_is_sliding = false
+		_internal_pos = rect.get_center()
+		position = _internal_pos.round()
+		set_bounds(rect)
+		slide_completed.emit()
+		return
+
+	_slide_start_pos = _internal_pos
+	_slide_target_pos = rect.get_center()
+	_slide_target_rect = rect
+	_slide_duration = duration
+	_slide_elapsed = 0.0
+	_is_sliding = true
+
+
+## คืนค่า true หากกล้องกำลังอยู่ในระหว่าง slide_to
+func is_sliding() -> bool:
+	return _is_sliding
 
 
 ## กำหนดตำแหน่งกล้องโดยตรง (คำนวณ clamp ขอบ และ round ให้)
@@ -124,17 +174,57 @@ func _physics_process(delta: float) -> void:
 
 ## อัปเดตตรรกะกล้อง 1 เฟรม (follow lerp, clamp bounds, pixel round, trauma decay, shake offset) — เทสต์เรียกตรงได้
 func tick(delta: float) -> void:
-	if target != null and is_instance_valid(target):
-		_internal_pos = compute_follow_position(_internal_pos, target.global_position, follow_smooth_speed, delta)
+	if _is_sliding:
+		_slide_elapsed += delta
+		var t: float = clampf(_slide_elapsed / _slide_duration, 0.0, 1.0) if _slide_duration > 0.0 else 1.0
+		_internal_pos = compute_slide_position(_slide_start_pos, _slide_target_pos, t)
+		position = _internal_pos.round()
+		if _slide_elapsed >= _slide_duration:
+			_is_sliding = false
+			_internal_pos = _slide_target_pos
+			set_bounds(_slide_target_rect)
+			position = _internal_pos.round()
+			slide_completed.emit()
+	else:
+		var has_target: bool = target != null and is_instance_valid(target)
+		var has_focus: bool = focus_target != null and is_instance_valid(focus_target)
 
-	_internal_pos = clamp_to_bounds(_internal_pos, bounds)
-	position = _internal_pos.round()
+		if has_target:
+			var target_pos: Vector2 = target.global_position
+			if has_focus:
+				target_pos = compute_focus_point(target.global_position, focus_target.global_position, focus_weight, max_focus_offset)
+			_internal_pos = compute_follow_position(_internal_pos, target_pos, follow_smooth_speed, delta)
+		elif has_focus:
+			_internal_pos = compute_follow_position(_internal_pos, focus_target.global_position, follow_smooth_speed, delta)
+
+		_internal_pos = clamp_to_bounds(_internal_pos, bounds)
+		position = _internal_pos.round()
 
 	trauma = decay_trauma(trauma, trauma_decay, delta)
 	offset = calculate_shake_offset(trauma, max_shake_offset).round()
 
 
 # ── Static Logic ที่เทสต์ได้โดยไม่ต้องพึ่ง scene tree ──
+
+## คำนวณตำแหน่งเลื่อนกล้องระหว่างเปลี่ยนห้อง (smooth interpolation)
+static func compute_slide_position(start_pos: Vector2, end_pos: Vector2, t: float) -> Vector2:
+	var clamped_t: float = clampf(t, 0.0, 1.0)
+	var weight: float = smoothstep(0.0, 1.0, clamped_t)
+	return start_pos.lerp(end_pos, weight)
+
+
+## คำนวณ offset จุดโฟกัสระหว่างผู้เล่นกับเป้าหมาย lock-on
+static func compute_focus_offset(player_pos: Vector2, target_pos: Vector2, weight: float, max_offset: float) -> Vector2:
+	var diff: Vector2 = target_pos - player_pos
+	var offset: Vector2 = diff * weight
+	if max_offset > 0.0 and offset.length() > max_offset:
+		offset = offset.limit_length(max_offset)
+	return offset
+
+
+## คำนวณจุดโฟกัสระหว่างผู้เล่นกับเป้าหมาย lock-on
+static func compute_focus_point(player_pos: Vector2, target_pos: Vector2, weight: float, max_offset: float) -> Vector2:
+	return player_pos + compute_focus_offset(player_pos, target_pos, weight, max_offset)
 
 ## คำนวณการลด trauma ตามเวลา
 static func decay_trauma(current_trauma: float, decay_rate: float, delta: float) -> float:
