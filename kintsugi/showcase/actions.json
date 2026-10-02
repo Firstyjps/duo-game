@@ -1,0 +1,236 @@
+[
+ {
+  "key": "idle",
+  "th": "ยืนหายใจ",
+  "en": "Idle",
+  "keys": "—",
+  "source": "original",
+  "frames": 10,
+  "ms": 600
+ },
+ {
+  "key": "walk",
+  "th": "เดิน",
+  "en": "Walk",
+  "keys": "← →",
+  "source": "original",
+  "frames": 26,
+  "ms": 1300
+ },
+ {
+  "key": "crouch",
+  "th": "หมอบ",
+  "en": "Crouch",
+  "keys": "↓",
+  "source": "pixellab",
+  "frames": 7,
+  "ms": 830
+ },
+ {
+  "key": "run",
+  "th": "วิ่ง",
+  "en": "Run",
+  "keys": "Shift + ← →",
+  "source": "pixellab",
+  "frames": 8,
+  "ms": 560
+ },
+ {
+  "key": "turn",
+  "th": "กลับตัวขณะวิ่ง",
+  "en": "Run turn",
+  "keys": "วิ่งแล้วกดทิศกลับ",
+  "source": "pixellab",
+  "frames": 6,
+  "ms": 620
+ },
+ {
+  "key": "jump",
+  "th": "กระโดด",
+  "en": "Jump",
+  "keys": "Space",
+  "source": "pixellab",
+  "frames": 7,
+  "ms": 830
+ },
+ {
+  "key": "dj",
+  "th": "กระโดด 2 ชั้น",
+  "en": "Double jump",
+  "keys": "Space กลางอากาศ",
+  "source": "pixellab",
+  "frames": 7,
+  "ms": 760
+ },
+ {
+  "key": "dash",
+  "th": "พุ่งกลางอากาศ",
+  "en": "Air dash",
+  "keys": "C กลางอากาศ",
+  "source": "pixellab",
+  "frames": 4,
+  "ms": 480
+ },
+ {
+  "key": "slide",
+  "th": "สไลด์",
+  "en": "Slide",
+  "keys": "↓ + C",
+  "source": "pixellab",
+  "frames": 6,
+  "ms": 680
+ },
+ {
+  "key": "backdodge",
+  "th": "หลบถอยหลัง",
+  "en": "Back dodge",
+  "keys": "C",
+  "source": "pixellab",
+  "frames": 7,
+  "ms": 690
+ },
+ {
+  "key": "atk1",
+  "th": "ฟัน 1",
+  "en": "Attack 1",
+  "keys": "X",
+  "source": "pixellab",
+  "frames": 7,
+  "ms": 810
+ },
+ {
+  "key": "atk2",
+  "th": "ฟัน 2",
+  "en": "Attack 2",
+  "keys": "X X",
+  "source": "pixellab",
+  "frames": 7,
+  "ms": 810
+ },
+ {
+  "key": "atk2-1",
+  "th": "ฟัน 2-1 (แทง)",
+  "en": "Attack 2-1",
+  "keys": "X X · เว้น · X",
+  "source": "pixellab",
+  "frames": 6,
+  "ms": 730
+ },
+ {
+  "key": "atk2-2",
+  "th": "ฟัน 2-2 (กวาด)",
+  "en": "Attack 2-2",
+  "keys": "… X",
+  "source": "pixellab",
+  "frames": 6,
+  "ms": 730
+ },
+ {
+  "key": "atk3",
+  "th": "ฟัน 3 (ฟันลง)",
+  "en": "Attack 3",
+  "keys": "X X X",
+  "source": "pixellab",
+  "frames": 7,
+  "ms": 810
+ },
+ {
+  "key": "jatk1",
+  "th": "ฟันกลางอากาศ 1",
+  "en": "Jump attack 1",
+  "keys": "X กลางอากาศ",
+  "source": "pixellab",
+  "frames": 6,
+  "ms": 730
+ },
+ {
+  "key": "jatk2",
+  "th": "ฟันกลางอากาศ 2",
+  "en": "Jump attack 2",
+  "keys": "X X กลางอากาศ",
+  "source": "pixellab",
+  "frames": 6,
+  "ms": 730
+ },
+ {
+  "key": "datk1",
+  "th": "ฟันสวน 1",
+  "en": "Dodge attack 1",
+  "keys": "C แล้ว X",
+  "source": "pixellab",
+  "frames": 5,
+  "ms": 650
+ },
+ {
+  "key": "datk2",
+  "th": "ฟันสวน 2",
+  "en": "Dodge attack 2",
+  "keys": "C แล้ว X X",
+  "source": "pixellab",
+  "frames": 6,
+  "ms": 730
+ },
+ {
+  "key": "vatk",
+  "th": "ฟันแนวดิ่ง",
+  "en": "Vertical attack",
+  "keys": "↓ + X กลางอากาศ",
+  "source": "pixellab",
+  "frames": 7,
+  "ms": 880
+ },
+ {
+  "key": "hurt1",
+  "th": "โดนตี (เบา)",
+  "en": "Hurt 1",
+  "keys": "โดนบนพื้น",
+  "source": "pixellab",
+  "frames": 2,
+  "ms": 470
+ },
+ {
+  "key": "hurt2",
+  "th": "โดนตี (ล้ม)",
+  "en": "Hurt 2",
+  "keys": "โดนกลางอากาศ",
+  "source": "pixellab",
+  "frames": 4,
+  "ms": 740
+ },
+ {
+  "key": "heal",
+  "th": "ฟื้นพลัง",
+  "en": "Heal",
+  "keys": "Q ค้าง",
+  "source": "pixellab",
+  "frames": 7,
+  "ms": 950
+ },
+ {
+  "key": "ladder",
+  "th": "ปีนบันได",
+  "en": "Ladder",
+  "keys": "↑ ที่บันได",
+  "source": "pixellab",
+  "frames": 5,
+  "ms": 550
+ },
+ {
+  "key": "ledge",
+  "th": "เกาะขอบผา",
+  "en": "Ledge grab & climb",
+  "keys": "ชนขอบผา แล้ว ↑",
+  "source": "pixellab",
+  "frames": 5,
+  "ms": 800
+ },
+ {
+  "key": "wall",
+  "th": "เกาะกำแพง / ถีบกำแพง",
+  "en": "Wall slide & jump",
+  "keys": "ดันเข้ากำแพง + Space",
+  "source": "pixellab",
+  "frames": 6,
+  "ms": 850
+ }
+]

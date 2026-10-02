@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kitsune Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/kitsune.css">
+<link rel="stylesheet" href="studio.css">
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="../index.html">Kitsune <span>Studio</span></a>
+  <nav class="tabs" role="tablist" aria-label="Studio sections">
+    <button role="tab" data-tab="play" id="tab-play">เล่น</button>
+    <button role="tab" data-tab="inspector" id="tab-inspector">ตรวจเฟรม</button>
+    <button role="tab" data-tab="moves" id="tab-moves">ท่าทั้งหมด</button>
+    <button role="tab" data-tab="concepts" id="tab-concepts">คอนเซปต์</button>
+    <button role="tab" data-tab="docs" id="tab-docs">เอกสาร</button>
+  </nav>
+</header>
+
+<main>
+  <section class="panel" data-panel="play" aria-labelledby="tab-play">
+    <div class="frame-wrap"><iframe id="gameFrame" src="../game-pixellab/index.html" title="Kintsugi Run (PixelLab)" allow="fullscreen"></iframe></div>
+    <p class="note">เวอร์ชัน PixelLab (23 แอนิเมชันวาดใหม่) · คลิกในเกมแล้วใช้คีย์บอร์ดได้เลย · <a href="../game-pixellab/index.html" target="_blank" rel="noopener">เปิดเกมเต็มจอ</a> · <a href="../game/index.html" target="_blank" rel="noopener">เวอร์ชันโมดูลเดิม (game/)</a></p>
+  </section>
+
+  <section class="panel" data-panel="inspector" aria-labelledby="tab-inspector">
+    <div class="inspector">
+      <div class="viewer">
+        <div class="stagebox" id="stagebox"><canvas id="insp" width="64" height="64"></canvas></div>
+        <div class="timeline">
+          <button class="btn" id="play" type="button">⏸ หยุด</button>
+          <button class="btn icon" id="prev" type="button" aria-label="เฟรมก่อนหน้า">◀</button>
+          <button class="btn icon" id="next" type="button" aria-label="เฟรมถัดไป">▶</button>
+          <input type="range" id="scrub" min="0" max="0" value="0" aria-label="เลือกเฟรม">
+          <span class="mono" id="frameLabel">F01 / 10</span>
+          <span class="mono dim" id="durLabel">60ms</span>
+        </div>
+        <div class="toggles">
+          <label><input type="checkbox" id="onion"> Onion skin</label>
+          <label><input type="checkbox" id="guides" checked> จุดยึดเท้า + hitbox</label>
+          <label><input type="checkbox" id="mirror"> กลับด้าน (หันขวาแบบในเกม)</label>
+          <span class="seg" role="group" aria-label="ความเร็ว">
+            <button class="btn sm" data-speed="0.25">¼×</button><button class="btn sm" data-speed="0.5">½×</button><button class="btn sm on" data-speed="1">1×</button><button class="btn sm" data-speed="2">2×</button>
+          </span>
+          <span class="seg" role="group" aria-label="พื้นหลัง">
+            <button class="btn sm on" data-bg="checker">ตาราง</button><button class="btn sm" data-bg="night">กลางคืน</button><button class="btn sm" data-bg="light">สว่าง</button>
+          </span>
+        </div>
+      </div>
+      <aside class="side">
+        <h2>แอนิเมชันจากไฟล์ .aseprite</h2>
+        <ul class="anim-list" id="animList"></ul>
+        <dl class="facts" id="facts"></dl>
+        <p class="note">ข้อมูลมาจาก <code>game/assets/sprites.json</code> ซึ่งสร้างโดย <code>tools/build_sprites.py</code> ใช้ไฟล์ชุดเดียวกับเกม</p>
+      </aside>
+    </div>
+  </section>
+
+  <section class="panel" data-panel="moves" aria-labelledby="tab-moves">
+    <div class="moves-head">
+      <h2>ท่าทั้งหมดในเกม</h2>
+      <p class="legend"><span class="tag real">เฟรมจริง</span> ใช้เฟรมจากไฟล์ sample ตรงๆ · <span class="tag remix">รีมิกซ์</span> สร้างจากเฟรม idle/walk + ท่าทาง + VFX โดยวิเคราะห์จังหวะจาก GIF ตัวอย่างของชุดเต็ม</p>
+    </div>
+    <div class="moves" id="moves"></div>
+    <h2 class="sub-h">จังหวะท่าโจมตี (ms)</h2>
+    <div class="table-wrap"><table class="timing" id="timing"></table></div>
+  </section>
+
+  <section class="panel" data-panel="concepts" aria-labelledby="tab-concepts">
+    <div class="concepts" id="concepts"></div>
+  </section>
+
+  <section class="panel" data-panel="docs" aria-labelledby="tab-docs">
+    <div class="docs">
+      <nav class="doc-list" id="docList" aria-label="เอกสาร"></nav>
+      <article class="doc" id="doc"></article>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script type="module" src="studio.js"></script>
+</body>
+</html>

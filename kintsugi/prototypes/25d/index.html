@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kintsugi 2.5D Prototypes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600&family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  /* Layout: short intro, then four equal prototype cards (thumbnail → what it is → what to try → open). */
+  :root {
+    color-scheme: dark;
+    --bg: #0F121B; --surface: #151037; --line: #2F1850; --fg: #ECEBFF; --muted: #9EA0FA;
+    --gold: #FFA303; --gold-hi: #FFFFCC; --lilac: #B2B2FF;
+    --font-display: 'Pixelify Sans', 'Kanit', system-ui, sans-serif;
+    --font-body: 'Kanit', system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); }
+  body { padding-inline: 16px; padding-block: 32px 64px; }
+  .wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 28px; }
+  .eyebrow { font-family: var(--font-display); color: var(--muted); letter-spacing: .08em; text-transform: uppercase; font-size: 14px; }
+  h1 { font-family: var(--font-display); font-size: clamp(34px, 6vw, 56px); line-height: 1; margin: 6px 0 14px; color: var(--gold-hi); text-shadow: 0 3px 0 #A64B0A; text-wrap: balance; }
+  .intro p { margin: 0 0 8px; max-width: 68ch; line-height: 1.65; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 18px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+  .card img { width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; image-rendering: pixelated; display: block; background: #07060f; }
+  .body { padding: 16px 18px 18px; display: grid; gap: 8px; flex: 1; }
+  .tag { font-family: var(--font-display); color: var(--gold); font-size: 14px; }
+  h2 { margin: 0; font-size: 22px; font-weight: 600; }
+  .body p { margin: 0; color: var(--fg); line-height: 1.6; }
+  .try { margin: 4px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.6; font-size: 15px; }
+  .open { margin-top: auto; justify-self: start; font: inherit; font-weight: 600; color: var(--bg); background: var(--gold); border-radius: 8px; padding: 8px 18px; text-decoration: none; }
+  .open:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 3px; }
+  .pending { color: var(--muted); font-size: 14px; }
+  footer { color: var(--muted); font-size: 13px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="intro">
+    <div class="eyebrow">Kintsugi Run · ทดลองมุมมอง 2.5D</div>
+    <h1>เลือกมุมมองเกม</h1>
+    <p>ทั้ง 4 แบบใช้ตัวละครกับท่าชุดเดียวกัน (สไปรต์ PixelLab) ต่างกันที่วิธีวางโลกและกล้อง ลองเล่นจริงทุกแบบแล้วค่อยเลือกทางที่จะพัฒนาเป็นเกมเต็ม</p>
+    <p>ทุกแบบ: คลิกในจอเกมก่อน แล้วกด Space เพื่อเริ่ม · R เริ่มใหม่ · M ปิด/เปิดเสียง</p>
+  </header>
+
+  <main class="grid">
+    <article class="card">
+      <img src="thumbs/hd2d.png" alt="HD-2D side view: extruded stone blocks, moonlit fog, pines" width="960" height="540">
+      <div class="body">
+        <span class="tag">แบบ A</span>
+        <h2>HD-2D มุมข้าง</h2>
+        <p>เกม Kintsugi Run เดิมทั้งเกม (2 ด่าน 26 ท่า) แต่โลกเป็น 3D: บล็อกมีความลึก แสงโคม หมอก ต้นสนและภูเขาอยู่ไกลจริง หญ้าเบลอหน้าเลนส์</p>
+        <ul class="try"><li>กด 1 / 2 สลับภาพ 2D เดิม กับ HD-2D เทียบกันได้ทันที</li><li>สังเกตเงาใต้ตัว แสงโคมที่เช็กพอยต์ และความลึกตอนกล้องเลื่อน</li></ul>
+        <a class="open" href="hd2d/index.html">เปิดแบบ A</a>
+      </div>
+    </article>
+    <article class="card">
+      <img src="thumbs/depth.png" alt="HD-2D with a cave layer reached through a shrine door" width="960" height="540">
+      <div class="body">
+        <span class="tag">แบบ B</span>
+        <h2>HD-2D + ประตูสลับชั้นลึก</h2>
+        <p>แบบ A บวกชั้นถ้ำด้านหลังในด่าน 1 ยืนหน้าประตูศาลเจ้าแล้วกด ↑ กล้องจะเลื่อนลึกเข้าไปเล่นในถ้ำ ชั้นหน้ากลายเป็นกระจกโปร่ง</p>
+        <ul class="try"><li>ประตูแรกอยู่ไม่ไกลจากจุดเริ่ม (ก่อนถึงขั้นบันไดหิน)</li><li>ในถ้ำมีเศษทอง 3 ชิ้น ศัตรู 2 ตัว และหนาม · ออกทางประตูอีกฝั่ง</li></ul>
+        <a class="open" href="hd2d/index.html#depth">เปิดแบบ B</a>
+      </div>
+    </article>
+    <article class="card">
+      <img src="thumbs/beatemup.png" alt="Beat 'em up prototype" width="960" height="540">
+      <div class="body">
+        <span class="tag">แบบ C</span>
+        <h2>Beat 'em up เดินลึกได้</h2>
+        <p>ถนนในวัดแบบเกมต่อยตีคลาสสิก เดินขึ้นลงตามแนวลึก ศัตรูมาเป็นระลอก จอล็อกจนกว่าจะเคลียร์ ใช้คอมโบ ฟันกลางอากาศ หลบแล้วสวน</p>
+        <ul class="try"><li>↑ ↓ เดินเข้า-ออกแนวลึก · ต้องอยู่แนวเดียวกับศัตรูถึงจะฟันโดน</li><li>X X X / X X เว้น X X · C หลบ แล้ว X X</li></ul>
+        <a class="open" href="beatemup/index.html">เปิดแบบ C</a>
+      </div>
+    </article>
+    <article class="card">
+      <img src="thumbs/iso.png" alt="Isometric temple courtyard prototype" width="960" height="540">
+      <div class="body">
+        <span class="tag">แบบ D</span>
+        <h2>Isometric ลานวัด</h2>
+        <p>ลานวัดมองเฉียงจากบน มีบันได ระดับความสูง สระน้ำ โทริอิ ซากุระ เดิน 4 ทิศ เก็บเศษทอง 6 ชิ้นให้ครบ</p>
+        <ul class="try"><li>ตัวละครมีภาพแค่หันซ้าย/ขวา ลองดูว่าเดินขึ้น-ลงจอแล้วรับได้ไหม</li><li>เดินหลังสิ่งของจะเห็นเงาโครงร่างตัวละคร</li></ul>
+        <a class="open" href="iso/index.html">เปิดแบบ D</a>
+      </div>
+    </article>
+  </main>
+
+  <footer>ไฟล์อยู่ใน <code>prototypes/25d/</code> ของ Kitsune · แบบ A/B: <code>hd2d/</code> (r3d.js) · แบบ C: <code>beatemup/</code> · แบบ D: <code>iso/</code></footer>
+</div>
+</body>
+</html>

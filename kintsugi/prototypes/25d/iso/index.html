@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Kintsugi Run - Isometric Courtyard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0F121B;
+    --ink: #E9E8FF;
+    --muted: #9EA0FA;
+    --gold: #FFA303;
+    --gold-hi: #FFFFCC;
+    --crimson: #FF0E00;
+    --lilac: #B2B2FF;
+    --panel: rgba(15, 18, 27, .82);
+    --panel-border: #2F1850;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    overflow: hidden;
+    font-family: 'Kanit', system-ui, sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: none;
+  }
+  #wrap {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+  }
+  #stage {
+    position: relative;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #hud {
+    position: absolute;
+    top: 10px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    font-size: 14px;
+    pointer-events: none;
+    text-shadow: 0 2px 2px #000;
+  }
+  #hud .pill {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 3px 9px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  #hud .hp {
+    color: var(--crimson);
+    letter-spacing: .15em;
+    font-size: 15px;
+  }
+  #hud .gold {
+    color: var(--gold);
+    font-weight: 600;
+  }
+  #hint {
+    position: absolute;
+    bottom: 8px;
+    left: 12px;
+    right: 12px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--muted);
+    pointer-events: none;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    text-align: center;
+  }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: rgba(15, 18, 27, .78);
+    text-align: center;
+    padding: 20px;
+    backdrop-filter: blur(2px);
+  }
+  .overlay.hidden { display: none; }
+  .overlay h1 {
+    margin: 0 0 6px;
+    font-size: clamp(24px, 5vw, 40px);
+    font-weight: 600;
+    letter-spacing: .04em;
+    color: var(--gold-hi);
+    text-shadow: 0 3px 0 #A64B0A, 0 0 20px rgba(255, 163, 3, .5);
+  }
+  .overlay p {
+    margin: 6px 0;
+    color: var(--ink);
+    font-size: 14px;
+  }
+  .overlay .sub {
+    color: var(--muted);
+    font-size: 12.5px;
+    max-width: 420px;
+    line-height: 1.45;
+  }
+  .overlay .controls-box {
+    margin: 10px auto;
+    background: rgba(47, 24, 80, 0.45);
+    border: 1px solid rgba(178, 178, 255, 0.25);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 12px;
+    text-align: left;
+    max-width: 380px;
+    line-height: 1.6;
+    color: var(--gold-hi);
+  }
+  .overlay .controls-box span {
+    color: var(--lilac);
+    font-weight: 600;
+  }
+  .overlay .stats {
+    font-size: 16px;
+    margin: 12px 0;
+  }
+  .overlay .stats b { color: var(--gold); }
+  .btn {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 7px 18px;
+    border-radius: 6px;
+    border: 1px solid var(--gold);
+    color: var(--gold-hi);
+    background: rgba(255, 163, 3, .16);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn:hover {
+    background: rgba(255, 163, 3, .35);
+    transform: translateY(-1px);
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="c" width="480" height="270"></canvas>
+    
+    <div id="hud">
+      <span class="pill hp" id="hHp">♥♥♥</span>
+      <span class="pill">เศษทอง <span class="gold" id="hShards">0/6</span></span>
+      <span class="pill">ศัตรู <span class="gold" id="hKills">0/4</span></span>
+      <span class="pill">เวลา <span id="hTime">0.0</span>s</span>
+    </div>
+
+    <div id="hint">
+      WASD/ลูกศร เดิน 4 ทิศ (อิงหน้าจอ) · Space กระโดด (ข้ามขอบหิน) · X ฟันคอมโบ 1→2→3 (กิ่ง 2-1→2-2) · C หลบถอยหลัง · R เริ่มใหม่
+    </div>
+
+    <!-- Start Overlay -->
+    <div class="overlay" id="start">
+      <div>
+        <h1>Kintsugi Run (Isometric)</h1>
+        <p>ลานวัดญี่ปุ่นโบราณยามราตรี รอยแยกศิลาทองคินสึงิ</p>
+        <div class="controls-box">
+          <div><span>WASD / ลูกศร:</span> เดินตามทิศทางหน้าจอ (เฉียงบนตาราง)</div>
+          <div><span>Space:</span> กระโดดขึ้นแท่นศิลาที่สูงเกิน 0.5 ช่อง</div>
+          <div><span>X:</span> โจมตีคอมโบ 3 จังหวะ (กดซ้ำเพื่อแตกสาย 2-1 → 2-2)</div>
+          <div><span>C:</span> หลบถอยหลังอย่างรวดเร็ว (อมตะชั่วขณะ)</div>
+          <div><span>เป้าหมาย:</span> เก็บเศษทองให้ครบ 6 ชิ้นเพื่อเปิดประตูโทริอิ!</div>
+        </div>
+        <div class="btn" id="startBtn">กด Space หรือคลิกเพื่อเริ่มเล่น</div>
+      </div>
+    </div>
+
+    <!-- Win Overlay -->
+    <div class="overlay hidden" id="win">
+      <div>
+        <h1>ปลุกพลังโทริอิสำเร็จ!</h1>
+        <p class="sub">แสงทองอร่ามส่องสว่างทั่วลานวัด ศิลาทองคินสึงิประสานรอยแยกสมบูรณ์</p>
+        <div class="stats">
+          เศษทอง <b id="wShards">6/6</b> · ศัตรูที่กำจัด <b id="wKills">0/4</b> · เวลา <b id="wTime">0.0</b> วินาที · ล้มเหลว <b id="wDeaths">0</b>
+        </div>
+        <div class="btn" id="winBtn">กด R หรือคลิกเพื่อเล่นอีกครั้ง</div>
+      </div>
+    </div>
+
+    <!-- Game Over Overlay -->
+    <div class="overlay hidden" id="gameover">
+      <div>
+        <h1 style="color:#FF0E00; text-shadow:0 3px 0 #882323;">สิ้นชีพ</h1>
+        <p class="sub">เงาหมึกแห่งราตรีเข้าครอบงำ</p>
+        <div class="btn" id="retryBtn">กด R หรือคลิกเพื่อลองใหม่</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="assets/sfx.js"></script>
+<script src="assets/atk.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

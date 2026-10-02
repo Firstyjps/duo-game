@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kitsune Project</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/kitsune.css">
+<style>
+  .wrap { max-width: 1060px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 72px; }
+  .hero { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 28px; align-items: center; margin-bottom: 36px; }
+  @media (max-width: 640px) { .hero { grid-template-columns: minmax(0, 1fr); } }
+  .sprite { width: 192px; aspect-ratio: 1; max-width: 100%; image-rendering: pixelated; image-rendering: crisp-edges;
+    background: radial-gradient(circle at 50% 70%, rgba(255, 163, 3, .14), transparent 62%); border-radius: 50%; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--mint); }
+  .hero h1 { font-size: clamp(34px, 6vw, 56px); font-weight: 600; margin: 4px 0 8px; color: var(--gold-hi);
+    text-shadow: 0 3px 0 #A64B0A; letter-spacing: .01em; }
+  .hero p { margin: 0; color: var(--muted); max-width: 60ch; }
+  .play { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; padding: 10px 20px; border-radius: 10px; text-decoration: none;
+    font-weight: 500; color: #1A1206; background: var(--gold); }
+  .play:hover { color: #1A1206; background: var(--gold-hi); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+  .card { display: grid; gap: 6px; align-content: start; padding: 18px; border-radius: var(--r); background: var(--ink-1);
+    border: 1px solid var(--line); color: var(--text); text-decoration: none; transition: border-color .15s, transform .15s; min-width: 0; }
+  .card:hover { border-color: var(--gold); transform: translateY(-2px); color: var(--text); }
+  .card h2 { margin: 0; font-size: 17px; font-weight: 500; display: flex; justify-content: space-between; gap: 8px; }
+  .card h2::after { content: '→'; color: var(--gold); }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+  .card .path { font-family: var(--mono); font-size: 12px; color: var(--mint); }
+
+  .map { margin-top: 40px; }
+  .map h2 { font-size: 17px; font-weight: 500; margin: 0 0 10px; }
+  .tree { overflow-x: auto; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 18px;
+    font-family: var(--mono); font-size: 13px; line-height: 1.75; color: var(--muted); margin: 0; }
+  .tree b { color: var(--text); font-weight: 600; }
+  .tree i { color: var(--gold); font-style: normal; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <canvas class="sprite" id="sprite" width="64" height="64" aria-label="ตัวละครหลักกำลังยืนหายใจ (idle 10 เฟรม)"></canvas>
+    <div>
+      <div class="eyebrow">Merakintsugi sample · idle 10f · walk 24f · from idle 2f</div>
+      <h1>Kitsune Project</h1>
+      <p>โปรเจกต์ 2D pixel platformer จากสไปรต์ชุด sample ของ Merakintsugi มีเกม Kintsugi Run 2 ด่าน ท่าครบ 22 ท่า และ Studio สำหรับตรวจเฟรม ดูท่า คอนเซปต์ตัวละคร และเอกสาร</p>
+      <a class="play" href="game-pixellab/index.html">เล่น Kintsugi Run</a>
+    </div>
+  </section>
+
+  <div class="grid">
+    <a class="card" href="game-pixellab/index.html"><h2>Kintsugi Run · PixelLab</h2><p>เวอร์ชันท่าวาดใหม่ 23 แอนิเมชัน: คอมโบแตกสาย, ฟันกลางอากาศ/หลังหลบ, เกาะขอบผา, กำแพง, บันได, ฟื้นพลัง</p><span class="path">game-pixellab/</span></a>
+    <a class="card" href="game/index.html"><h2>Kintsugi Run</h2><p>เกม 2 ด่าน: ทุ่งจันทร์คินสึงิ และวัดบนภูเขายามค่ำ มีเสียงสังเคราะห์ทุกท่า</p><span class="path">game/</span></a>
+    <a class="card" href="studio/index.html#inspector"><h2>ตรวจเฟรม</h2><p>เล่น/หยุด/เลื่อนทีละเฟรม, onion skin, จุดยึดเท้าและ hitbox, กลับด้านแบบในเกม</p><span class="path">studio/#inspector</span></a>
+    <a class="card" href="studio/index.html#moves"><h2>ท่าทั้งหมด</h2><p>22 ท่าพร้อมปุ่มกดและภาพอ้างอิง กับตารางจังหวะท่าโจมตีทุกเฟส</p><span class="path">studio/#moves</span></a>
+    <a class="card" href="studio/index.html#concepts"><h2>คอนเซปต์ตัวละคร</h2><p>Oni Ronin, Tengu Shinobi, Kitsune Miko, Jade Dragon, Slime Yokai</p><span class="path">assets/concepts/</span></a>
+    <a class="card" href="studio/index.html#docs"><h2>เอกสาร</h2><p>คู่มือดีไซน์ตัวละคร, ท่าทั้งหมดและวิธีสร้าง, README</p><span class="path">docs/</span></a>
+    <a class="card" href="assets/tiny-swords/"><h2>Tiny Swords</h2><p>ชุด asset ฉากแยก (terrain, ศัตรู goblin, อาคาร, UI) ยังไม่ได้ใช้ในเกม</p><span class="path">assets/tiny-swords/</span></a>
+  </div>
+
+  <section class="map">
+    <h2>โครงสร้างโปรเจกต์</h2>
+<pre class="tree"><b>Kitsune/</b>
+├── <b>game/</b>          เกม (ES modules) · <i>js/levels/</i> ข้อมูลด่าน · <i>js/dev/playtest.js</i> บอททดสอบ (?debug)
+├── <b>studio/</b>        ตรวจเฟรม · ท่าทั้งหมด · คอนเซปต์ · เอกสาร
+├── <b>assets/</b>
+│   ├── sprites/     ไฟล์ .aseprite + sheet ต้นฉบับ (ชุด sample ที่ใช้ในเกมได้)
+│   ├── reference/   GIF/วิดีโอตัวอย่างของชุดเต็ม ใช้วิเคราะห์จังหวะท่าเท่านั้น
+│   ├── concepts/    ภาพคอนเซปต์ตัวละครใหม่
+│   └── tiny-swords/ ชุด asset ฉาก
+├── <b>docs/</b>          คู่มือดีไซน์ · moveset · คอนเซปต์
+├── <b>tools/</b>         build_sprites.py: .aseprite → game/assets/sheet.png + sprites.json
+└── <b>shared/</b>        สไตล์ร่วมของ hub และ studio</pre>
+  </section>
+</div>
+<script>
+  // Hero sprite: the real idle loop from the shared atlas, mirrored to face right.
+  (async () => {
+    const cv = document.getElementById('sprite'), g = cv.getContext('2d');
+    try {
+      const [meta, img] = await Promise.all([
+        fetch('game/assets/sprites.json').then(r => r.json()),
+        new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = 'game/assets/sheet.png'; }),
+      ]);
+      const f = meta.animations.idle.frames, c = meta.cell, still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let i = 0;
+      const draw = () => { g.clearRect(0, 0, c, c); g.save(); g.translate(c, 0); g.scale(-1, 1); g.drawImage(img, f[i].x, f[i].y, c, c, 0, 0, c, c); g.restore(); };
+      const tick = () => { draw(); if (!still) { i = (i + 1) % f.length; setTimeout(tick, f[i].duration); } };
+      tick();
+    } catch { cv.hidden = true; }
+  })();
+</script>
+</body>
+</html>
