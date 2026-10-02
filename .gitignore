@@ -1,0 +1,9 @@
+# Godot
+.godot/
+*.translation
+export/
+build/
+# ส่วนตัว
+CLAUDE.local.md
+.claude/settings.local.json
+.DS_Store
