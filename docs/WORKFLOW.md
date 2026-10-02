@@ -6,7 +6,7 @@
 1. **GitHub = ความจริงหนึ่งเดียว** — โค้ด งาน และข้อตัดสินใจอยู่บน GitHub คุยใน LINE ได้ แต่ข้อสรุปต้องลง Issue หรือ `docs/DECISIONS.md`
 2. **แบ่งตามระบบ เจ้าของชัด** — แต่ละคนเป็นเจ้าของ folder ของตัวเอง (`docs/OWNERS.md`) แก้ของอีกคน = เปิด PR ให้เจ้าของรีวิว
 3. **คุยกันผ่าน contract** — ระบบเรียกกันผ่าน signal บน `EventBus` หรือ interface ที่เขียนไว้ใน `docs/contracts/` ห้ามเอื้อมเข้าไปเรียก node ภายในระบบอีกฝั่งตรง ๆ
-4. **ส่งต่องานผ่าน Handoff issue** — คนละ 1 issue (label `handoff`, ปักหมุดไว้) จบ session ทุกครั้งเพิ่ม comment สั้น ๆ อีกคนได้แจ้งเตือนทันที และ Claude ของอีกฝั่งอ่านตอน `/start`
+4. **ส่งต่องานผ่าน Handoff issue** — คนละ 1 issue (label `handoff`, ปักหมุดไว้ · `/start` ครั้งแรกสร้างให้เอง) จบ session ทุกครั้งเพิ่ม comment สั้น ๆ อีกคนได้แจ้งเตือนทันที และ Claude ของอีกฝั่งอ่านตอน `/start`
 
 ## โครงสร้าง
 ```
@@ -89,5 +89,5 @@ comment ใน Handoff issue ของตัวเอง (`/wrap` เขีย�
 - [ ] ตกลงชื่อเกม + pitch 1 ย่อหน้า + core loop → `docs/DESIGN.md`
 - [ ] แบ่งระบบ → `docs/OWNERS.md` + `.github/CODEOWNERS` + สร้าง label `system:*`
 - [ ] เขียน contract แรก (ของที่ 2 ระบบต้องคุยกันแน่ ๆ)
-- [ ] เชิญเพื่อนเข้า repo · เพื่อนสร้าง Handoff issue ของตัวเอง + ปักหมุด
+- [ ] เชิญเพื่อนเข้า repo · เพื่อน `/start` ครั้งแรก → Claude สร้าง Handoff issue + ปักหมุด + ผูกแจ้งเตือนทั้งสองฝั่งให้เอง
 - [ ] ต่างคนต่าง `/start` ทำ issue แรก → ลองรอบ PR → รีวิว → merge ให้ครบ 1 รอบ
