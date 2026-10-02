@@ -2,7 +2,8 @@ extends SceneTree
 ## รันทุกไฟล์ res://tests/test_*.gd — ทุก method ที่ขึ้นต้นด้วย test_ ต้อง return true
 ## godot --headless --path game --script res://tests/run_tests.gd
 
-func _init() -> void:
+## รันใน _initialize() ไม่ใช่ _init() — autoload (EventBus) ถูกเพิ่มเข้า root หลัง _init ทำให้ script ที่ใช้ EventBus compile ไม่ผ่าน
+func _initialize() -> void:
 	var passed: int = 0
 	var failed: Array[String] = []
 	for file: String in DirAccess.get_files_at("res://tests"):
