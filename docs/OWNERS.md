@@ -4,8 +4,8 @@
 
 | คน | GitHub | git user.name | เป็นเจ้าของ |
 |---|---|---|---|
-| Kron | @Firstyjps | Kron Kasem | `game/systems/<ระบบ A>/` — _ใส่ชื่อระบบ_ |
-| Few | @kronkawin2549-create | Few | `game/systems/<ระบบ B>/` — _ใส่ชื่อระบบ_ |
+| Kron | @Firstyjps | Kron Kasem | **ระบบ A** (ผู้เล่น + ต่อสู้ + สกิล + UI/HUD + inventory) — _Kron ใส่ชื่อ folder_ |
+| Few | @kronkawin2549-create | Few | **ระบบ B:** `game/systems/dungeon/` (ดันเจี้ยน/ห้อง) · `game/systems/enemy/` (ศัตรู AI) · `game/systems/loot/` (ดรอป/ไอเทม) |
 | **ร่วม** (รีวิวทั้งคู่) | — | — | `game/core/` · `docs/contracts/` · `game/project.godot` · `CLAUDE.md` · `docs/WORKFLOW.md` |
 
 ## ตัวอย่างการแบ่ง (เลือก/แก้ได้)
