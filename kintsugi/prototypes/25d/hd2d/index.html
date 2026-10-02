@@ -1,0 +1,1345 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Kintsugi HD-2D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0F121B;
+    --ink: #E9E8FF;
+    --muted: #9EA0FA;
+    --gold: #FFA303;
+    --gold-hi: #FFFFCC;
+    --crimson: #FF0E00;
+    --panel: rgba(15, 18, 27, .78);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
+    font-family: 'Kanit', system-ui, sans-serif; -webkit-user-select: none; user-select: none; touch-action: none; }
+  #wrap { position: fixed; inset: 0; display: grid; place-items: center; }
+  #stage { position: relative; }
+  canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+  #hud { position: absolute; top: 10px; left: 12px; right: 12px; display: flex; gap: 16px; align-items: center;
+    font-size: 15px; pointer-events: none; text-shadow: 0 2px 0 #000; }
+  #hud .pill { background: var(--panel); border: 1px solid #2F1850; border-radius: 8px; padding: 3px 10px; }
+  #hud .gold { color: var(--gold); font-weight: 600; }
+  #hint { position: absolute; top: 46px; left: 12px; max-width: min(560px, calc(100% - 24px)); font-size: 13px; line-height: 1.5;
+    color: var(--muted); pointer-events: none; transition: opacity .6s; background: var(--panel);
+    border: 1px solid #2F1850; border-radius: 8px; padding: 4px 10px; }
+  .overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(15,18,27,.72);
+    text-align: center; padding: 16px; }
+  .overlay.hidden { display: none; }
+  .overlay h1 { margin: 0 0 4px; font-size: clamp(28px, 6vw, 52px); font-weight: 600; letter-spacing: .04em;
+    color: var(--gold-hi); text-shadow: 0 3px 0 #A64B0A, 0 0 24px rgba(255,163,3,.45); }
+  .overlay p { margin: 6px 0; color: var(--ink); }
+  .overlay .sub { color: var(--muted); font-size: 14px; }
+  .overlay .stats { font-size: 18px; margin: 12px 0; }
+  .overlay .stats b { color: var(--gold); }
+  .btn { display: inline-block; margin-top: 12px; padding: 8px 20px; border-radius: 8px; border: 1px solid var(--gold);
+    color: var(--gold-hi); background: rgba(255,163,3,.12); font-size: 16px; }
+  #touch { position: absolute; inset: auto 0 0 0; height: 40%; display: none; pointer-events: none; }
+  #touch.on { display: block; }
+  #touch .tb { position: absolute; bottom: 18px; width: 72px; height: 72px; border-radius: 50%; pointer-events: auto;
+    background: rgba(178,178,255,.16); border: 2px solid rgba(178,178,255,.4); display: grid; place-items: center;
+    font-size: 26px; color: var(--ink); }
+  #touch .tb.down { background: rgba(255,163,3,.3); border-color: var(--gold); }
+  #tL { left: 18px; } #tR { left: 104px; } #tJ { right: 18px; width: 80px !important; height: 80px !important; }
+  #tA { right: 108px; } #tD { right: 22px; bottom: 112px !important; width: 60px !important; height: 60px !important; font-size: 20px !important; }
+  #tH { right: 190px; bottom: 112px !important; width: 52px !important; height: 52px !important; font-size: 18px !important; }
+  #tV { right: 104px; bottom: 112px !important; width: 60px !important; height: 60px !important; font-size: 20px !important; }
+  #hud .hp { color: #FF0E00; letter-spacing: .1em; }
+  #tDn { left: 61px; bottom: 100px !important; width: 60px !important; height: 52px !important; font-size: 20px !important; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="c" width="480" height="270"></canvas>
+    <div id="hud">
+      <span class="pill" id="hLv">ด่าน 1</span>
+      <span class="pill hp" id="hHp">♥♥♥</span>
+      <span class="pill">เศษทอง <span class="gold" id="hShards">0/0</span></span>
+      <span class="pill">เวลา <span id="hTime">0.0</span></span>
+      <span class="pill">ศัตรู <span class="gold" id="hKills">0/0</span></span>
+      <span class="pill">ตาย <span id="hDeaths">0</span></span>
+    </div>
+    <div id="hint">← → เดิน · Shift วิ่ง · Space กระโดด (ซ้ำกลางอากาศ = 2 ชั้น) · ↓ หมอบ · X ฟัน: กดต่อ = 1→2→3, เว้นจังหวะหลังฮิต 2 = แตกสาย 2-1→2-2 · กลางอากาศ X X = ฟันกระโดด 2 จังหวะ · ↓+X กลางอากาศ = ฟันแนวดิ่ง · C หลบถอยหลัง (แล้ว X X = ฟันสวน 2 จังหวะ) · ↓+C สไลด์ · C กลางอากาศ = air dash · ↑ ปีนบันได/ดึงตัวขึ้นขอบผา · ดันเข้ากำแพงตอนตก = เกาะ/กระโดดกำแพง · Q ค้าง = ฟื้นพลัง (ใช้เศษทอง 3) · V ค้าง = ชาร์จ · ↑+X = ฟันหมุน · H ซ่อนคำแนะนำ</div>
+    <div id="touch"><div class="tb" id="tL">◀</div><div class="tb" id="tR">▶</div><div class="tb" id="tDn">▼</div><div class="tb" id="tJ">▲</div><div class="tb" id="tA">⚔</div><div class="tb" id="tD">➤</div><div class="tb" id="tV">✦</div><div class="tb" id="tH">✚</div></div>
+    <div class="overlay" id="start">
+      <div>
+        <h1>Kintsugi Run · HD-2D</h1>
+        <p class="sub" style="color:#FFA303">กด 1 = ภาพ 2D เดิม · 2 = HD-2D · โหมดประตูชั้นลึก: เปิดลิงก์ท้าย #depth แล้วกด ↑ หน้าประตูศาลเจ้า</p>
+        <p>ฟันเงาหมึกให้สิ้น เก็บเศษทองให้ครบ แล้ววิ่งไปถึงประตูโทริอิ</p>
+        <p class="sub">ท่าครบชุด: วิ่ง · กระโดด 2 ชั้น · เกาะกำแพง · ปีนบันได · หมอบ/สไลด์ · กลิ้งหลบ+สวนกลับ · คอมโบ 5 จังหวะ · air dash · ปักดาบ · ชาร์จพลัง</p>
+        <div class="btn">กด Space หรือแตะเพื่อเริ่ม</div>
+      </div>
+    </div>
+    <div class="overlay hidden" id="win">
+      <div>
+        <h1>ถึงแล้ว!</h1>
+        <div class="stats">เศษทอง <b id="wShards"></b> · เวลา <b id="wTime"></b> · ศัตรู <b id="wKills"></b> · ตาย <b id="wDeaths"></b></div>
+        <p class="sub" id="wNote"></p>
+        <div class="btn" id="wBtn">กด R หรือแตะเพื่อเล่นอีกครั้ง</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="sfx.js"></script>
+<script src="level2.js"></script>
+<script src="atk.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="r3d.js"></script>
+<script>
+(() => {
+'use strict';
+const W = 480, H = 270, T = 16, ROWS = 17;
+let COLS = 140;
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+// ---------- palette (from the character's own colours) ----------
+const P = {
+  navy: '#1C154D', navyD: '#151037', navyDD: '#0F121B', royal: '#0321BC',
+  lilac: '#B2B2FF', lilacD: '#9EA0FA', plum: '#40225F', plumD: '#2F1850',
+  gold: '#FFA303', goldHi: '#FFFFCC', goldD: '#E05E2B', rust: '#A64B0A',
+  red: '#FF0E00', crimson: '#882323', crimsonD: '#580303', wood: '#4D2F1E', white: '#FFFFFF', ice: '#97C0FF'
+};
+
+// ---------- sprites ----------
+const sheet = new Image(); sheet.src = 'sheet.png';
+const atkSheet = new Image(); atkSheet.src = 'atk.png';   // PixelLab attack frames (see pixellab/build_atk.py)
+const ART = window.ATK_ART || { cell: 64, ax: 31, moves: {} };
+const CW = 46, CH = 58, AX = 22;           // cell size; anchor x (feet centre)
+const ANIM = { idle: { row: 0, n: 10, ms: 60 }, walk: { row: 1, n: 24, ms: 38 }, start: { row: 2, n: 2, ms: 55 } };
+
+// ---------- levels ----------
+let grid = [];   // 0 air, 1 solid, 2 spike, 3 ladder
+const fill = (x0, x1, y0, y1, v) => { for (let y = Math.max(0, y0); y <= Math.min(ROWS - 1, y1); y++) for (let x = Math.max(0, x0); x <= Math.min(COLS - 1, x1); x++) grid[y][x] = v; };
+const ground = (x0, x1, top) => fill(x0, x1, top, ROWS - 1, 1);
+const plat = (x0, x1, y) => fill(x0, x1, y, y, 1);
+const spikes = (x0, x1, y) => fill(x0, x1, y, y, 2);
+const ladder = (x, y0, y1) => fill(x, x, y0, y1, 3);
+
+const LEVEL1 = {
+  name: 'เชิงเขาจันทร์เสี้ยว', cols: 140, start: [3, 14], goal: [122, 14],
+  build() {
+    fill(0, 0, 0, ROWS - 1, 1); fill(COLS - 1, COLS - 1, 0, ROWS - 1, 1);
+    ground(1, 20, 14);
+    ground(21, 28, 12);
+    ground(32, 40, 13); spikes(35, 36, 12);
+    plat(43, 44, 11);
+    ground(47, 56, 14); plat(51, 53, 11); plat(54, 56, 8);
+    ground(57, 70, 14); spikes(58, 68, 13);
+    ground(71, 75, 14); plat(73, 74, 11); ground(76, 78, 9);
+    ground(89, 100, 12); spikes(93, 94, 11); spikes(98, 98, 11);
+    plat(102, 103, 11);
+    ground(105, 138, 14); plat(112, 114, 11);
+    fill(4, 4, 4, 10, 1);       // wall-jump chimney with the left wall
+    ladder(75, 9, 13);          // ladder up to the high ledge
+    fill(116, 120, 10, 12, 1);  // low overhang: slide under it
+  },
+  shards: [[2, 2], [118, 13], [7, 12], [10, 11], [13, 12], [25, 10], [36, 9], [43, 9], [55, 6], [63, 9], [77, 7], [84, 7], [93, 8], [113, 9]],
+  checkpoints: [[3, 14], [49, 14], [71, 14], [91, 12], [107, 14]],
+  enemies: [[23, 28, 12], [37, 40, 13], [53, 56, 14], [95, 97, 12], [109, 111, 14], [12, 19, 14]],
+  movers: [{ x0: 58, x1: 66, y: 11, w: 3, speed: 42 }, { x0: 79, x1: 86, y: 10, w: 3, speed: 50 }],
+  // cave layer behind the field: a corridor from door (18) to door (55) that skips the pits and spikes
+  back() {
+    fill(12, 59, 4, ROWS - 1, 1); fill(15, 56, 7, 13, 0);   // rock only around the corridor; open sky elsewhere
+    fill(26, 26, 7, 10, 1); fill(42, 45, 12, 13, 1); spikes(36, 37, 13);
+  },
+  doors: [18, 55],
+  backShards: [[24, 12, 1], [33, 9, 1], [44, 10, 1]],
+  backEnemies: [[28, 34, 14, 1], [47, 53, 14, 1]],
+};
+const LEVELS = [LEVEL1]; if (window.LEVEL2) LEVELS.push(window.LEVEL2);   // level 2 lives in level2.js
+// depth-door prototype: #depth (or ?depth) adds a cave layer behind level 1
+const DEPTH = /depth/.test(location.hash + location.search);
+let LAYERS = [], activeLayer = 0;
+const onLayer = o => (o.layer || 0) === activeLayer;
+let levelIdx = 0, shardDefs, checkpointDefs, enemyDefs, GOAL, movers0, START;
+
+const solid = (tx, ty) => tx < 0 || tx >= COLS ? true : ty < 0 || ty >= ROWS ? false : grid[ty][tx] === 1;
+const tileAt = (tx, ty) => (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) ? 0 : grid[ty][tx];
+
+// ---------- deterministic rng for decoration ----------
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+// ---------- pre-render level tiles ----------
+const lv = document.createElement('canvas');
+function drawLevel(dst = lv) {
+  dst.width = COLS * T; dst.height = ROWS * T; seed = 7;
+  const g = dst.getContext('2d');
+  const px = (x, y, c, w = 1, h = 1) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+  for (let ty = 0; ty < ROWS; ty++) for (let tx = 0; tx < COLS; tx++) {
+    const v = grid[ty][tx], X = tx * T, Y = ty * T;
+    if (v === 1) {
+      let depth = 0; while (depth < 3 && solid(tx, ty - depth - 1)) depth++;
+      px(X, Y, depth >= 2 ? P.navyD : P.navy, T, T);
+      for (let i = 0; i < 5; i++) px(X + (rnd() * 15 | 0), Y + (rnd() * 15 | 0), rnd() < .5 ? P.navyDD : (depth ? P.navyD : P.plumD));
+      if (!solid(tx - 1, ty)) px(X, Y, P.navyDD, 1, T);
+      if (!solid(tx + 1, ty)) px(X + T - 1, Y, P.navyDD, 1, T);
+      if (tileAt(tx, ty + 1) !== 1 && ty < ROWS - 1) px(X, Y + T - 1, P.navyDD, T, 1);
+      if (depth === 0) {          // mossy lilac top
+        px(X, Y, P.lilac, T, 1); px(X, Y + 1, P.lilacD, T, 2); px(X, Y + 3, P.plum, T, 1);
+        for (let i = 0; i < 4; i++) { const dx = rnd() * 15 | 0, dl = 1 + (rnd() * 3 | 0); px(X + dx, Y + 3, P.lilacD, 1, dl); }
+        if (rnd() < .3) px(X + (rnd() * 14 | 0), Y - 1, P.lilac, 1, 1);
+      }
+      if (rnd() < .22) {          // kintsugi gold crack
+        let cx = X + 2 + (rnd() * 12 | 0), cy = Y + 5 + (rnd() * 4 | 0);
+        for (let i = 0; i < 7; i++) { px(cx, cy, P.gold); cx += rnd() < .5 ? 1 : -1; cy += 1; if (cy >= Y + T - 1) break; }
+        px(cx, cy - 1, P.goldHi);
+      }
+    } else if (v === 4) {         // shrine door (2 tiles tall, drawn from its bottom tile)
+      if (tileAt(tx, ty + 1) !== 4) {
+        const B = Y + T;
+        px(X + 3, B - 28, P.navyDD, 10, 28); px(X + 4, B - 26, '#2a1a40', 8, 26);
+        px(X + 7, B - 20, P.gold, 2, 2); px(X + 6, B - 18, P.goldD, 4, 1);
+        px(X + 1, B - 30, P.crimson, 2, 30); px(X + 13, B - 30, P.crimson, 2, 30);
+        px(X + 1, B - 30, P.red, 1, 30); px(X + 13, B - 30, P.red, 1, 30);
+        px(X - 2, B - 33, P.navyDD, 20, 2); px(X - 1, B - 31, P.red, 18, 2); px(X + 2, B - 27, P.crimson, 12, 1);
+      }
+    } else if (v === 3) {         // ladder
+      px(X + 2, Y, P.wood, 2, T); px(X + 12, Y, P.wood, 2, T);
+      px(X + 2, Y, P.rust, 1, T); px(X + 12, Y, P.rust, 1, T);
+      for (let r = 2; r < T; r += 5) { px(X + 4, Y + r, P.rust, 8, 2); px(X + 4, Y + r, P.gold, 8, 1); }
+    } else if (v === 2) {         // spikes
+      for (let s = 0; s < 4; s++) {
+        const bx = X + s * 4;
+        px(bx + 1, Y + 8, P.white, 1, 2); px(bx + 1, Y + 10, P.lilac, 2, 2);
+        px(bx, Y + 12, P.plum, 4, 4); px(bx + 3, Y + 11, P.plumD, 1, 5); px(bx + 2, Y + 10, P.plumD, 1, 2);
+      }
+    }
+  }
+}
+
+// ---------- background (parallax layers) ----------
+function makeLayer(w, h, fn) { const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d')); return c; }
+const sky = makeLayer(W, H, g => {
+  const gr = g.createLinearGradient(0, 0, 0, H);
+  gr.addColorStop(0, P.navyDD); gr.addColorStop(.55, P.plumD); gr.addColorStop(1, P.plum);
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 90; i++) { g.fillStyle = rnd() < .2 ? P.goldHi : P.lilac; g.globalAlpha = .3 + rnd() * .7; g.fillRect(rnd() * W | 0, rnd() * H * .6 | 0, 1, 1); }
+  g.globalAlpha = 1;
+  // moon
+  const mx = 372, my = 62, r = 26;
+  g.fillStyle = 'rgba(255,255,204,.08)'; g.beginPath(); g.arc(mx, my, r + 14, 0, 7); g.fill();
+  for (let y = -r; y <= r; y++) { const hw = Math.round(Math.sqrt(r * r - y * y)); g.fillStyle = y < r * .3 ? P.goldHi : '#F2E7C0'; g.fillRect(mx - hw, my + y, hw * 2, 1); }
+  g.fillStyle = '#E3D6AA'; [[-8, -6, 5], [7, 4, 4], [-3, 12, 3], [12, -12, 2]].forEach(([dx, dy, s]) => g.fillRect(mx + dx, my + dy, s, s));
+  // kintsugi crack across the moon
+  g.fillStyle = P.gold; let cx = mx - 18, cy = my - 10; for (let i = 0; i < 36; i++) { g.fillRect(cx, cy, 1, 1); cx++; if (rnd() < .45) cy += rnd() < .6 ? 1 : -1; }
+});
+function ridge(h, base, amp, col, step, detail) {
+  return makeLayer(960, h, g => {
+    g.fillStyle = col; let y = base;
+    for (let x = 0; x < 960; x++) {
+      const t = x / 960 * Math.PI * 2;
+      y = base - amp * (0.6 * Math.sin(t * step) + 0.3 * Math.sin(t * step * 2.7 + 1.3) + 0.15 * Math.sin(t * step * 6.1 + 2));
+      g.fillRect(x, Math.round(y), 1, h);
+      if (detail && x % 120 === 40) {  // tiny pagoda silhouettes
+        const py = Math.round(y);
+        g.fillRect(x - 1, py - 18, 3, 18); for (let k = 0; k < 3; k++) g.fillRect(x - 6 + k, py - 6 - k * 5, 13 - k * 2, 2);
+      }
+    }
+  });
+}
+const far = ridge(H, 170, 40, P.plumD, 3, false);
+const mid = ridge(H, 200, 28, P.navy, 4, true);
+
+// ---------- enemies (ink shades) ----------
+
+// ---------- body tint sheets (white flash / ice glow / after-images) ----------
+const SHEETS = { base: [sheet, atkSheet], white: [], ghost: [] };
+function tint(col, img = sheet) {
+  const c = document.createElement('canvas'); c.width = img.width || 1; c.height = img.height || 1;
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+  g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, c.width, c.height); return c;
+}
+
+// ---------- VFX: crescent smear arcs (separate layer from the body, per the guide) ----------
+// colours: core #FFFFFF → glow #97C0FF → energy edge #0321BC → dissolving particles #1C154D
+const ARC_OX = 80, ARC_OY = 120, ARC_S = 192;
+const ARC_SPECS = {
+  1:       { cx: 4,  cy: -24, R: 28, ex: 1.3,  a0: -2.0, a1: 1.0,  th: 14 },  // hit 1: horizontal front slash
+  2:       { cx: 8,  cy: -12, R: 26, ex: 1.45, a0: 1.7,  a1: -1.2, th: 12 },  // hit 2: low sweep rising diagonally
+  3:       { cx: 10, cy: -30, R: 34, ex: 1.1,  a0: -2.7, a1: 1.25, th: 16 },  // hit 3: overhead heavy
+  4:       { cx: 8,  cy: -20, R: 32, ex: 1.2,  a0: 1.6,  a1: -1.6, th: 13 },  // ↑+X: rising crescent from low to high
+  5:       { cx: 8,  cy: -36, R: 34, ex: .85,  a0: -1.7, a1: 1.4,  th: 14 },  // hit 5: vertical finisher
+  air:     { cx: 4,  cy: -28, R: 26, ex: 1.2,  a0: -1.6, a1: 1.3,  th: 12 },
+  dodge1:  { cx: 12, cy: -22, R: 40, ex: 1.9,  a0: -1.0, a1: 0.8,  th: 12 },  // dodge attack 1: long flat cut
+};
+const hexRGB = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+function makeArc(sp, stage) {
+  const c = document.createElement('canvas'); c.width = c.height = ARC_S;
+  const g = c.getContext('2d'), img = g.createImageData(ARC_S, ARC_S), d = img.data;
+  const span = sp.a1 - sp.a0, thMul = [1, .72, .45, .25][stage], cut = stage * .2;
+  const pal = [[P.white, P.ice, P.royal], [P.white, P.ice, P.royal], [P.ice, P.royal, P.navy], [P.royal, P.navy, P.navy]][stage].map(hexRGB);
+  for (let y = 0; y < ARC_S; y++) for (let x = 0; x < ARC_S; x++) {
+    const dx = (x - ARC_OX - sp.cx + .5) / sp.ex, dy = y - ARC_OY - sp.cy + .5, r = Math.hypot(dx, dy);
+    if (r > sp.R + 1) continue;
+    const a = Math.atan2(dy, dx); let u = -1;
+    for (const k of [0, 2 * Math.PI, -2 * Math.PI]) { const v = (a + k - sp.a0) / span; if (v >= 0 && v <= 1) { u = v; break; } }
+    if (u < cut) continue;
+    const th = sp.th * thMul * Math.pow(Math.sin(Math.PI * u), .6) * (.3 + .7 * u);
+    if (th < .6 || r < sp.R - th || r > sp.R) continue;
+    if (stage && (((x * 73856093) ^ (y * 19349663) ^ (stage * 83492791)) >>> 0) % 100 < stage * 20) continue;
+    const q = (sp.R - r) / th, col = u < .18 ? pal[2] : q < .35 ? pal[0] : q < .75 ? pal[1] : pal[2], i = (y * ARC_S + x) * 4;
+    d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+const ARCS = {}; for (const k in ARC_SPECS) ARCS[k] = [0, 1, 2, 3].map(s => makeArc(ARC_SPECS[k], s));
+
+// ---------- attack timing (ms) — anticipation → smear → active → recovery ----------
+// 60ms holds, 20ms×2 smear, 40ms active/recovery frames (animation_timing_metadata.json)
+const ATK = {
+  1:       { antic: 60,  smear: 40,  active: 80,  rec: 170, dmg: 1, hb: [2, -48, 42, 46] },
+  2:       { antic: 60,  smear: 40,  active: 80,  rec: 200, dmg: 1, hb: [0, -34, 46, 34] },
+  3:       { antic: 110, smear: 40,  active: 110, rec: 240, dmg: 2, hb: [-14, -64, 62, 64] },
+  4:       { antic: 60,  smear: 120, active: 120, rec: 170, dmg: 1, hb: [-34, -64, 68, 68] },
+  5:       { antic: 140, smear: 0,   active: 140, rec: 300, dmg: 2, hb: [-52, -44, 104, 48] },
+  air:     { antic: 40,  smear: 40,  active: 80,  rec: 120, dmg: 1, hb: [-4, -54, 40, 54] },
+  plunge:  { antic: 90,  smear: 0,   active: 140, rec: 260, dmg: 2, hb: [-44, -40, 88, 44] },
+  dodge1:  { antic: 30,  smear: 70,  active: 90,  rec: 200, dmg: 2, hb: [-24, -46, 76, 48] },
+  dodge2:  { antic: 60,  smear: 50,  active: 100, rec: 240, dmg: 2, hb: [-20, -62, 70, 64] },
+  '2-1':   { antic: 50,  smear: 40,  active: 80,  rec: 180, dmg: 1, hb: [2, -48, 44, 46] },
+  '2-2':   { antic: 70,  smear: 40,  active: 100, rec: 260, dmg: 2, hb: [-4, -54, 52, 54] },
+  air2:    { antic: 40,  smear: 40,  active: 90,  rec: 140, dmg: 1, hb: [-8, -58, 48, 60] },
+  burst:   { antic: 0,   smear: 0,   active: 180, rec: 320, dmg: 2, hb: [0, 0, 0, 0] },
+};
+const DASH_T = .18, DASH_V = 340, CHARGE_MIN = .45;
+const ARC_OF = { dodge2: 3, '2-1': 1, air2: 'air' };   // 2-2 draws its own white arc in the PixelLab frames   // reuse arcs for kinds without their own
+const isAir = k => k === 'air' || k === 'air2';
+
+// ---------- input ----------
+const keys = {};
+const map = { ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r', ArrowDown: 'd', KeyS: 'd', ArrowUp: 'u', KeyW: 'u',
+  Space: 'j', KeyZ: 'j', KeyK: 'j', KeyX: 'a', KeyJ: 'a', KeyC: 'x', KeyL: 'x',
+  ShiftLeft: 's', ShiftRight: 's', KeyV: 'v', KeyI: 'v', KeyQ: 'q' };
+const pressed = { j: false, a: false, x: false, u: false, v: false, q: false };
+function press(k) { if (k in pressed && !keys[k]) pressed[k] = true; keys[k] = true; }
+addEventListener('keydown', e => {
+  const k = map[e.code];
+  if (k) { press(k); e.preventDefault(); }
+  if (e.code === 'KeyR') { reset(); begin(); }
+  if (e.code === 'Digit1' && window.R3D) R3D.toggle(false);
+  if (e.code === 'Digit2' && window.R3D) R3D.toggle(true);
+  if (e.code === 'KeyN' && won) nextOrRestart();
+  if (e.code === 'KeyM' && window.SFX) SFX.setMuted(!SFX.muted);
+  if (e.code === 'KeyH') { const h = document.getElementById('hint'); h.style.opacity = h.style.opacity === '0' ? 1 : 0; hintHidden = true; }
+  if (!running && (e.code === 'Space' || e.code === 'Enter')) begin();
+});
+addEventListener('keyup', e => { const k = map[e.code]; if (k) keys[k] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+const touchEl = document.getElementById('touch');
+if (matchMedia('(pointer: coarse)').matches) touchEl.classList.add('on');
+[['tL', 'l'], ['tR', 'r'], ['tJ', 'j'], ['tA', 'a'], ['tD', 'x'], ['tDn', 'd'], ['tV', 'v'], ['tH', 'q']].forEach(([id, k]) => {
+  const el = document.getElementById(id);
+  const on = e => { e.preventDefault(); press(k); el.classList.add('down'); };
+  const off = e => { e.preventDefault(); keys[k] = false; el.classList.remove('down'); };
+  el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('pointerleave', off);
+});
+document.getElementById('start').addEventListener('pointerdown', () => begin());
+document.getElementById('win').addEventListener('pointerdown', () => { nextOrRestart(); });
+
+// ---------- game state ----------
+const PW = 14, PH = 40, PH_CROUCH = 24, PH_LOW = 14;   // hitbox: standing / crouch & roll / slide
+const RUN = 130, SPRINT = 205, CRAWL = 55, ACC = 1100, AIR_ACC = 750, FRICTION = 1400;
+const GRAV = 1500, JUMP_V = 455, DJUMP_V = 400, MAX_FALL = 520, MAX_HP = 3;
+let pl, shards, checkpoints, movers, enemies, parts, fx, ghosts, petals, cam, time, deaths, running, won, respawn, hintHidden;
+let hitstop = 0, shake = 0;
+
+function reset() {
+  pl = { x: START[0] * T + 8, y: START[1] * T, vx: 0, vy: 0, ground: false, face: 1, coyote: 0, buffer: 0,
+         anim: 'idle', at: 0, frame: 0, sx: 1, sy: 1, dead: 0, ride: null, h: PH,
+         atk: null, act: null, dash: 0, canDash: true, dashCd: 0, ghostT: 0,
+         hp: MAX_HP, inv: 0, airJumps: 1, spin: 0, dodgeT: 0, branchT: 0, ledgeCd: 0, wjT: 0, landT: 0, runF: 0, crouchT: 0, spent: 0, airMax: RUN, crouch: false, wallLock: 0, climbF: 0, sprint: false };
+  if (LAYERS.length) { activeLayer = 0; grid = LAYERS[0].grid; if (window.R3D && R3D.setLayer) R3D.setLayer(0); }
+  shards = shardDefs.map(([x, y, layer]) => ({ x: x * T + 8, y: y * T + 8, got: false, ph: rnd() * 6, layer: layer || 0 }));
+  checkpoints = checkpointDefs.map(([x, y], i) => ({ x: x * T + 8, y: y * T, lit: i === 0 }));
+  enemies = enemyDefs.map(([a, b, y, layer]) => ({ layer: layer || 0, x0: a * T + 8, x1: b * T + 8, x: (a + b) / 2 * T + 8, y: y * T, dir: rnd() < .5 ? -1 : 1,
+    hp: 2, flash: 0, kb: 0, dead: false, ph: rnd() * 6 }));
+  respawn = { x: pl.x, y: pl.y };
+  movers = movers0.map(m => ({ ...m, x: m.x0, dir: 1, dx: 0 }));
+  parts = []; fx = []; ghosts = []; petals = [];
+  for (let i = 0; i < 26; i++) petals.push({ x: rnd() * W, y: rnd() * H, v: 8 + rnd() * 14, ph: rnd() * 6, s: rnd() < .5 ? 1 : 2 });
+  cam = { x: 0, y: ROWS * T - H };
+  time = 0; deaths = 0; won = false; hitstop = 0; shake = 0;
+  for (const k in pressed) pressed[k] = false;
+  document.getElementById('win').classList.add('hidden');
+}
+function loadLevel(i) {
+  levelIdx = i; const LV = LEVELS[i]; COLS = LV.cols;
+  grid = Array.from({ length: ROWS }, () => new Uint8Array(COLS));
+  LV.build({ fill, ground, plat, spikes, ladder });
+  const useDepth = DEPTH && LV.back;
+  if (useDepth) LV.doors.forEach(x => fill(x, x, 12, 13, 4));
+  shardDefs = LV.shards.concat(useDepth ? LV.backShards : []); checkpointDefs = LV.checkpoints;
+  enemyDefs = LV.enemies.concat(useDepth ? LV.backEnemies : []); START = LV.start;
+  GOAL = { x: LV.goal[0] * T, y: LV.goal[1] * T };
+  movers0 = LV.movers.map(m => ({ x0: m.x0 * T, x1: m.x1 * T, y: m.y * T, w: m.w * T, speed: m.speed }));
+  drawLevel();
+  LAYERS = [{ grid, lv }]; activeLayer = 0;
+  if (useDepth) {
+    const front = grid; grid = Array.from({ length: ROWS }, () => new Uint8Array(COLS));
+    LV.back(); LV.doors.forEach(x => fill(x, x, 12, 13, 4));
+    const lvB = document.createElement('canvas'); drawLevel(lvB);
+    LAYERS.push({ grid, lv: lvB }); grid = front;
+  }
+  if (window.R3D) R3D.rebuild();
+  document.getElementById('hLv').textContent = `ด่าน ${i + 1} · ${LV.name}`;
+}
+function nextOrRestart() {
+  loadLevel(levelIdx + 1 < LEVELS.length ? levelIdx + 1 : 0); reset(); begin();
+}
+function begin() {
+  running = true; document.getElementById('start').classList.add('hidden');
+  if (window.SFX) SFX.unlock();
+}
+const sfx = (n, o) => { if (window.SFX) try { return SFX.play(n, o); } catch (e) {} };
+
+function burst(x, y, n, cols, spd, life, grav = 300, size = 1) {
+  for (let i = 0; i < n; i++) {
+    const a = rnd() * Math.PI * 2, s = spd * (.4 + rnd() * .6);
+    parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - spd * .3, life, max: life, c: cols[i % cols.length], g: grav, s: size });
+  }
+}
+function dust(x, y, n, dir = 0, spd = 60, size = 1) {
+  for (let i = 0; i < n; i++) parts.push({ x: x + (rnd() - .5) * 10, y: y - 1, vx: (rnd() - .5) * spd + dir * spd * .6, vy: -rnd() * 30, life: .35 + rnd() * .15, max: .5, c: rnd() < .5 ? P.lilacD : P.lilac, g: 40, s: size });
+}
+function smoke(x, y, n, dir = 0) {   // soft puffs that grow and drift up
+  for (let i = 0; i < n; i++) parts.push({ x: x + (rnd() - .5) * 12, y: y - 2 - rnd() * 6, vx: dir * (20 + rnd() * 40) + (rnd() - .5) * 20, vy: -10 - rnd() * 20,
+    life: .45 + rnd() * .25, max: .7, c: rnd() < .5 ? '#7A72B8' : '#5B5394', g: -10, s: 2, grow: 5 });
+}
+function setAct(type, dur = Infinity, extra = {}) { pl.act = { type, t: 0, dur, ...extra }; }
+
+// ---------- collision ----------
+function overlapsTiles(x, y, v, h = pl.h) { // x = centre, y = feet
+  const l = Math.floor((x - PW / 2) / T), r = Math.floor((x + PW / 2 - .01) / T);
+  const t = Math.floor((y - h) / T), b = Math.floor((y - .01) / T);
+  for (let ty = t; ty <= b; ty++) for (let tx = l; tx <= r; tx++) if (v === 1 ? solid(tx, ty) : tileAt(tx, ty) === v) return { tx, ty };
+  return null;
+}
+const roomFor = h => !overlapsTiles(pl.x, pl.y, 1, h);
+function hitSpike() {
+  const l = Math.floor((pl.x - PW / 2 + 2) / T), r = Math.floor((pl.x + PW / 2 - 2) / T);
+  const t = Math.floor((pl.y - pl.h) / T), b = Math.floor((pl.y - 1) / T);
+  for (let ty = t; ty <= b; ty++) for (let tx = l; tx <= r; tx++)
+    if (tileAt(tx, ty) === 2 && pl.y > ty * T + 9 && pl.x + PW / 2 - 2 > tx * T + 1 && pl.x - PW / 2 + 2 < tx * T + 15) return true;
+  return false;
+}
+function wallAt(side) {
+  const tx = Math.floor((pl.x + side * (PW / 2 + 1)) / T);
+  return solid(tx, Math.floor((pl.y - 12) / T)) && solid(tx, Math.floor((pl.y - 30) / T));
+}
+
+function die() {
+  if (pl.dead) return;
+  pl.dead = .7; deaths++; pl.atk = null; pl.act = null; pl.dash = 0; shake = 4;
+  burst(pl.x, pl.y - 20, 26, [P.lilac, P.white, P.royal, P.gold], 160, .7, 200);
+  sfx('die');
+}
+const shardsAvail = () => shards.filter(s => s.got).length - pl.spent;
+function hurt(e) {   // knockdown → get up, with i-frames
+  pl.hp--;
+  if (pl.hp <= 0) { die(); return; }
+  pl.atk = null; pl.dash = 0; pl.crouch = false;
+  if (pl.ground && pl.hp > 1) {     // hurt 1: flinch in place
+    setAct('flinch', .3); pl.vx = (pl.x < e.x ? -1 : 1) * 120; pl.inv = 1.3;
+  } else {                          // hurt 2: knocked down
+    setAct('knock', .55);
+    pl.vx = (pl.x < e.x ? -1 : 1) * 170; pl.vy = -230; pl.ground = false; pl.ride = null; pl.inv = 1.6;
+  }
+  smoke(pl.x, pl.y, 5);
+  pl.face = pl.x < e.x ? 1 : -1;
+  hitstop = .08; shake = 3;
+  burst(pl.x, pl.y - 22, 14, [P.red, P.white, P.lilac], 140, .4, 200);
+  sfx('hurt');
+}
+
+// ---------- combat ----------
+function startAttack(kind, dir) {
+  if (dir && kind !== 'dodge1' && kind !== 'dodge2') pl.face = dir;
+  pl.atk = { kind, phase: ATK[kind].antic ? 'antic' : 'active', t: 0, queued: false };
+  if (kind === 3 && pl.ground) { pl.vy = -230; pl.ground = false; pl.ride = null; }
+  if (kind === 5 && pl.ground) { pl.vy = -280; pl.ground = false; pl.ride = null; }
+  if (isAir(kind)) pl.vy = Math.min(pl.vy, 40);
+  if (kind === 'plunge') { pl.vy = -90; pl.vx *= .3; }
+  if (kind === 1 || kind === 2) pl.vx *= .3;
+  if (kind === 'dodge1' || kind === 'dodge2') { pl.inv = Math.max(pl.inv, .35); }
+  sfx({ plunge: 'plunge', 5: 'plunge', dodge1: 'counter', dodge2: 'slash3', '2-1': 'slash2', '2-2': 'slash4', air2: 'slash2' }[kind] || (typeof kind === 'number' ? 'slash' + kind : 'slash1'));
+}
+function applyHit(box, dmg, kb) {
+  const [ox, oy, w, h] = box;
+  const x0 = pl.face > 0 ? pl.x + ox : pl.x - ox - w, y0 = pl.y + oy;
+  let any = false;
+  for (const e of enemies) {
+    if (e.dead || !onLayer(e)) continue;
+    if (e.x + 8 > x0 && e.x - 8 < x0 + w && e.y > y0 && e.y - 14 < y0 + h) {
+      any = true; e.hp -= dmg; e.flash = .12; e.kb = (e.x > pl.x ? 1 : -1) * kb;
+      fx.push({ type: 'spark', x: e.x, y: e.y - 8, t: 0, life: .18 });
+      burst(e.x, e.y - 8, 8, [P.white, P.ice, P.royal], 140, .3, 120);
+      if (e.hp <= 0) {
+        e.dead = true;
+        burst(e.x, e.y - 6, 22, [P.navyDD, P.plum, P.plumD, P.lilacD], 150, .6, 260, 2);
+        burst(e.x, e.y - 6, 10, [P.gold, P.goldHi], 90, .7, 60);
+        sfx('kill');
+      } else sfx('hit');
+    }
+  }
+  if (any) { hitstop = Math.max(hitstop, dmg > 1 ? .09 : .055); shake = Math.max(shake, dmg > 1 ? 3 : 1.5); }
+  return any;
+}
+function shockwave(x, y) {       // symmetrical ground shockwave
+  fx.push({ type: 'shock', x, y, t: 0, life: .4 });
+  dust(x - 10, y, 10, -1, 160, 2); dust(x + 10, y, 10, 1, 160, 2);
+  burst(x, y - 4, 14, [P.white, P.ice, P.royal], 170, .45, 420);
+  shake = Math.max(shake, 3.5); sfx('impact');
+}
+function rays(x, y) {             // vertical finisher: 6-ray burst + rock debris
+  fx.push({ type: 'rays', x, y, t: 0, life: .5 });
+  fx.push({ type: 'shock', x, y, t: 0, life: .45 });
+  burst(x, y - 2, 18, [P.navy, P.lilacD, P.plum, P.navyD], 210, .7, 650, 2);
+  burst(x, y - 6, 16, ['#6CF2C2', P.ice, P.white], 180, .5, 200);
+  shake = Math.max(shake, 5); sfx('impact', { pitch: .8 });
+}
+function kintsugiBurst(power) {   // charged special: pillar of light + gold ring
+  const r = 70 + power * 40;
+  fx.push({ type: 'pillar', x: pl.x, y: pl.y, t: 0, life: .6 });
+  fx.push({ type: 'circle', x: pl.x, y: pl.y - 22, r, t: 0, life: .45 });
+  rays(pl.x, pl.y);
+  burst(pl.x, pl.y - 20, 30, [P.gold, P.goldHi, '#6CF2C2', P.white], 260, .8, 120);
+  applyHit([-r, -80, 2 * r, 84], 2 + (power >= 1 ? 1 : 0), 260);
+  shake = 6; hitstop = Math.max(hitstop, .07); sfx('burst');
+}
+
+function updateAttack(dt, dir) {
+  const a = pl.atk, D = ATK[a.kind];
+  a.t += dt * 1000;
+  if (pressed.a && a.phase !== 'antic') a.queued = true;
+  switch (a.phase) {
+    case 'antic':
+      if (a.kind === 5) { pl.vy *= .8; }                 // hang in the air before the finisher
+      if (a.t >= D.antic) {
+        a.t = 0;
+        if (a.kind === 'plunge' || a.kind === 5) { a.phase = 'dive'; break; }
+        a.phase = 'smear';
+        if (a.kind === 1) pl.vx = pl.face * 110;
+        if (a.kind === 2) pl.vx = pl.face * 300;          // lunge ≈ +12 px
+        if (a.kind === 3) pl.vy = 520;
+        if (a.kind === 4) { pl.vy = -340; pl.vx = pl.face * 60; pl.ground = false; pl.ride = null; }
+        if (a.kind === 'dodge1') { pl.vx = pl.face * 480; hitstop = .05; fx.push({ type: 'flash', t: 0, life: .12 }); smoke(pl.x, pl.y, 4, -pl.face); }
+        if (a.kind === 'dodge2') { pl.vy = -220; pl.vx = pl.face * 80; pl.ground = false; pl.ride = null; }
+        if (a.kind === '2-1') pl.vx = pl.face * 120;
+        if (a.kind === '2-2') { pl.vx = pl.face * 260; smoke(pl.x, pl.y, 3, -pl.face); }
+      }
+      break;
+    case 'smear':
+      if (a.kind === 3 && !pl.ground && a.t < 400) break;   // keep the overhead smear until she hits the floor
+      if (a.t >= D.smear) {
+        a.t = 0; a.phase = 'active';
+        if (a.kind === 3 && pl.ground) shockwave(pl.x + pl.face * 16, pl.y);
+        applyHit(D.hb, D.dmg, a.kind === 3 ? 220 : a.kind === 4 ? 160 : 120);
+        if (a.kind === 'dodge1') { hitstop = Math.max(hitstop, .1); pl.vx = pl.face * 90; }
+      }
+      break;
+    case 'dive':
+      pl.vx = 0; pl.vy = 700;
+      if (pl.ground) {
+        a.phase = 'active'; a.t = 0; rays(pl.x, pl.y); pl.sx = 1.35; pl.sy = .7;
+        if (a.kind === 5) shockwave(pl.x, pl.y);
+        applyHit(D.hb, D.dmg, 220);
+      } else if (a.t > 1500) { a.phase = 'rec'; a.t = 0; }
+      break;
+    case 'active':
+      if (a.t >= D.active) { a.t = 0; a.phase = 'rec'; }
+      break;
+    case 'rec':
+      if (a.queued) {   // combo chains: 1→2→3, 2-1→2-2, air→air2, dodge1→dodge2
+        const next = { 1: 2, 2: 3, '2-1': '2-2', air: 'air2', dodge1: 'dodge2' }[a.kind];
+        if (next && (pl.ground || isAir(next) || next === 'dodge2')) { startAttack(next, dir); return; }
+      }
+      if (a.t >= D.rec) { if (a.kind === 2) pl.branchT = .45; pl.atk = null; }   // pause after hit 2 → branch to 2-1
+      break;
+  }
+}
+
+// ---------- update ----------
+function update(dt) {
+  if (!running) { tickFx(dt); return; }
+  if (won) { updateCheer(dt); tickFx(dt); return; }
+  if (hitstop > 0) { hitstop -= dt; return; }
+  time += dt;
+  for (const m of movers) {
+    const nx = Math.max(m.x0, Math.min(m.x1, m.x + m.dir * m.speed * dt));
+    m.dx = nx - m.x; m.x = nx; if (m.x === m.x0 || m.x === m.x1) m.dir *= -1;
+  }
+  for (const e of enemies) {
+    if (e.dead || !onLayer(e)) continue;
+    e.flash = Math.max(0, e.flash - dt);
+    if (e.kb) { e.x += e.kb * dt; e.kb *= Math.pow(.002, dt); if (Math.abs(e.kb) < 5) e.kb = 0; }
+    else e.x += e.dir * 26 * dt;
+    if (e.x < e.x0) { e.x = e.x0; e.dir = 1; } if (e.x > e.x1) { e.x = e.x1; e.dir = -1; }
+  }
+  if (pl.dead) {
+    pl.dead -= dt;
+    if (pl.dead <= 0) {
+      pl.dead = 0;
+      Object.assign(pl, { x: respawn.x, y: respawn.y, vx: 0, vy: 0, sx: 1, sy: 1, ride: null, hp: MAX_HP, inv: .8, act: null, h: PH, crouch: false });
+      burst(pl.x, pl.y - 20, 14, [P.gold, P.goldHi], 80, .5, 0);
+    }
+    tickFx(dt); for (const k in pressed) pressed[k] = false; return;
+  }
+
+  const dir = (keys.r ? 1 : 0) - (keys.l ? 1 : 0);
+  if ((dir || pressed.a) && !hintHidden) { hintHidden = true; setTimeout(() => document.getElementById('hint').style.opacity = 0, 9000); }
+  pl.dashCd -= dt; pl.inv = Math.max(0, pl.inv - dt); pl.dodgeT -= dt; pl.branchT -= dt; pl.wallLock -= dt; pl.ledgeCd -= dt; pl.wjT -= dt; pl.landT -= dt; pl.vjT = (pl.vjT || 0) - dt;
+  if (pl.spin > 0) pl.spin -= dt;
+  const jumpHeld = keys.j || keys.u;
+  let jumpPress = pressed.j;
+
+  // --- ladder grab (↑ at a ladder, ↓ on top of one) ---
+  const ltx = Math.floor(pl.x / T);
+  const ladderAtBody = tileAt(ltx, Math.floor((pl.y - 2) / T)) === 3 || tileAt(ltx, Math.floor((pl.y - 20) / T)) === 3;
+  const ladderBelow = tileAt(ltx, Math.floor((pl.y + 1) / T)) === 3;
+  let grabbed = false;
+  if ((!pl.act || pl.act.type === 'wall') && !pl.atk && pl.dash <= 0) {
+    if (keys.u && ladderAtBody) grabbed = true;
+    else if (keys.d && pl.ground && ladderBelow && !ladderAtBody) { grabbed = true; pl.y += 3; }
+    if (grabbed) { setAct('ladder'); pl.x = ltx * T + 8; pl.vx = pl.vy = 0; pl.airJumps = 1; pl.canDash = true; pl.crouch = false; pl.h = PH; }
+  }
+  if (LAYERS.length > 1 && pressed.u && !grabbed && pl.ground && !pl.act && !pl.atk && tileAt(Math.floor(pl.x / T), Math.floor((pl.y - 2) / T)) === 4) {
+    activeLayer ^= 1; grid = LAYERS[activeLayer].grid; pressed.u = false; grabbed = true;   // step through the shrine door
+    pl.inv = Math.max(pl.inv, .5); smoke(pl.x, pl.y, 8); sfx('dash');
+    if (window.R3D && R3D.setLayer) R3D.setLayer(activeLayer);
+  }
+  if (pressed.u && !grabbed && !(pl.act && pl.act.type === 'ladder')) jumpPress = true;
+
+  const act = pl.act;
+  if (act) act.t += dt;
+
+  // ===== ladder: its own movement, no gravity =====
+  if (act && act.type === 'ladder') {
+    const v = ((keys.d ? 1 : 0) - (keys.u ? 1 : 0)) * 75;
+    pl.vx = 0; pl.vy = v;
+    if (v) { pl.climbF += dt * 6; if ((pl.climbF | 0) !== ((pl.climbF - dt * 6) | 0)) sfx('climb', { volume: .4 }); }
+    if (jumpPress) { pl.act = null; pl.vy = -320; pl.vx = dir * RUN; if (dir) pl.face = dir; dust(pl.x, pl.y, 4); sfx('jump'); }
+    else {
+      pl.y += v * dt;
+      if (v < 0 && tileAt(ltx, Math.floor((pl.y - 1) / T)) !== 3) { pl.y = Math.ceil(pl.y / T) * T; pl.act = null; pl.ground = true; }
+      else if (v > 0 && overlapsTiles(pl.x, pl.y, 1)) { pl.y = Math.floor(pl.y / T) * T; pl.act = null; pl.ground = true; }
+      else if (tileAt(ltx, Math.floor((pl.y - 2) / T)) !== 3 && tileAt(ltx, Math.floor((pl.y - 20) / T)) !== 3) pl.act = null;
+    }
+    for (const k in pressed) pressed[k] = false;
+    afterMove(dt, dir);
+    return;
+  }
+
+  // ===== ledge: hang, then pull up =====
+  if (act && (act.type === 'ledge' || act.type === 'ledgeclimb')) {
+    pl.vx = pl.vy = 0; pl.face = act.side;
+    if (act.type === 'ledge') {
+      if (jumpPress || keys.u) { setAct('ledgeclimb', .42, { side: act.side, top: act.top, fx: act.fx, x0: pl.x, y0: pl.y }); sfx('climb'); }
+      else if (keys.d) { pl.act = null; pl.ledgeCd = .35; }
+    } else {
+      const p = Math.min(1, act.t / act.dur), tx = act.fx * T + 8 - act.side * 2;
+      pl.x = act.x0 + (tx - act.x0) * Math.max(0, p * 2 - 1); pl.y = act.y0 + (act.top - act.y0) * Math.min(1, p * 1.6);
+      if (p >= 1) { pl.x = tx; pl.y = act.top; pl.act = null; pl.ground = true; pl.vy = 0; dust(pl.x, pl.y, 4); }
+    }
+    for (const k in pressed) pressed[k] = false;
+    afterMove(dt, dir);
+    return;
+  }
+
+  // ===== special actions =====
+  if (act) switch (act.type) {
+    case 'flinch':
+      pl.vx *= Math.pow(.02, dt);
+      if (act.t >= act.dur) pl.act = null;
+      break;
+    case 'backdodge':
+      pl.inv = Math.max(pl.inv, .05); pl.h = PH;
+      if (pl.ground && act.t > .08) pl.vx *= Math.pow(.01, dt);
+      if (act.t >= act.dur && pl.ground) { pl.act = null; pl.dodgeT = .35; }
+      break;
+    case 'heal':
+      pl.vx *= Math.pow(.001, dt);
+      if (rnd() < .5) parts.push({ x: pl.x + (rnd() - .5) * 20, y: pl.y - rnd() * 6, vx: 0, vy: -40 - rnd() * 30, life: .5, max: .5, c: rnd() < .5 ? '#6CF2C2' : P.goldHi, g: 0, s: 1 });
+      if (!keys.q) pl.act = null;
+      else if (act.t >= act.dur) {
+        pl.act = null; pl.hp = Math.min(MAX_HP, pl.hp + 1); pl.spent += 3;
+        burst(pl.x, pl.y - 24, 18, ['#6CF2C2', P.gold, P.white], 120, .6, -20); sfx('checkpoint');
+      }
+      break;
+    case 'knock':
+      pl.h = PH_CROUCH; pl.vx *= Math.pow(.05, dt);
+      if (act.t >= act.dur && pl.ground) setAct('getup', .3);
+      break;
+    case 'getup':
+      pl.vx = 0; pl.h = PH;
+      if (act.t >= act.dur) pl.act = null;
+      break;
+    case 'roll': {
+      const p = act.t / act.dur;
+      pl.vx = pl.face * 240 * (1 - .4 * p); pl.h = PH_CROUCH; pl.inv = Math.max(pl.inv, .05);
+      if (act.t >= act.dur) { pl.act = null; pl.dodgeT = .35; if (!roomFor(PH)) pl.crouch = true; }
+      break;
+    }
+    case 'slide': {
+      const p = Math.min(1, act.t / act.dur);
+      pl.vx = pl.face * Math.max(120, 300 * (1 - .6 * p)); pl.h = PH_LOW; pl.inv = Math.max(pl.inv, .05);
+      if (rnd() < .6) parts.push({ x: pl.x - pl.face * (8 + rnd() * 18), y: pl.y - 2 - rnd() * 8, vx: -pl.face * 30, vy: -rnd() * 20, life: .3, max: .3, c: rnd() < .5 ? P.ice : '#8C6CFF', g: 0, s: 1 });
+      if (act.t >= act.dur) {
+        if (!roomFor(PH_CROUCH) || !pl.ground) act.t = act.dur;   // keep sliding until there is room
+        else { pl.act = null; pl.crouch = !roomFor(PH) || keys.d; }
+      }
+      break;
+    }
+    case 'brake':
+      pl.vx *= Math.pow(.0005, dt);
+      if (rnd() < .5) parts.push({ x: pl.x + pl.face * 6, y: pl.y - 1, vx: pl.face * 40 * rnd(), vy: -rnd() * 40, life: .25, max: .25, c: rnd() < .5 ? P.goldHi : P.lilac, g: 200, s: 1 });
+      if (act.t >= act.dur) { pl.act = null; pl.face = act.to; pl.vx = act.to * 40; }
+      break;
+    case 'land':
+      pl.vx *= Math.pow(.001, dt);
+      if (act.t >= act.dur) pl.act = null;
+      break;
+    case 'charge':
+      pl.vx *= Math.pow(.001, dt);
+      if (rnd() < .7) {
+        const ang = rnd() * Math.PI * 2, rr = 26 + rnd() * 10;
+        parts.push({ x: pl.x + Math.cos(ang) * rr, y: pl.y - 22 + Math.sin(ang) * rr, vx: -Math.cos(ang) * rr * 3, vy: -Math.sin(ang) * rr * 3, life: .3, max: .3, c: act.t >= CHARGE_MIN ? (rnd() < .5 ? P.gold : P.goldHi) : (rnd() < .5 ? P.ice : '#6CF2C2'), g: 0, s: 1 });
+      }
+      if (act.t >= CHARGE_MIN && !act.ready) { act.ready = true; fx.push({ type: 'circle', x: pl.x, y: pl.y - 22, r: 30, t: 0, life: .3 }); sfx('chargeready'); }
+      if (!keys.v) {
+        if (act.snd && act.snd.stop) act.snd.stop();
+        pl.act = null;
+        if (act.t >= CHARGE_MIN) { startAttack('burst'); kintsugiBurst(Math.min(1, (act.t - CHARGE_MIN) / .7)); }
+      } else if (jumpPress) { if (act.snd && act.snd.stop) act.snd.stop(); pl.act = null; }
+      break;
+    case 'wall': {
+      const side = act.side;
+      if (pl.ground || !wallAt(side)) { pl.act = null; break; }
+      act.away = dir === side ? 0 : (act.away || 0) + dt;
+      if (act.away > .15) { pl.act = null; break; }
+      pl.vx = 0; pl.face = side;
+      pl.vy = Math.min(pl.vy + GRAV * dt, 70);
+      act.dustT = (act.dustT || 0) - dt;
+      if (act.dustT <= 0) { act.dustT = .07; parts.push({ x: pl.x + side * 8, y: pl.y - 30 + rnd() * 10, vx: -side * 10, vy: -20, life: .3, max: .3, c: P.lilac, g: 0, s: 1 }); }
+      if (jumpPress) {
+        pl.act = null; pl.vy = -430; pl.vx = -side * 210; pl.face = -side; pl.wallLock = .18; pl.airJumps = 1; pl.wjT = .2;
+        dust(pl.x + side * 6, pl.y - 20, 6, -side, 90); jumpPress = false; pressed.j = false; sfx('walljump');
+      }
+      break;
+    }
+  }
+
+  // --- dash / roll / slide (C) ---
+  const freeAct = !pl.act || pl.act.type === 'land' || pl.act.type === 'brake';
+  if (pressed.x && pl.dash <= 0 && pl.dashCd <= 0 && freeAct && (!pl.atk || pl.atk.phase === 'rec')) {
+    pl.atk = null;
+    if (dir && !(pl.ground && !keys.d && !pl.crouch)) pl.face = dir;   // back dodge keeps facing
+    if (pl.ground && (keys.d || pl.crouch)) { setAct('slide', .38); pl.crouch = false; pl.dashCd = .2; dust(pl.x, pl.y, 6, -pl.face, 90); sfx('slide'); }
+    else if (pl.ground) { setAct('backdodge', .34); pl.vx = -pl.face * 210; pl.vy = -170; pl.ground = false; pl.ride = null; pl.dashCd = .2; smoke(pl.x, pl.y, 6, pl.face); sfx('roll'); }
+    else if (pl.canDash) {
+      pl.act = null; pl.dash = DASH_T; pl.dashCd = .32; pl.canDash = false;
+      pl.vx = pl.face * DASH_V; pl.vy = 0; pl.sx = 1.3; pl.sy = .8; pl.ghostT = 0;
+      fx.push({ type: 'ring', x: pl.x + pl.face * 4, y: pl.y - 22, t: 0, life: .3 }); smoke(pl.x, pl.y - 18, 4, -pl.face);
+      fx.push({ type: 'lines', x: pl.x, y: pl.y - 22, face: pl.face, t: 0, life: .22 });
+      sfx('dash');
+    }
+  }
+  if (pl.dash > 0) {
+    pl.dash -= dt; pl.vx = pl.face * DASH_V; pl.vy = 0;
+    pl.ghostT -= dt;
+    if (pl.ghostT <= 0) { pl.ghostT = .045; ghosts.push({ x: pl.x, y: pl.y, face: pl.face, pose: pose(), life: .22 }); }
+    if (pl.dash <= 0) { pl.vx = pl.face * RUN; pl.dash = 0; }
+  }
+
+  // --- attacks / charge ---
+  if (pressed.a && pl.dash <= 0) {
+    if (!pl.atk && pl.dodgeT > 0 && pl.ground && (!pl.act || pl.act.type === 'land')) { pl.act = null; pl.dodgeT = 0; startAttack('dodge1', dir); }
+    else if (!pl.atk && pl.branchT > 0 && pl.ground && !pl.act) { pl.branchT = 0; startAttack('2-1', dir); }
+    else if (!pl.atk && pl.ground && keys.u && !pl.act) startAttack(4, dir);   // bonus: rising spin slash
+    else if (!pl.atk && freeAct) {
+      pl.act = null; pl.crouch = false;
+      if (!pl.ground && keys.d) startAttack('plunge', dir);
+      else startAttack(pl.ground ? 1 : 'air', dir);
+    }
+  }
+  if (pressed.v && pl.ground && !pl.atk && !pl.act && pl.dash <= 0) { setAct('charge'); pl.act.snd = sfx('charge'); }
+  if (pressed.q && pl.ground && !pl.atk && !pl.act && pl.dash <= 0 && pl.hp < MAX_HP && shardsAvail() >= 3) setAct('heal', .9);
+  if (pl.atk) updateAttack(dt, dir);
+  const atk = pl.atk;
+  const blocked = (atk && !isAir(atk.kind)) || !!pl.act;
+
+  // --- crouch ---
+  if (pl.ground && keys.d && !pl.act && !atk) pl.crouch = true;
+  else if (pl.crouch && (!keys.d || !pl.ground) && roomFor(PH)) pl.crouch = false;
+  if (!pl.act) pl.h = pl.crouch ? PH_CROUCH : PH;
+
+  // --- brake / turn-around skid ---
+  if (pl.ground && !pl.act && !atk && dir && Math.sign(pl.vx) === -dir && Math.abs(pl.vx) > 115 && !pl.crouch) {
+    setAct('brake', .24, { to: dir }); sfx('land', { volume: .5, pitch: 1.4 });
+  }
+
+  if (pl.ground && !pl.act && !atk && !dir && pl.sprint && Math.abs(pl.vx) > 150) { setAct('brake', .2, { to: pl.face }); smoke(pl.x, pl.y, 3, -pl.face); }
+  // --- horizontal input ---
+  pl.sprint = keys.s && pl.ground && !pl.crouch;
+  if (pl.ground) pl.airMax = Math.max(RUN, Math.min(SPRINT, Math.abs(pl.vx)));
+  const maxV = pl.crouch ? CRAWL : pl.ground ? (pl.sprint ? SPRINT : RUN) : pl.airMax;
+  if (pl.dash <= 0 && !blocked) {
+    const acc = pl.ground ? ACC : AIR_ACC;
+    const d2 = pl.wallLock > 0 && Math.sign(dir) === -Math.sign(pl.vx) ? 0 : dir;
+    if (d2) { pl.vx += d2 * acc * (atk ? .5 : 1) * dt; if (!atk) pl.face = d2; }
+    else if (pl.ground) { const f = FRICTION * dt; pl.vx = Math.abs(pl.vx) <= f ? 0 : pl.vx - Math.sign(pl.vx) * f; }
+    pl.vx = Math.max(-maxV, Math.min(maxV, pl.vx));
+  } else if (pl.dash <= 0 && pl.ground && atk && !(atk.phase === 'smear')) {
+    const f = 2.2 * FRICTION * dt; pl.vx = Math.abs(pl.vx) <= f ? 0 : pl.vx - Math.sign(pl.vx) * f;
+  }
+
+  // --- jumps: ground (coyote + buffer), double jump ---
+  pl.coyote = pl.ground ? .09 : pl.coyote - dt;
+  pl.buffer = jumpPress ? .12 : pl.buffer - dt;
+  const canAct = (!pl.act || pl.act.type === 'land' || pl.act.type === 'brake') && !atk && pl.dash <= 0;
+  if (pl.buffer > 0 && pl.coyote > 0 && canAct && roomFor(PH)) {
+    pl.act = null; pl.crouch = false; pl.h = PH;
+    pl.vy = -JUMP_V; pl.buffer = 0; pl.coyote = 0; pl.ground = false; pl.ride = null;
+    pl.sx = .82; pl.sy = 1.2; dust(pl.x, pl.y, 6, -pl.face); sfx('jump');
+  } else if (jumpPress && !pl.ground && pl.coyote <= 0 && pl.airJumps > 0 && canAct) {
+    pl.airJumps--; pl.vy = -DJUMP_V; pl.buffer = 0; pl.spin = Math.abs(pl.vx) > 60 ? .32 : 0; pl.vjT = pl.spin ? 0 : .32; smoke(pl.x, pl.y, 3);
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; parts.push({ x: pl.x + Math.cos(a) * 10, y: pl.y + Math.sin(a) * 3, vx: Math.cos(a) * 70, vy: Math.sin(a) * 15, life: .3, max: .3, c: i % 2 ? P.ice : P.white, g: 0, s: 1 }); }
+    sfx('doublejump');
+  }
+
+  // --- gravity ---
+  const custom = pl.dash > 0 || (atk && (atk.phase === 'dive' || (atk.kind === 5 && atk.phase === 'antic'))) || (pl.act && pl.act.type === 'wall');
+  if (!custom) {
+    let g = pl.vy < 0 && !jumpHeld && !atk && pl.spin <= 0 ? GRAV * 2.2 : pl.vy > 0 ? GRAV * 1.15 : GRAV;
+    if (atk && isAir(atk.kind) && atk.phase !== 'rec') g *= .35;
+    if (atk && atk.kind === 4 && (atk.phase === 'smear' || atk.phase === 'active')) g *= .55;
+    pl.vy = Math.min(atk && atk.kind === 3 ? 700 : MAX_FALL, pl.vy + g * dt);
+  }
+
+  // --- ledge grab: head reaches the top corner of a block while pushing into it ---
+  if (!pl.ground && (!pl.act || pl.act.type === 'wall') && !atk && pl.dash <= 0 && dir && pl.vy > -80 && pl.ledgeCd <= 0) {
+    const head = pl.y - PH;
+    const fxT = Math.floor((pl.x + dir * (PW / 2 + 2)) / T), ty = Math.floor((head + 10) / T), top = ty * T;   // block whose top edge is just below the head
+    if (solid(fxT, ty) && !solid(fxT, ty - 1) && !solid(fxT, ty - 2) && !solid(Math.floor(pl.x / T), ty - 1) && head >= top - 14 && head <= top + 8) {
+      setAct('ledge', Infinity, { side: dir, top, fx: fxT }); pl.face = dir; pl.vx = pl.vy = 0; pl.y = top + PH - 6;
+      pl.x = dir > 0 ? fxT * T - PW / 2 : (fxT + 1) * T + PW / 2; pl.airJumps = 1; pl.canDash = true; sfx('land', { volume: .4 });
+    }
+  }
+  // --- wall cling trigger ---
+  if (!pl.ground && !pl.act && !atk && pl.dash <= 0 && pl.vy > 0 && dir && pl.wallLock <= 0 && wallAt(dir)) {
+    setAct('wall', Infinity, { side: dir }); pl.face = dir; pl.airJumps = 1; pl.canDash = true; sfx('wallslide', { volume: .5 });
+  }
+  for (const k in pressed) pressed[k] = false;
+
+  physics(dt);
+  afterMove(dt, dir);
+}
+
+function physics(dt) {
+  if (pl.ride) { pl.x += pl.ride.dx; if (overlapsTiles(pl.x, pl.y, 1)) pl.x -= pl.ride.dx; }
+  pl.x += pl.vx * dt;
+  let hit = overlapsTiles(pl.x, pl.y, 1);
+  if (hit) { pl.x = pl.vx > 0 ? hit.tx * T - PW / 2 : (hit.tx + 1) * T + PW / 2; pl.vx = 0; }
+
+  const prevY = pl.y, wasGround = pl.ground, fallV = pl.vy;
+  pl.y += pl.vy * dt; pl.ground = false; pl.ride = null;
+  hit = overlapsTiles(pl.x, pl.y, 1);
+  if (hit) {
+    if (pl.vy > 0) { pl.y = Math.floor((pl.y - .01) / T) * T; pl.ground = true; }
+    else { pl.y = (Math.floor((pl.y - pl.h) / T) + 1) * T + pl.h; }
+    pl.vy = 0;
+  }
+  if (fallV >= 0) {
+    for (const m of activeLayer ? [] : movers) {          // one-way moving platforms
+      if (pl.x + PW / 2 > m.x && pl.x - PW / 2 < m.x + m.w && prevY <= m.y + 1 && pl.y >= m.y) { pl.y = m.y; pl.vy = 0; pl.ground = true; pl.ride = m; }
+    }
+    const ty = Math.floor(pl.y / T);   // ladder tops are one-way floors
+    if (!keys.d) for (const tx of [Math.floor((pl.x - PW / 2) / T), Math.floor((pl.x + PW / 2 - .01) / T)]) {
+      if (tileAt(tx, ty) === 3 && tileAt(tx, ty - 1) !== 3 && prevY <= ty * T + .01 && pl.y >= ty * T) { pl.y = ty * T; pl.vy = 0; pl.ground = true; }
+    }
+  }
+  if (pl.ground) { pl.canDash = true; pl.airJumps = 1; }
+  if (pl.ground && !wasGround) {
+    const heavyAtk = pl.atk && (pl.atk.kind === 3 || pl.atk.kind === 5 || pl.atk.kind === 'plunge');
+    if (pl.atk && isAir(pl.atk.kind)) pl.atk = null;
+    pl.landT = .12;
+    if (pl.act && pl.act.type === 'wall') pl.act = null;
+    if (!heavyAtk && !pl.act && fallV > 470) { setAct('land', .12); pl.sx = 1.3; pl.sy = .72; dust(pl.x, pl.y, 12, 0, 90); smoke(pl.x, pl.y, 6); shake = Math.max(shake, 1.5); sfx('heavyland'); }
+    else if (!heavyAtk && fallV > 200) { pl.sx = 1.22; pl.sy = .78; dust(pl.x, pl.y, 8); sfx('land'); }
+  }
+}
+
+function afterMove(dt, dir) {
+  if (hitSpike() || pl.y > ROWS * T + 40) { die(); }
+  const atk = pl.atk, act = pl.act;
+  const inv = pl.inv > 0 || pl.dash > 0 || (atk && ['smear', 'active', 'dive'].includes(atk.phase)) || (act && ['roll', 'slide', 'knock', 'getup', 'backdodge', 'ledgeclimb'].includes(act.type));
+  if (!pl.dead && !inv) for (const e of enemies) {
+    if (!e.dead && onLayer(e) && Math.abs(e.x - pl.x) < PW / 2 + 6 && e.y - 12 < pl.y && e.y > pl.y - pl.h + 4) { hurt(e); break; }
+  }
+
+  for (const s of shards) if (!s.got && onLayer(s) && Math.abs(s.x - pl.x) < 13 && s.y > pl.y - pl.h - 4 && s.y < pl.y + 4) {
+    s.got = true; burst(s.x, s.y, 16, [P.gold, P.goldHi, P.white], 120, .55, 100); sfx('pickup');
+  }
+  for (const c of activeLayer ? [] : checkpoints) if (!c.lit && Math.abs(c.x - pl.x) < 14 && Math.abs(c.y - pl.y) < 30) {
+    checkpoints.forEach(o => o.lit = false); c.lit = true; respawn = { x: c.x, y: c.y }; pl.hp = MAX_HP;
+    burst(c.x, c.y - 26, 12, [P.red, P.gold, P.goldHi], 90, .6, -40); sfx('checkpoint');
+  } else if (c.lit && Math.abs(c.x - pl.x) < 14 && Math.abs(c.y - pl.y) < 30) respawn = { x: c.x, y: c.y };
+  if (!activeLayer && pl.x > GOAL.x + 8 && pl.x < GOAL.x + 40 && pl.y <= GOAL.y + 1 && pl.ground) finish();
+
+  if (pl.dash <= 0) { pl.sx += (1 - pl.sx) * Math.min(1, dt * 12); pl.sy += (1 - pl.sy) * Math.min(1, dt * 12); }
+  pl.runF += dt * Math.abs(pl.vx) / 72; pl.crouchT = pl.crouch ? pl.crouchT + dt : 0;
+
+  // locomotion animation state
+  const moving = Math.abs(pl.vx) > 8;
+  let anim;
+  if (!pl.ground) anim = 'air';
+  else if (moving) anim = (pl.anim === 'idle' || (pl.anim === 'start' && pl.frame < 2)) ? 'start' : 'walk';
+  else anim = 'idle';
+  if (pl.anim === 'start' && anim === 'start' && pl.frame >= 2) anim = 'walk';
+  if (anim !== pl.anim) { pl.anim = anim; pl.at = 0; pl.frame = 0; }
+  pl.at += dt * 1000;
+  const A = ANIM[pl.anim];
+  if (A) {
+    const ms = pl.anim === 'walk' ? A.ms * RUN / Math.max(60, Math.abs(pl.vx)) * (pl.crouch ? 1.6 : 1) : A.ms;
+    while (pl.at >= ms) {
+      pl.at -= ms; pl.frame++;
+      if (pl.anim === 'start') { if (pl.frame >= A.n) { pl.anim = 'walk'; pl.frame = 0; } }
+      else pl.frame %= A.n;
+      if (pl.anim === 'walk' && !pl.atk && !pl.act && (pl.frame === 5 || pl.frame === 17)) {
+        dust(pl.x - pl.face * 6, pl.y, pl.sprint ? 4 : 2, -pl.face); sfx('step', { volume: pl.crouch ? .15 : .3 });
+      }
+    }
+  }
+  tickFx(dt);
+}
+
+function updateCheer(dt) {   // victory hops at the torii
+  const act = pl.act; act.t += dt;
+  pl.vy += GRAV * dt; pl.vx = 0;
+  physics(dt);
+  if (pl.ground && act.t - (act.last || 0) > .5) {
+    act.last = act.t; pl.vy = -260; pl.ground = false; pl.sx = .85; pl.sy = 1.18;
+    burst(pl.x, pl.y - 30, 10, [P.gold, P.goldHi, P.white], 90, .6, 60);
+  }
+  if (pl.dash <= 0) { pl.sx += (1 - pl.sx) * Math.min(1, dt * 12); pl.sy += (1 - pl.sy) * Math.min(1, dt * 12); }
+}
+
+function tickFx(dt) {
+  for (const p of parts) { p.life -= dt; p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.grow) p.s += p.grow * dt; }
+  parts = parts.filter(p => p.life > 0);
+  for (const f of fx) f.t += dt; fx = fx.filter(f => f.t < f.life);
+  for (const g of ghosts) g.life -= dt; ghosts = ghosts.filter(g => g.life > 0);
+  shake = Math.max(0, shake - dt * 18);
+  for (const p of petals) { p.y += p.v * dt; p.x += Math.sin(performance.now() / 900 + p.ph) * 10 * dt - 6 * dt; if (p.y > H) { p.y = -4; p.x = rnd() * W; } if (p.x < -4) p.x = W; }
+  const tx = Math.max(0, Math.min(COLS * T - W, pl.x - W * .42 + pl.face * 30));
+  cam.x += (tx - cam.x) * Math.min(1, dt * 5);
+}
+
+let finishTimer = 0;
+function finish() {
+  won = true; pl.atk = null; pl.dash = 0; setAct('cheer');
+  burst(GOAL.x + 24, GOAL.y - 50, 50, [P.gold, P.goldHi, P.red, P.white], 220, 1.2, 120);
+  sfx('win');
+  const got = shards.filter(s => s.got).length, kills = enemies.filter(e => e.dead).length;
+  document.getElementById('wShards').textContent = `${got}/${shards.length}`;
+  document.getElementById('wKills').textContent = `${kills}/${enemies.length}`;
+  document.getElementById('wTime').textContent = time.toFixed(1) + ' วิ';
+  document.getElementById('wDeaths').textContent = deaths;
+  const full = got === shards.length && kills === enemies.length;
+  document.getElementById('wNote').textContent = full
+    ? (deaths === 0 ? 'สมบูรณ์แบบ — ครบทุกอย่างและไม่ตายเลย' : 'เก็บครบ ฟันครบ! ลองอีกรอบแบบไม่ตายดูไหม')
+    : `ยังขาดเศษทอง ${shards.length - got} ชิ้น · เงาหมึก ${enemies.length - kills} ตัว`;
+  clearTimeout(finishTimer); document.getElementById('wBtn').textContent = levelIdx + 1 < LEVELS.length ? 'กด N หรือแตะเพื่อไปด่านถัดไป · R เล่นด่านนี้ใหม่' : 'จบทุกด่านแล้ว! กด N หรือแตะเพื่อเริ่มด่าน 1 ใหม่ · R เล่นด่านนี้ใหม่';
+  finishTimer = setTimeout(() => document.getElementById('win').classList.remove('hidden'), 1600);
+}
+
+// ---------- render ----------
+function drawProps(cx, cy) {
+  const t = performance.now() / 1000;
+  for (const c of activeLayer ? [] : checkpoints) {
+    const x = Math.round(c.x - cx), y = Math.round(c.y - cy);
+    ctx.fillStyle = P.wood; ctx.fillRect(x - 1, y - 22, 3, 22);
+    ctx.fillStyle = P.navyDD; ctx.fillRect(x - 6, y - 32, 13, 2);
+    ctx.fillStyle = c.lit ? P.red : P.crimsonD; ctx.fillRect(x - 4, y - 30, 9, 9);
+    ctx.fillStyle = c.lit ? P.goldHi : P.crimson; ctx.fillRect(x - 2, y - 28, 5, 5);
+    if (c.lit) { ctx.fillStyle = `rgba(255,163,3,${.12 + .05 * Math.sin(t * 5)})`; ctx.beginPath(); ctx.arc(x + .5, y - 26, 16, 0, 7); ctx.fill(); }
+  }
+  if (!activeLayer) {
+    const x = Math.round(GOAL.x - cx), y = Math.round(GOAL.y - cy);
+    ctx.fillStyle = P.crimson; ctx.fillRect(x + 6, y - 70, 5, 70); ctx.fillRect(x + 41, y - 70, 5, 70);
+    ctx.fillStyle = P.red; ctx.fillRect(x + 7, y - 70, 2, 70); ctx.fillRect(x + 42, y - 70, 2, 70);
+    ctx.fillStyle = P.crimson; ctx.fillRect(x + 2, y - 60, 48, 4);
+    ctx.fillStyle = P.navyDD; ctx.fillRect(x - 4, y - 78, 60, 4);
+    ctx.fillStyle = P.red; ctx.fillRect(x - 2, y - 74, 56, 4); ctx.fillRect(x - 6, y - 79, 4, 3); ctx.fillRect(x + 54, y - 79, 4, 3);
+    ctx.fillStyle = P.gold; ctx.fillRect(x + 22, y - 70, 8, 10);
+    ctx.fillStyle = `rgba(255,255,204,${.06 + .04 * Math.sin(t * 2)})`; ctx.fillRect(x + 11, y - 56, 30, 56);
+  }
+  for (const s of shards) if (!s.got && onLayer(s)) {
+    const x = Math.round(s.x - cx), y = Math.round(s.y - cy + Math.sin(t * 3 + s.ph) * 2);
+    ctx.fillStyle = 'rgba(255,163,3,.18)'; ctx.fillRect(x - 5, y - 6, 11, 13);
+    ctx.fillStyle = P.goldD; for (let r = -4; r <= 4; r++) { const w = 4 - Math.abs(r); ctx.fillRect(x - w, y + r, w * 2 + 1, 1); }
+    ctx.fillStyle = P.gold; for (let r = -4; r <= 2; r++) { const w = Math.max(0, 3 - Math.abs(r)); ctx.fillRect(x - w, y + r, w * 2, 1); }
+    ctx.fillStyle = P.goldHi; ctx.fillRect(x - 1, y - 3, 1, 2);
+    if (Math.sin(t * 4 + s.ph * 3) > .85) { ctx.fillStyle = P.white; ctx.fillRect(x + 3, y - 6, 1, 3); ctx.fillRect(x + 2, y - 5, 3, 1); }
+  }
+  for (const m of activeLayer ? [] : movers) {
+    const x = Math.round(m.x - cx), y = Math.round(m.y - cy);
+    ctx.fillStyle = P.wood; ctx.fillRect(x, y, m.w, 6);
+    ctx.fillStyle = P.gold; ctx.fillRect(x, y, m.w, 1);
+    ctx.fillStyle = P.rust; ctx.fillRect(x, y + 5, m.w, 1);
+    ctx.fillStyle = P.crimson; ctx.fillRect(x + 3, y + 6, 2, 3); ctx.fillRect(x + m.w - 5, y + 6, 2, 3);
+    ctx.fillStyle = P.goldHi; for (let i = 6; i < m.w - 4; i += 10) ctx.fillRect(x + i, y + 2, 2, 2);
+  }
+}
+
+function drawDoorPrompt(cx, cy) {
+  if (LAYERS.length < 2 || tileAt(Math.floor(pl.x / T), Math.floor((pl.y - 2) / T)) !== 4) return;
+  const x = Math.round(pl.x - cx), y = Math.round(pl.y - cy) - 58 + Math.round(Math.sin(performance.now() / 150));
+  ctx.fillStyle = 'rgba(15,18,27,.8)'; ctx.fillRect(x - 6, y - 7, 13, 11);
+  ctx.fillStyle = P.gold; ctx.fillRect(x, y - 5, 1, 7); ctx.fillRect(x - 1, y - 4, 3, 1); ctx.fillRect(x - 2, y - 3, 5, 1);
+}
+function drawEnemies(cx, cy) {
+  const t = performance.now() / 1000;
+  for (const e of enemies) {
+    if (e.dead || !onLayer(e)) continue;
+    const x = Math.round(e.x - cx), y = Math.round(e.y - cy), h = 12 + Math.round(Math.sin(t * 6 + e.ph));
+    const fl = e.flash > 0;
+    for (let i = 0; i < h; i++) {
+      const f = i / h, half = Math.round(8 * Math.sqrt(Math.max(0, 1 - Math.pow(f, 2.2))));
+      const yy = y - i - 1;
+      ctx.fillStyle = fl ? P.white : (i >= h - 2 ? P.lilacD : '#6B4A9E'); ctx.fillRect(x - half, yy, half * 2, 1);
+      if (half > 1) { ctx.fillStyle = fl ? P.white : (i > h - 4 ? P.plumD : P.navyDD); ctx.fillRect(x - half + 1, yy, half * 2 - 2, 1); }
+    }
+    if (!fl) {
+      ctx.fillStyle = P.plumD;
+      for (let k = -7; k < 8; k += 3) ctx.fillRect(x + k, y - 1 + (Math.sin(t * 8 + k + e.ph) > 0 ? 1 : 0), 2, 1);
+      const ex = x + e.dir * 2;
+      ctx.fillStyle = e.hp < 2 ? P.red : P.lilac; ctx.fillRect(ex - 4, y - 8, 2, 2); ctx.fillRect(ex + 2, y - 8, 2, 2);
+      ctx.fillStyle = P.white; ctx.fillRect(ex - 4, y - 8, 1, 1); ctx.fillRect(ex + 2, y - 8, 1, 1);
+    }
+  }
+}
+
+// body pose for the current state: frame + transform
+// rot = lean (+ forward), cy = rotation pivot height above feet, ox/oy = offsets, fm = extra mirror, glow = ice overlay
+// PixelLab frames (atk.png) override the procedural pose wherever a move has them
+const pick = (seq, p) => seq[Math.min(seq.length - 1, Math.max(0, Math.floor(p * seq.length)))];
+function pose() {
+  const ps = basePose(), ov = artPose(ps);
+  if (!ov) return ps;
+  return Object.assign({}, ps, { rot: ps.rot * .25, cy: 0, oy: 0, sx: 1 + (ps.sx - 1) * .4, sy: 1 + (ps.sy - 1) * .4 }, ov, { art: true });
+}
+function artPose(ps) {
+  const M = ART.moves, a = pl.atk, act = pl.act;
+  const R = (k, ph, p, extra) => (M[k] && M[k][ph]) ? Object.assign({ row: M[k].row, col: pick(M[k][ph], p) }, extra) : null;
+  if (act) switch (act.type) {
+    case 'knock':      return R('hurt', 'down', act.t / act.dur, { rot: 0 });
+    case 'getup':      return R('hurt', 'up', act.t / act.dur, { rot: 0 });
+    case 'flinch':     return R('hurt', 'light', act.t / act.dur, { rot: 0 });
+    case 'backdodge':  return R('backdodge', 'play', act.t / act.dur, { rot: 0, sx: 1, sy: 1 });
+    case 'slide':      return roomFor(PH_CROUCH) ? R('slide', 'play', Math.min(1, act.t / act.dur), { rot: 0, ox: 0, sx: 1, sy: 1 }) : null;   // tight tunnel → flat procedural pose
+    case 'wall':       return R('wall', 'slide', (act.t * 5) % 1, { rot: 0, ox: 0, fm: -1 });   // art has her back to the wall
+    case 'ledge':      return R('ledge', 'hang', (act.t * 2) % 1, { rot: 0, oy: 14 });          // hands on the ledge top
+    case 'ledgeclimb': return R('ledge', 'climb', act.t / act.dur, { rot: 0, oy: Math.round(14 * (1 - act.t / act.dur)) });
+    case 'ladder':     return R('ladder', 'loop', (pl.climbF / 4) % 1, { rot: 0, sx: 1 });
+    case 'brake':      return act.to !== pl.face ? R('turn', 'play', act.t / act.dur, { rot: 0, ox: 0 }) : null;   // turn-around only; a plain stop keeps the lean
+    case 'land':       return R('jump', 'land', act.t / act.dur);
+    case 'heal':       return R('heal', 'play', Math.min(1, act.t / act.dur), { rot: 0 });
+    default:           return null;
+  }
+  if (pl.dash > 0) return R('dash', 'play', 1 - pl.dash / DASH_T, { rot: 0, sx: 1, sy: 1 });
+  if (a) {
+    const art = M[a.kind]; if (!art) return null;
+    const seq = art[a.phase] || (a.phase === 'dive' && art.smear); if (!seq) return null;
+    const D = ATK[a.kind], dur = { antic: D.antic, smear: D.smear || 1, active: D.active, rec: D.rec, dive: 400 }[a.phase] || 1;
+    return { row: art.row, col: pick(seq, a.t / dur) };
+  }
+  if (pl.spin > 0) return R('dj', 'play', 1 - pl.spin / .32, { rot: 0 });   // forward double jump (no full-body spin)
+  if (pl.vjT > 0) return R('dj', 'play', 1 - pl.vjT / .32, { rot: 0 });                                               // vertical double jump
+  if (pl.wjT > 0) return R('wall', 'jump', 1 - pl.wjT / .2, { rot: 0 });
+  if (!pl.ground) return R('jump', pl.vy < -150 ? 'rise' : pl.vy < 150 ? 'apex' : 'fall', .5, { rot: 0 });
+  if (pl.crouch) return R('crouch', pl.crouchT < .12 ? 'down' : 'hold', pl.crouchT < .12 ? pl.crouchT / .12 : (pl.crouchT * 2) % 1, { rot: 0, sx: 1, sy: 1 });
+  if (pl.sprint && Math.abs(pl.vx) > 150) return R('run', 'loop', pl.runF % 1, { rot: 0 });
+  if (pl.landT > 0) return R('jump', 'land', 1 - pl.landT / .12);
+  return null;
+}
+function basePose() {
+  const a = pl.atk, act = pl.act;
+  const B = o => Object.assign({ row: 0, col: 0, rot: 0, ox: 0, oy: 0, sx: pl.sx, sy: pl.sy }, o);
+  if (act) switch (act.type) {
+    case 'knock':  return B({ row: 1, col: 10, rot: -1.35, oy: -2 });
+    case 'flinch': return B({ row: 0, col: 0, rot: -.2, ox: -2, flash: act.t < .08 ? .6 : 0 });
+    case 'backdodge': { const p = act.t / act.dur; return B({ row: 1, col: 0, rot: -.35 * Math.sin(Math.PI * p), sx: .95, sy: .95 }); }
+    case 'heal':   return B({ row: 0, col: Math.floor(act.t * 10) % 10, glow: .3 + .2 * Math.sin(act.t * 18) });
+    case 'ledge':  return B({ row: 1, col: 10, rot: 0, oy: 0 });
+    case 'ledgeclimb': return B({ row: 1, col: 0, rot: -.2 * (1 - act.t / act.dur) });
+    case 'getup': { const p = Math.min(1, act.t / act.dur); return B({ row: 0, col: 0, rot: -1.35 * (1 - p) * (1 - p), oy: -2 * (1 - p) }); }
+    case 'roll': { const p = act.t / act.dur; return B({ row: 1, col: 0, rot: p * Math.PI * 2, cy: 21, oy: -1 - Math.round(4 * Math.sin(Math.PI * p)), sx: .82, sy: .74 }); }
+    case 'slide':  return B({ row: 1, col: 3, rot: 1.38, oy: -7, ox: -6 });
+    case 'wall':   return B({ row: 1, col: 10, rot: -.12, ox: 1 });
+    case 'ladder': return B({ row: 1, col: (pl.climbF | 0) % 2 ? 0 : 12, rot: 0, sx: .96 });
+    case 'charge': { const pulse = .25 + .25 * Math.sin(act.t * 22); return B({ row: 0, col: Math.floor(act.t * 10) % 10, sx: 1.04, sy: .96, glow: Math.min(1, act.t / CHARGE_MIN) * pulse + (act.ready ? .25 : 0) }); }
+    case 'brake':  return B({ row: 0, col: 0, rot: -.24, ox: -2 });
+    case 'land':   return B({ row: 0, col: 0 });
+    case 'cheer':  return pl.ground ? B({ row: 0, col: Math.floor(act.t * 14) % 10 }) : B({ row: 1, col: 0, rot: -.12 });
+  }
+  if (pl.dash > 0) return B({ row: 1, col: 3, rot: .22 });
+  if (a) {
+    const k = a.kind, D = ATK[k];
+    const rec = () => { const p = Math.min(1, a.t / D.rec); return B({ row: 0, col: Math.min(4, Math.floor(p * 5)), rot: .1 * (1 - p), ox: 2 * (1 - p) }); };
+    if (k === 'burst') return a.phase === 'active' ? B({ row: 1, col: 0, rot: -.15, sy: 1.12, glow: .6 }) : rec();
+    if (k === 'plunge' || k === 5) {
+      if (a.phase === 'antic') return k === 5 ? B({ row: 1, col: 0, rot: -.25, sy: 1.06 }) : B({ row: 1, col: 0, rot: -.12, sx: .92, sy: .92 });
+      if (a.phase === 'dive') return B({ row: 1, col: 10, sx: .8, sy: 1.28, flash: k === 5 ? .3 : 0 });
+      if (a.phase === 'active') return B({ row: 1, col: 3, sx: pl.sx, sy: pl.sy });
+      return rec();
+    }
+    if (k === 4) {
+      if (a.phase === 'antic') return B({ row: 0, col: 0, rot: -.1, sy: .9 });
+      if (a.phase === 'smear' || a.phase === 'active') {
+        const p = a.phase === 'smear' ? a.t / D.smear * .55 : .55 + Math.min(1, a.t / D.active) * .45;
+        return B({ row: 1, col: 3, rot: -.12 + .2 * p, flash: a.phase === 'smear' ? .3 : 0 });
+      }
+      return rec();
+    }
+    if (k === 'dodge1' || k === 'dodge2') {
+      if (a.phase === 'antic') return B({ row: 0, col: 0, rot: -.12, ox: -2 });
+      if (a.phase === 'smear') return B({ row: 1, col: 3, rot: .3, sx: 1.3, sy: .85, flash: .5 });
+      if (a.phase === 'active') return B({ row: 1, col: 3, rot: .15, ox: 2 });
+      return rec();
+    }
+    if (a.phase === 'antic') return k === 3
+      ? B({ row: 1, col: 0, rot: -.18, ox: -2, sx: .94, sy: 1.08 })
+      : B({ row: 0, col: 0, rot: -.1, ox: -2, sx: 1.04, sy: .96 });
+    if (a.phase === 'smear') return k === 3
+      ? B({ row: 1, col: 10, rot: .26, ox: 3, sx: .9, sy: 1.14, flash: .3 })
+      : k === 2 ? B({ row: 1, col: 3, rot: .2, ox: 4, sx: 1.16, sy: .88, flash: .3 })
+      : B({ row: 1, col: 3, rot: .16, ox: 3, sx: 1.12, sy: .92, flash: .3 });
+    if (a.phase === 'active') return k === 3
+      ? B({ row: 1, col: 3, rot: .14, ox: 3, sx: 1.2, sy: .82 })
+      : B({ row: 1, col: 3, rot: k === 2 ? .18 : .1, ox: 2, sy: k === 2 ? .9 : 1 });
+    return rec();
+  }
+  if (pl.spin > 0) return B({ row: 1, col: 0, rot: -.08 });
+  if (pl.anim === 'air') {
+    const col = pl.vy < -60 ? 0 : pl.vy < 120 ? 3 : 10;
+    return B({ row: 1, col, rot: pl.vy < -60 ? -.05 : .04 });
+  }
+  const A = ANIM[pl.anim], col = Math.min(pl.frame, A.n - 1);
+  if (pl.crouch) return B({ row: A.row, col, sx: pl.sx * 1.08, sy: pl.sy * .7, rot: pl.anim === 'walk' ? .08 : 0 });
+  return B({ row: A.row, col, rot: pl.anim === 'walk' ? (pl.sprint ? .13 : .04) : 0 });
+}
+
+function drawBody(variant, x, y, face, ps, alpha = 1, comp) {
+  const img = SHEETS[variant][ps.art ? 1 : 0]; if (!img) return;
+  const cw = ps.art ? ART.cell : CW, ch = ps.art ? ART.cell : CH, ax = ps.art ? ART.ax : AX;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  if (comp) ctx.globalCompositeOperation = comp;
+  ctx.translate(Math.round(x + face * ps.ox), Math.round(y + (ps.oy || 0)));
+  ctx.scale(face * (ps.fm || 1), 1);
+  if (ps.cy) ctx.translate(0, -ps.cy);
+  ctx.rotate(ps.rot);
+  if (ps.cy) ctx.translate(0, ps.cy);
+  ctx.scale(-ps.sx, ps.sy);   // source sprites face LEFT, so mirror them to match `face`
+  ctx.drawImage(img, ps.col * cw, ps.row * ch, cw, ch, -ax, -ch, cw, ch);
+  ctx.restore();
+}
+
+function drawArc(cx, cy) {
+  const a = pl.atk; if (!a || pl.dead) return;
+  const k = ARCS[a.kind] ? a.kind : ARC_OF[a.kind]; if (!ARCS[k]) return;
+  let stage = -1;
+  if (a.phase === 'smear' || (a.phase === 'dive' && k === 5)) stage = 0;
+  else if (a.phase === 'active') stage = a.t < ATK[a.kind].active / 2 ? 1 : 2;
+  else if (a.phase === 'rec' && a.t < 80) stage = 3;
+  if (stage < 0) return;
+  ctx.save();
+  ctx.translate(Math.round(pl.x - cx), Math.round(pl.y - cy));
+  ctx.scale(pl.face, 1);
+  ctx.drawImage(ARCS[k][stage], -ARC_OX, -ARC_OY);
+  ctx.restore();
+}
+
+function drawFx(cx, cy) {
+  for (const f of fx) {
+    const p = f.t / f.life, x = Math.round((f.x || 0) - cx), y = Math.round((f.y || 0) - cy);
+    if (f.type === 'spark') {
+      const r = Math.round(3 + p * 9);
+      ctx.fillStyle = p < .4 ? P.white : P.ice;
+      ctx.fillRect(x - r, y, r * 2 + 1, 1); ctx.fillRect(x, y - r, 1, r * 2 + 1);
+      const d = Math.round(r * .6); ctx.fillStyle = P.royal;
+      for (let i = 1; i <= d; i++) { ctx.fillRect(x + i, y + i, 1, 1); ctx.fillRect(x - i, y - i, 1, 1); ctx.fillRect(x + i, y - i, 1, 1); ctx.fillRect(x - i, y + i, 1, 1); }
+    } else if (f.type === 'shock') {
+      const r = Math.round(6 + p * 46);
+      ctx.globalAlpha = 1 - p;
+      ctx.fillStyle = P.white; ctx.fillRect(x - r, y - 1, 6, 1); ctx.fillRect(x + r - 6, y - 1, 6, 1);
+      ctx.fillStyle = P.ice; ctx.fillRect(x - r, y - 2, 10, 1); ctx.fillRect(x + r - 10, y - 2, 10, 1);
+      ctx.fillStyle = P.royal; ctx.fillRect(x - r + 2, y - 4, 4, 2); ctx.fillRect(x + r - 6, y - 4, 4, 2);
+      ctx.globalAlpha = 1;
+    } else if (f.type === 'rays') {
+      const len = Math.round(58 * Math.min(1, p * 3));
+      ctx.globalAlpha = 1 - p;
+      [-1.0, -.6, -.25, .25, .6, 1.0].forEach((o, i) => {
+        const ang = -Math.PI / 2 + o * .9, w = i === 2 || i === 3 ? 3 : 2;
+        for (let s = 0; s < len; s++) {
+          ctx.fillStyle = s < len * .35 ? P.white : s < len * .7 ? '#6CF2C2' : P.ice;
+          ctx.fillRect(x + Math.round(Math.cos(ang) * s), y + Math.round(Math.sin(ang) * s), w, 1);
+        }
+      });
+      ctx.globalAlpha = 1;
+    } else if (f.type === 'lines') {
+      ctx.globalAlpha = 1 - p; ctx.fillStyle = P.ice;
+      for (let i = 0; i < 5; i++) {
+        const ly = y - 14 + i * 7, l = 10 + (i * 7) % 13;
+        ctx.fillRect(x - f.face * (18 + p * 40 + i * 3) - (f.face > 0 ? l : 0), ly, l, 1);
+      }
+      ctx.globalAlpha = 1;
+    } else if (f.type === 'ring') {     // air-dash portal: thin vertical ellipse
+      const rx = Math.max(1, Math.round(3 + p * 9)), ry = Math.round(24 - p * 4);
+      ctx.globalAlpha = 1 - p;
+      for (let i = 0; i < 48; i++) {
+        const a = i / 48 * Math.PI * 2;
+        ctx.fillStyle = i % 3 ? P.lilac : P.white;
+        ctx.fillRect(x + Math.round(Math.cos(a) * rx), y + Math.round(Math.sin(a) * ry), 1, 1);
+      }
+      ctx.globalAlpha = 1;
+    } else if (f.type === 'circle') {   // expanding ring (charge ready / burst)
+      const r = Math.round(f.r * (.2 + p * .8));
+      ctx.globalAlpha = 1 - p;
+      for (let i = 0; i < 64; i++) {
+        const a = i / 64 * Math.PI * 2;
+        ctx.fillStyle = i % 2 ? P.gold : P.goldHi;
+        ctx.fillRect(x + Math.round(Math.cos(a) * r), y + Math.round(Math.sin(a) * r * .55), 2, 1);
+      }
+      ctx.globalAlpha = 1;
+    } else if (f.type === 'pillar') {   // kintsugi light pillar
+      const w = Math.round(28 * Math.sin(Math.PI * Math.min(1, p * 1.2)));
+      ctx.globalAlpha = .85 * (1 - p);
+      ctx.fillStyle = '#6CF2C2'; ctx.fillRect(x - w, y - 140, w * 2, 140);
+      ctx.fillStyle = P.goldHi; ctx.fillRect(x - Math.round(w * .55), y - 140, Math.round(w * 1.1), 140);
+      ctx.fillStyle = P.white; ctx.fillRect(x - Math.round(w * .2), y - 140, Math.max(1, Math.round(w * .4)), 140);
+      ctx.globalAlpha = 1;
+    } else if (f.type === 'flash') {
+      ctx.globalAlpha = .18 * (1 - p); ctx.fillStyle = P.white; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+    }
+  }
+}
+
+function drawPlayer(cx, cy) {
+  for (const g of ghosts) drawBody('ghost', g.x - cx, g.y - cy, g.face, g.pose, g.life / .22 * .5);
+  if (pl.dead) return;
+  const ps = pose();
+  const blink = pl.inv > 0 && !pl.act && !pl.atk && Math.floor(pl.inv * 14) % 2;
+  const x = pl.x - cx, y = pl.y - cy;
+  if (pl.act && pl.act.type === 'charge') {      // charge aura behind the body
+    const t = pl.act.t, r = 22 + 4 * Math.sin(t * 9);
+    ctx.globalAlpha = Math.min(.8, t * 2);
+    for (let i = 0; i < 10; i++) {
+      const a = t * 4 + i / 10 * Math.PI * 2;
+      ctx.fillStyle = pl.act.ready ? (i % 2 ? P.gold : P.goldHi) : (i % 2 ? P.ice : '#6CF2C2');
+      ctx.fillRect(Math.round(x + Math.cos(a) * r), Math.round(y - 22 + Math.sin(a) * r * .6), 2, 2);
+    }
+    ctx.globalAlpha = 1;
+  }
+  drawBody('base', x, y, pl.face, ps, blink ? .35 : 1);
+  if (ps.flash) drawBody('white', x, y, pl.face, ps, ps.flash);
+  if (ps.glow) drawBody('ghost', x, y, pl.face, ps, Math.min(1, ps.glow), 'lighter');
+}
+
+function drawShadows(cx, cy) {   // contact shadows on the ground under every body (HD-2D only)
+  const blob = (x, y, w) => {
+    let ty = Math.floor(y / T); while (ty < ROWS && !solid(Math.floor(x / T), ty) && tileAt(Math.floor(x / T), ty) !== 3) ty++;
+    const gy = ty * T, d = gy - y; if (ty >= ROWS || d > 90) return;
+    const k = 1 - d / 90; ctx.fillStyle = `rgba(0,0,0,${.38 * k})`;
+    ctx.beginPath(); ctx.ellipse(Math.round(x - cx), Math.round(gy - cy) - 1, w * (.6 + .4 * k), 3 * (.6 + .4 * k), 0, 0, Math.PI * 2); ctx.fill();
+  };
+  if (!pl.dead) blob(pl.x, pl.y, 12);
+  for (const e of enemies) if (!e.dead) blob(e.x, e.y, 9);
+}
+function render() {
+  const sx = shake ? Math.round((rnd() - .5) * 2 * shake) : 0, sy = shake ? Math.round((rnd() - .5) * 2 * shake) : 0;
+  const cx = Math.round(cam.x) + sx, cy = Math.round(cam.y) + sy;
+  if (window.R3D && R3D.on) {   // HD-2D: world drawn in 3D underneath, this canvas only carries the actors
+    ctx.clearRect(0, 0, W, H); R3D.frame(cx, cy); drawShadows(cx, cy);
+  } else {
+  ctx.drawImage(sky, 0, 0);
+  const fx0 = -(cx * .15) % 960, mx = -(cx * .4) % 960;
+  ctx.drawImage(far, fx0, 0); ctx.drawImage(far, fx0 + 960, 0);
+  ctx.drawImage(mid, mx, 18); ctx.drawImage(mid, mx + 960, 18);
+  ctx.fillStyle = P.lilac;
+  for (const p of petals) { ctx.globalAlpha = .55; ctx.fillRect(Math.round(p.x), Math.round(p.y), p.s, 1); }
+  ctx.globalAlpha = 1;
+  ctx.drawImage(LAYERS[activeLayer].lv, cx, cy, W, H, 0, 0, W, H);
+  }
+  drawProps(cx, cy);
+  drawEnemies(cx, cy);
+  drawPlayer(cx, cy);   // body layer
+  drawDoorPrompt(cx, cy);
+  drawArc(cx, cy);      // VFX layer (decoupled)
+  drawFx(cx, cy);
+  for (const p of parts) { ctx.globalAlpha = Math.max(0, p.life / p.max); ctx.fillStyle = p.c; const sz = Math.round(p.s || 1), off = p.grow ? sz >> 1 : 0; ctx.fillRect(Math.round(p.x - cx) - off, Math.round(p.y - cy) - off, sz, sz); }
+  ctx.globalAlpha = 1;
+  if (pl.dead > .45) { ctx.fillStyle = `rgba(255,14,0,${(pl.dead - .45) * .8})`; ctx.fillRect(0, 0, W, H); }
+}
+
+const hS = document.getElementById('hShards'), hT = document.getElementById('hTime'), hD = document.getElementById('hDeaths'), hK = document.getElementById('hKills'), hHp = document.getElementById('hHp');
+function hud() {
+  hS.textContent = `${shards.filter(s => s.got).length}/${shards.length}` + (pl.spent ? ` (ใช้ได้ ${shardsAvail()})` : '');
+  hK.textContent = `${enemies.filter(e => e.dead).length}/${enemies.length}`;
+  hT.textContent = time.toFixed(1); hD.textContent = deaths;
+  hHp.textContent = '♥'.repeat(Math.max(0, pl.hp)) + '♡'.repeat(MAX_HP - Math.max(0, pl.hp));
+}
+
+// ---------- sizing ----------
+function fit() {
+  const s = Math.max(1, Math.floor(Math.min(innerWidth / W, innerHeight / H) * 2) / 2);
+  cv.style.width = W * s + 'px'; cv.style.height = H * s + 'px';
+  if (window.R3D) R3D.fit(cv.style.width, cv.style.height);
+}
+addEventListener('resize', fit); fit();
+
+// ---------- loop ----------
+loadLevel(0);
+reset();
+let last = performance.now(), accT = 0; const STEP = 1 / 120;
+if (/[?&]debug/.test(location.search)) {
+  window.__dbg = () => ({ pl, cam, enemies, shards, loadLevel, reset, LEVELS, levelIdx });
+  window.__step = ms => { for (let i = 0; i < Math.round(ms / 1000 / STEP); i++) update(STEP); render(); hud(); };
+}
+function frame(now) {
+  accT += Math.min(.1, (now - last) / 1000); last = now;
+  while (accT >= STEP) { update(STEP); accT -= STEP; }
+  render(); hud();
+  requestAnimationFrame(frame);
+}
+window.KR = {
+  W, H, T, canvas: cv, sky, far, mid,
+  layers: () => LAYERS, activeLayer: () => activeLayer,
+  checkpoints: () => checkpoints, goal: () => GOAL,
+};
+const boot = () => {
+  SHEETS.white = [tint(P.white), tint(P.white, atkSheet)]; SHEETS.ghost = [tint(P.ice), tint(P.ice, atkSheet)];
+  last = performance.now(); requestAnimationFrame(frame);
+  if (window.R3D && window.THREE) { R3D.toggle(true); fit(); }
+};
+const loaded = img => new Promise(r => { if (img.complete && img.naturalWidth) r(); else { img.onload = r; img.onerror = r; } });
+Promise.all([loaded(sheet), loaded(atkSheet)]).then(boot);
+})();
+</script>
+</body>
+</html>

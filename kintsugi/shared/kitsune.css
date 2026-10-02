@@ -1,0 +1,39 @@
+/* Shared look for the hub and the studio.
+   Layout concept: a night-shrine workbench — ink-navy surfaces, kintsugi-gold accents, mint for VFX data.
+   Deliberately dark-only: the art and the game are night scenes. */
+:root {
+  color-scheme: dark;
+  --ink-0: #0E1018;      /* page */
+  --ink-1: #161A28;      /* surfaces */
+  --ink-2: #1F2236;      /* raised / hover */
+  --line: #2C2752;       /* plum-tinted borders */
+  --text: #ECEAFF;
+  --muted: #A3A6D9;      /* lilac-tinted secondary text */
+  --gold: #FFA303;
+  --gold-hi: #FFE9A8;
+  --mint: #7FF5C8;
+  --red: #FF5A47;
+  --font: 'Kanit', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --r: 12px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--ink-0); color: var(--text); font: 15px/1.6 var(--font); }
+a { color: var(--gold); }
+a:hover { color: var(--gold-hi); }
+h1, h2, h3 { text-wrap: balance; line-height: 1.25; }
+code, .mono { font-family: var(--mono); font-size: .86em; }
+.dim { color: var(--muted); }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.btn { font: inherit; color: var(--text); background: var(--ink-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 5px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--gold); }
+.btn.on { background: rgba(255, 163, 3, .14); border-color: var(--gold); color: var(--gold-hi); }
+.btn.sm { padding: 2px 9px; font-size: 13px; }
+.tag { display: inline-block; font-size: 12px; padding: 0 8px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+.tag.real { color: var(--gold-hi); border-color: rgba(255, 163, 3, .5); background: rgba(255, 163, 3, .1); }
+.tag.remix { color: var(--mint); border-color: rgba(127, 245, 200, .45); background: rgba(127, 245, 200, .08); }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

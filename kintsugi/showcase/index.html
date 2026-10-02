@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kintsugi Moveset</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600&family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  /* Layout: reel + summary up top, then a filterable grid of one card per action. Single dark look taken from the sprite's own palette. */
+  :root {
+    color-scheme: dark;
+    --bg: #0F121B;          /* deep ink */
+    --surface: #151037;     /* coat shadow navy */
+    --line: #2F1850;        /* plum crease */
+    --fg: #ECEBFF;
+    --muted: #9EA0FA;       /* hair midtone */
+    --gold: #FFA303;        /* kintsugi gold */
+    --gold-hi: #FFFFCC;
+    --lilac: #B2B2FF;
+    --font-display: 'Pixelify Sans', 'Kanit', system-ui, sans-serif;
+    --font-body: 'Kanit', system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); }
+  body { padding-inline: 16px; padding-block: 28px 56px; }
+  .wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; }
+  header { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 28px; align-items: center; }
+  header img { width: 100%; max-width: 340px; margin-inline: auto; height: auto; image-rendering: pixelated; border: 1px solid var(--line); border-radius: 10px; display: block; }
+  .eyebrow { font-family: var(--font-display); color: var(--muted); letter-spacing: .08em; font-size: 14px; text-transform: uppercase; }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(36px, 6vw, 60px); line-height: 1; margin: 6px 0 12px; color: var(--gold-hi);
+        text-shadow: 0 3px 0 #A64B0A; text-wrap: balance; }
+  header p { margin: 0 0 10px; color: var(--fg); max-width: 60ch; line-height: 1.6; }
+  .counts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .counts span { border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; font-size: 14px; color: var(--muted); }
+  .counts b { color: var(--gold); font-weight: 600; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; }
+  .filters button { font: inherit; font-size: 15px; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; cursor: pointer; }
+  .filters button[aria-pressed="true"] { background: var(--surface); border-color: var(--gold); color: var(--gold-hi); }
+  .filters button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+  .card { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+  .card[hidden] { display: none; }
+  .card img { width: 100%; height: auto; aspect-ratio: 1; image-rendering: pixelated; display: block; }
+  figcaption { padding: 10px 12px 12px; display: grid; gap: 2px; }
+  .num { font-family: var(--font-display); color: var(--muted); font-size: 13px; }
+  .th { font-weight: 600; font-size: 17px; }
+  .en { font-family: var(--font-display); color: var(--lilac); font-size: 14px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+  kbd { font-family: var(--font-body); font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; color: var(--fg); }
+  .src { font-size: 12px; border-radius: 999px; padding: 1px 8px; }
+  .src.pixellab { color: var(--gold); border: 1px solid rgba(255,163,3,.45); }
+  .src.original { color: var(--lilac); border: 1px solid rgba(178,178,255,.45); }
+  .stat { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  footer { color: var(--muted); font-size: 13px; line-height: 1.6; }
+  @media (max-width: 640px) { header { grid-template-columns: minmax(0, 1fr); } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="all_actions.gif" alt="All 26 actions played one after another" width="304" height="348">
+    <div>
+      <div class="eyebrow">Kintsugi Run · Merakintsugi sample character</div>
+      <h1>Kintsugi Moveset</h1>
+      <p>ทุกอิริยาบถของตัวละครในเกม เล่นวนเป็น GIF ทีละท่า ภาพใหญ่เล่นต่อกันครบทุกท่า ใช้ปุ่มข้างล่างกรองตามหมวดได้</p>
+      <p>ยืนและเดินมาจากไฟล์ sample ต้นฉบับ ท่าที่เหลือ PixelLab วาดใหม่จากเฟรมยืน แล้วจัดตำแหน่งเท้าและทิศให้ตรงกับเกม</p>
+      <div class="counts"><span><b>26</b> ท่า</span><span><b>24</b> PixelLab</span><span><b>2</b> ต้นฉบับ</span><span>ขยาย ×4 · หันขวาแบบในเกม</span></div>
+    </div>
+  </header>
+
+  <nav class="filters" aria-label="กรองท่า">
+    <button type="button" data-f="all" aria-pressed="true">ทั้งหมด</button>
+    <button type="button" data-f="move" aria-pressed="false">เคลื่อนที่</button>
+    <button type="button" data-f="attack" aria-pressed="false">โจมตี</button>
+    <button type="button" data-f="other" aria-pressed="false">อื่นๆ</button>
+  </nav>
+
+  <main class="grid">
+    <figure class="card" data-group="move">
+      <img src="gifs/idle.gif" alt="Idle animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">01</span>
+        <span class="th">ยืนหายใจ</span>
+        <span class="en">Idle</span>
+        <span class="meta"><kbd>—</kbd><span class="src original">ต้นฉบับ</span></span>
+        <span class="stat">10 เฟรม · 0.60 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="move">
+      <img src="gifs/walk.gif" alt="Walk animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">02</span>
+        <span class="th">เดิน</span>
+        <span class="en">Walk</span>
+        <span class="meta"><kbd>← →</kbd><span class="src original">ต้นฉบับ</span></span>
+        <span class="stat">26 เฟรม · 1.30 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="move">
+      <img src="gifs/crouch.gif" alt="Crouch animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">03</span>
+        <span class="th">หมอบ</span>
+        <span class="en">Crouch</span>
+        <span class="meta"><kbd>↓</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">7 เฟรม · 0.83 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="move">
+      <img src="gifs/run.gif" alt="Run animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">04</span>
+        <span class="th">วิ่ง</span>
+        <span class="en">Run</span>
+        <span class="meta"><kbd>Shift + ← →</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">8 เฟรม · 0.56 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="move">
+      <img src="gifs/turn.gif" alt="Run turn animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">05</span>
+        <span class="th">กลับตัวขณะวิ่ง</span>
+        <span class="en">Run turn</span>
+        <span class="meta"><kbd>วิ่งแล้วกดทิศกลับ</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">6 เฟรม · 0.62 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="move">
+      <img src="gifs/jump.gif" alt="Jump animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">06</span>
+        <span class="th">กระโดด</span>
+        <span class="en">Jump</span>
+        <span class="meta"><kbd>Space</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">7 เฟรม · 0.83 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="move">
+      <img src="gifs/dj.gif" alt="Double jump animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">07</span>
+        <span class="th">กระโดด 2 ชั้น</span>
+        <span class="en">Double jump</span>
+        <span class="meta"><kbd>Space กลางอากาศ</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">7 เฟรม · 0.76 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="move">
+      <img src="gifs/dash.gif" alt="Air dash animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">08</span>
+        <span class="th">พุ่งกลางอากาศ</span>
+        <span class="en">Air dash</span>
+        <span class="meta"><kbd>C กลางอากาศ</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">4 เฟรม · 0.48 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="move">
+      <img src="gifs/slide.gif" alt="Slide animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">09</span>
+        <span class="th">สไลด์</span>
+        <span class="en">Slide</span>
+        <span class="meta"><kbd>↓ + C</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">6 เฟรม · 0.68 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="move">
+      <img src="gifs/backdodge.gif" alt="Back dodge animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">10</span>
+        <span class="th">หลบถอยหลัง</span>
+        <span class="en">Back dodge</span>
+        <span class="meta"><kbd>C</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">7 เฟรม · 0.69 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="attack">
+      <img src="gifs/atk1.gif" alt="Attack 1 animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">11</span>
+        <span class="th">ฟัน 1</span>
+        <span class="en">Attack 1</span>
+        <span class="meta"><kbd>X</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">7 เฟรม · 0.81 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="attack">
+      <img src="gifs/atk2.gif" alt="Attack 2 animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">12</span>
+        <span class="th">ฟัน 2</span>
+        <span class="en">Attack 2</span>
+        <span class="meta"><kbd>X X</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">7 เฟรม · 0.81 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="attack">
+      <img src="gifs/atk2-1.gif" alt="Attack 2-1 animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">13</span>
+        <span class="th">ฟัน 2-1 (แทง)</span>
+        <span class="en">Attack 2-1</span>
+        <span class="meta"><kbd>X X · เว้น · X</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">6 เฟรม · 0.73 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="attack">
+      <img src="gifs/atk2-2.gif" alt="Attack 2-2 animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">14</span>
+        <span class="th">ฟัน 2-2 (กวาด)</span>
+        <span class="en">Attack 2-2</span>
+        <span class="meta"><kbd>… X</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">6 เฟรม · 0.73 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="attack">
+      <img src="gifs/atk3.gif" alt="Attack 3 animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">15</span>
+        <span class="th">ฟัน 3 (ฟันลง)</span>
+        <span class="en">Attack 3</span>
+        <span class="meta"><kbd>X X X</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">7 เฟรม · 0.81 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="attack">
+      <img src="gifs/jatk1.gif" alt="Jump attack 1 animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">16</span>
+        <span class="th">ฟันกลางอากาศ 1</span>
+        <span class="en">Jump attack 1</span>
+        <span class="meta"><kbd>X กลางอากาศ</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">6 เฟรม · 0.73 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="attack">
+      <img src="gifs/jatk2.gif" alt="Jump attack 2 animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">17</span>
+        <span class="th">ฟันกลางอากาศ 2</span>
+        <span class="en">Jump attack 2</span>
+        <span class="meta"><kbd>X X กลางอากาศ</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">6 เฟรม · 0.73 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="attack">
+      <img src="gifs/datk1.gif" alt="Dodge attack 1 animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">18</span>
+        <span class="th">ฟันสวน 1</span>
+        <span class="en">Dodge attack 1</span>
+        <span class="meta"><kbd>C แล้ว X</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">5 เฟรม · 0.65 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="attack">
+      <img src="gifs/datk2.gif" alt="Dodge attack 2 animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">19</span>
+        <span class="th">ฟันสวน 2</span>
+        <span class="en">Dodge attack 2</span>
+        <span class="meta"><kbd>C แล้ว X X</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">6 เฟรม · 0.73 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="attack">
+      <img src="gifs/vatk.gif" alt="Vertical attack animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">20</span>
+        <span class="th">ฟันแนวดิ่ง</span>
+        <span class="en">Vertical attack</span>
+        <span class="meta"><kbd>↓ + X กลางอากาศ</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">7 เฟรม · 0.88 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="other">
+      <img src="gifs/hurt1.gif" alt="Hurt 1 animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">21</span>
+        <span class="th">โดนตี (เบา)</span>
+        <span class="en">Hurt 1</span>
+        <span class="meta"><kbd>โดนบนพื้น</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">2 เฟรม · 0.47 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="other">
+      <img src="gifs/hurt2.gif" alt="Hurt 2 animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">22</span>
+        <span class="th">โดนตี (ล้ม)</span>
+        <span class="en">Hurt 2</span>
+        <span class="meta"><kbd>โดนกลางอากาศ</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">4 เฟรม · 0.74 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="other">
+      <img src="gifs/heal.gif" alt="Heal animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">23</span>
+        <span class="th">ฟื้นพลัง</span>
+        <span class="en">Heal</span>
+        <span class="meta"><kbd>Q ค้าง</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">7 เฟรม · 0.95 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="other">
+      <img src="gifs/ladder.gif" alt="Ladder animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">24</span>
+        <span class="th">ปีนบันได</span>
+        <span class="en">Ladder</span>
+        <span class="meta"><kbd>↑ ที่บันได</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">5 เฟรม · 0.55 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="other">
+      <img src="gifs/ledge.gif" alt="Ledge grab &amp; climb animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">25</span>
+        <span class="th">เกาะขอบผา</span>
+        <span class="en">Ledge grab &amp; climb</span>
+        <span class="meta"><kbd>ชนขอบผา แล้ว ↑</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">5 เฟรม · 0.80 วิ</span>
+      </figcaption>
+    </figure>
+    <figure class="card" data-group="other">
+      <img src="gifs/wall.gif" alt="Wall slide &amp; jump animation" width="304" height="304" loading="lazy">
+      <figcaption>
+        <span class="num">26</span>
+        <span class="th">เกาะกำแพง / ถีบกำแพง</span>
+        <span class="en">Wall slide &amp; jump</span>
+        <span class="meta"><kbd>ดันเข้ากำแพง + Space</kbd><span class="src pixellab">PixelLab</span></span>
+        <span class="stat">6 เฟรม · 0.85 วิ</span>
+      </figcaption>
+    </figure>
+  </main>
+
+  <footer>สร้างจาก <code>game/showcase/build_showcase.py</code> (GIF) และ <code>gen_html.py</code> (หน้านี้) · เฟรม PixelLab อยู่ใน <code>game/pixellab/</code></footer>
+</div>
+<script>
+  const buttons = document.querySelectorAll('.filters button'), cards = document.querySelectorAll('.card');
+  buttons.forEach(b => b.addEventListener('click', () => {
+    buttons.forEach(x => x.setAttribute('aria-pressed', x === b));
+    cards.forEach(c => c.hidden = b.dataset.f !== 'all' && c.dataset.group !== b.dataset.f);
+  }));
+</script>
+</body>
+</html>

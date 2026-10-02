@@ -1,0 +1,104 @@
+"""Pack the PixelLab animations into game/atk.png + game/atk.js.
+
+Each move is an 8-frame 64x64 animation generated from idle frame 1 (saved as
+<prefix>_1.png .. <prefix>_8.png; <prefix>_0.png is the input frame and is skipped).
+Rows are only written for moves whose frames exist, so the game falls back to
+its procedural pose for the rest.
+
+Per move:
+  seq   – which of the 8 frames (0-based) play in each phase the game asks for
+  align – 'none'   keep PixelLab's placement (attacks, where the blade may sit below the feet)
+          'bottom' shift each frame so its lowest opaque pixel sits on the cell floor
+                   (airborne / moving poses: the game moves the body, not the frame)
+          'feet'   'bottom' + centre the lower body on the anchor (dashes, slides,
+                   dodges that drift sideways inside the frame)
+"""
+import json
+import os
+from PIL import Image
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = os.path.dirname(HERE)
+CELL, AX = 64, 31
+
+MOVES = [
+    # kind (game key), file prefix, phases, align
+    ('1',         'hit1',      {'antic': [1, 2, 3], 'smear': [4], 'active': [5], 'rec': [6, 7]}, 'none'),
+    ('2',         'hit2',      {'antic': [1, 2], 'smear': [3], 'active': [4, 5], 'rec': [6, 7]}, 'none'),
+    ('3',         'hit3',      {'antic': [1, 2, 3], 'smear': [4], 'active': [5, 6], 'rec': [7]}, 'none'),
+    ('2-1',       'hit2_1',    {'antic': [2, 3, 4], 'smear': [5], 'active': [6, 7], 'rec': [7]}, 'none'),
+    ('2-2',       'hit2_2',    {'antic': [2, 3, 4], 'smear': [5], 'active': [6, 7], 'rec': [7]}, 'none'),
+    ('air',       'jatk1',     {'antic': [2, 3], 'smear': [4], 'active': [5, 6], 'rec': [7]}, 'bottom'),
+    ('air2',      'jatk2',     {'antic': [2, 3], 'smear': [4, 5], 'active': [6, 7], 'rec': [7]}, 'bottom'),
+    ('dodge1',    'datk1',     {'antic': [3, 4], 'smear': [5], 'active': [6, 7], 'rec': [7]}, 'none'),
+    ('dodge2',    'datk2',     {'antic': [2], 'smear': [3, 4], 'active': [5, 6], 'rec': [7]}, 'none'),
+    ('plunge',    'vatk',      {'antic': [1, 2, 3], 'dive': [4], 'active': [5, 6], 'rec': [7]}, 'bottom'),
+    ('jump',      'jump',      {'crouch': [1, 2], 'rise': [3], 'apex': [4], 'fall': [5], 'land': [6, 7]}, 'bottom'),
+    ('run',       'run',       {'loop': [0, 1, 2, 3, 4, 5, 6, 7]}, 'feet'),
+    ('turn',      'turn',      {'play': [1, 2, 3, 4, 5, 6]}, 'feet'),   # skid turn-around (last frame faces back, unused)
+    ('crouch',    'crouch',    {'down': [1, 2, 3], 'hold': [4, 5, 6, 7]}, 'bottom'),
+    ('dj',        'djump',     {'play': [1, 2, 3, 4, 5, 6, 7]}, 'bottom'),
+    ('dash',      'adash',     {'play': [3, 4, 5, 6]}, 'none'),
+    ('slide',     'slide',     {'play': [2, 3, 4, 5, 6, 7]}, 'feet'),
+    ('backdodge', 'bdodge',    {'play': [1, 2, 3, 4, 5, 6, 7]}, 'feet'),
+    ('wall',      'wall',      {'slide': [2, 3, 4, 5], 'jump': [6, 7]}, 'none'),
+    ('ledge',     'ledge',     {'hang': [3, 4], 'climb': [5, 6, 7]}, 'none'),
+    ('ladder',    'ladder',    {'loop': [3, 4, 5, 6, 7]}, 'none'),   # side-on step-up (PixelLab ignored 'back view')
+    ('hurt',      'hurt',      {'light': [0, 1], 'down': [4, 5, 6], 'up': [6, 7]}, 'bottom'),
+    ('heal',      'heal',      {'play': [1, 2, 3, 4, 5, 6, 7]}, 'none'),
+]
+
+
+# frames (0-based) where PixelLab turned the character around — mirrored back to face left
+FLIP = {'crouch': [3, 4, 5, 6, 7], 'backdodge': [2, 3, 4, 5, 6], 'plunge': [5, 6, 7], 'hurt': [2, 3, 4, 5, 6, 7]}
+
+
+def mirrored(im):
+    # mirror around the anchor column (AX), not the cell centre
+    out = Image.new('RGBA', im.size, (0, 0, 0, 0))
+    m = im.transpose(Image.FLIP_LEFT_RIGHT)
+    out.paste(m, (2 * AX - (CELL - 1), 0), m)
+    return out
+
+
+def aligned(im, mode):
+    if mode == 'none':
+        return im
+    box = im.getbbox()
+    if not box:
+        return im
+    dy = CELL - box[3]
+    dx = 0
+    if mode == 'feet':
+        # centre of the lowest 12 rows of opaque pixels → anchor x
+        a = im.getchannel('A').load()
+        xs = [x for y in range(max(0, box[3] - 12), box[3]) for x in range(CELL) if a[x, y] > 0]
+        if xs:
+            dx = round(AX - sum(xs) / len(xs))
+    out = Image.new('RGBA', im.size, (0, 0, 0, 0))
+    out.paste(im, (dx, dy), im)
+    return out
+
+
+rows = []
+for kind, prefix, seq, align in MOVES:
+    files = [os.path.join(HERE, f'{prefix}_{i}.png') for i in range(1, 9)]
+    if all(os.path.exists(f) for f in files):
+        rows.append((kind, files, seq, align))
+
+sheet = Image.new('RGBA', (CELL * 8, CELL * max(1, len(rows))), (0, 0, 0, 0))
+art = {}
+for r, (kind, files, seq, align) in enumerate(rows):
+    for c, f in enumerate(files):
+        im = Image.open(f).convert('RGBA')
+        if c in FLIP.get(kind, []):
+            im = mirrored(im)
+        im = aligned(im, align)
+        sheet.paste(im, (c * CELL, r * CELL), im)
+    art[kind] = {'row': r, **seq}
+
+sheet.save(os.path.join(OUT, 'atk.png'))
+with open(os.path.join(OUT, 'atk.js'), 'w', encoding='utf-8') as fh:
+    fh.write('// generated by pixellab/build_atk.py — PixelLab animation frames packed in atk.png\n')
+    fh.write('window.ATK_ART = ' + json.dumps({'cell': CELL, 'ax': AX, 'moves': art}) + ';\n')
+print('rows:', [k for k, *_ in rows])
