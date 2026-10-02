@@ -1,0 +1,28 @@
+id,en,th
+UI_TITLE,Kintsugi,Kintsugi
+UI_PLAY,Start Game,เริ่มเกม
+UI_SETTINGS,Settings,ตั้งค่า
+UI_QUIT,Quit,ออกจากเกม
+UI_RESUME,Resume,กลับเกม
+UI_TITLE_SCREEN,Title Screen,กลับหน้าเริ่ม
+UI_PAUSED,Game Paused,หยุดเกม
+UI_AUDIO,Audio,เสียง
+UI_MASTER_VOL,Master Volume,ระดับเสียงรวม
+UI_MUSIC_VOL,Music Volume,เสียงดนตรี
+UI_SFX_VOL,SFX Volume,เสียงเอฟเฟกต์
+UI_VIDEO,Display,การแสดงผล
+UI_FULLSCREEN,Fullscreen,เต็มจอ
+UI_LANGUAGE,Language,ภาษา
+UI_CONTROLS,Controls,ปุ่มควบคุม
+UI_RESET_DEFAULTS,Reset Defaults,คืนค่าเริ่มต้น
+UI_BACK,Back,กลับ
+UI_REBIND,Rebind,เปลี่ยนปุ่ม
+UI_PRESS_ANY_KEY,Press any key or button...,กดปุ่มใดๆ บนคีย์บอร์ดหรือจอย...
+UI_KEY_EXISTS,Button already bound!,ปุ่มนี้ถูกใช้งานแล้ว!
+UI_MOVE_UP,Move Up,เดินขึ้น
+UI_MOVE_DOWN,Move Down,เดินลง
+UI_MOVE_LEFT,Move Left,เดินซ้าย
+UI_MOVE_RIGHT,Move Right,เดินขวา
+UI_ATTACK,Attack,โจมตี
+UI_DODGE,Dodge,หลบ
+UI_PAUSE,Pause,หยุดเกม
