@@ -8,6 +8,7 @@ const DUMMY_SCRIPT: GDScript = preload("res://systems/player/debug/dummy.gd")
 
 func _spawn() -> Player:
 	var player: Player = PLAYER_SCENE.instantiate()
+	player._enter_tree()
 	player.setup()
 	return player
 
@@ -38,6 +39,10 @@ func _create_dummy(pos: Vector2, hp: int = 100) -> Node2D:
 	dummy.health = health
 	dummy.hurtbox = hurtbox
 	dummy.collision_shape = col
+
+	health.died.connect(func() -> void:
+		EventBus.enemy_died.emit(dummy, &"dummy", dummy.global_position)
+	)
 	return dummy
 
 
@@ -114,9 +119,9 @@ func test_lock_on_unlocks_when_target_dies() -> bool:
 
 	player.set_intent(Vector2.ZERO, Vector2.ZERO, false, false, false, true)
 	player.tick(0.0)
-	var locked_ok: bool = player.lock_target == d1
+	var locked_ok: bool = player.lock_target == d1 and player.is_locked_on()
 
-	# เป้าหมายตาย (HP หมด)
+	# เป้าหมายตาย (HP หมด -> trigger health.died -> EventBus.enemy_died)
 	var h: Health = d1.get_node("Health") as Health
 	h.take_damage(999)
 	player.tick(0.0)
@@ -126,6 +131,61 @@ func test_lock_on_unlocks_when_target_dies() -> bool:
 	player.free()
 	d1.free()
 	return locked_ok and unlocked_ok
+
+
+func test_lock_on_unlocks_when_enemy_died_signal() -> bool:
+	var player: Player = _spawn()
+	player.global_position = Vector2.ZERO
+
+	var d1: Node2D = _create_dummy(Vector2(60, 0))
+	player.test_targets = [d1]
+
+	player.set_intent(Vector2.ZERO, Vector2.ZERO, false, false, false, true)
+	player.tick(0.0)
+	var locked_ok: bool = player.lock_target == d1 and player.is_locked_on()
+
+	# emit EventBus.enemy_died โดยตรง
+	EventBus.enemy_died.emit(d1, &"dummy", d1.global_position)
+	player.tick(0.0)
+
+	var unlocked_ok: bool = player.lock_target == null and not player.is_locked_on()
+
+	player.free()
+	d1.free()
+	return locked_ok and unlocked_ok
+
+
+func test_lock_on_target_freed_emits_null() -> bool:
+	var player: Player = _spawn()
+	player.global_position = Vector2.ZERO
+
+	var d1: Node2D = _create_dummy(Vector2(60, 0))
+	player.test_targets = [d1]
+
+	var changed_targets: Array = []
+	var cb := func(t: Node2D) -> void:
+		changed_targets.append(t)
+	player.lock_target_changed.connect(cb)
+
+	# ล็อคเป้า d1
+	player.set_intent(Vector2.ZERO, Vector2.ZERO, false, false, false, true)
+	player.tick(0.0)
+	var locked_ok: bool = player.lock_target == d1 and changed_targets.size() == 1 and changed_targets[0] == d1
+
+	# เป้าหมายถูก free
+	d1.free()
+
+	# เรียก tick เพื่อให้ player ตรวจสอบสถานะเป้าหมายที่ถูก free
+	player.tick(0.0)
+
+	var freed_ok: bool = player.lock_target == null \
+		and not player.is_locked_on() \
+		and changed_targets.size() == 2 \
+		and changed_targets[1] == null
+
+	player.lock_target_changed.disconnect(cb)
+	player.free()
+	return locked_ok and freed_ok
 
 
 func test_lock_on_unlocks_when_out_of_range() -> bool:
@@ -139,15 +199,19 @@ func test_lock_on_unlocks_when_out_of_range() -> bool:
 	player.tick(0.0)
 	var locked_ok: bool = player.lock_target == d1
 
-	# ย้ายเป้าออกนอกระยะ lock_range
-	d1.global_position = Vector2(player.lock_range + 50.0, 0)
+	# ย้ายเป้าไปที่ระยะเกิน lock_range แต่ยังไม่เกิน lock_range * lock_release_mult (1.2) -> ต้องยังล็อคอยู่
+	d1.global_position = Vector2(player.lock_range + 10.0, 0)
 	player.tick(0.0)
+	var buffer_locked_ok: bool = player.lock_target == d1 and player.is_locked_on()
 
+	# ย้ายเป้าออกนอกระยะ lock_range * lock_release_mult -> ต้องปลดเป้า
+	d1.global_position = Vector2(player.lock_range * player.lock_release_mult + 10.0, 0)
+	player.tick(0.0)
 	var unlocked_ok: bool = player.lock_target == null and not player.is_locked_on()
 
 	player.free()
 	d1.free()
-	return locked_ok and unlocked_ok
+	return locked_ok and buffer_locked_ok and unlocked_ok
 
 
 func test_parry_within_window_prevents_damage_and_refunds_stamina() -> bool:
@@ -240,8 +304,8 @@ func test_charge_attack_full_charge_deals_multiplied_damage() -> bool:
 
 	var in_windup: bool = player.state == Player.State.ATTACK and player.attack_phase == Player.AttackPhase.WINDUP
 
-	# สเต็ปจบ windup -> เข้า CHARGING
-	player.tick(player.windup_time)
+	# สเต็ปถึง charge_threshold (0.15s) -> เข้า CHARGING
+	player.tick(player.charge_threshold)
 	var in_charging: bool = player.state == Player.State.ATTACK and player.attack_phase == Player.AttackPhase.CHARGING
 
 	# ชาร์จต่อจนครบ charge_time
@@ -281,9 +345,91 @@ func test_charge_attack_short_press_is_normal_attack() -> bool:
 	return in_active and damage_normal and stamina_normal
 
 
-func test_charge_attack_insufficient_stamina_fails() -> bool:
+func test_charge_attack_held_past_threshold_released_before_charge_time_is_normal_attack() -> bool:
 	var player: Player = _spawn()
-	# stamina พอฟันธรรมดา (15) แต่ไม่พอชาร์จ (30)
+
+	# กดโจมตีค้าง
+	player.set_intent(Vector2.ZERO, Vector2.RIGHT, true, false, false, false, true)
+	player.tick(0.0)
+
+	var initial_stamina: float = player.stamina
+	var spent_attack_cost: bool = is_equal_approx(initial_stamina, player.stamina_max - player.attack_cost)
+
+	# สเต็ปเวลาเกิน charge_threshold (0.15s) เข้าสู่ CHARGING
+	player.tick(player.charge_threshold + 0.05)
+	var in_charging: bool = player.is_charging()
+
+	# ปล่อยปุ่มโจมตีก่อนครบ charge_time (0.45s)
+	player.set_intent(Vector2.ZERO, Vector2.RIGHT, false, false, false, false, false)
+	player.tick(0.0)
+
+	var in_active: bool = player.attack_phase == Player.AttackPhase.ACTIVE
+	var normal_damage: bool = player.hitbox.damage == player.attack_damage
+	# stamina หักแค่ attack_cost เดิม
+	var stamina_remains: bool = is_equal_approx(player.stamina, initial_stamina)
+
+	player.free()
+	return spent_attack_cost and in_charging and in_active and normal_damage and stamina_remains
+
+
+func test_charge_attack_cancelled_by_dodge_and_parry() -> bool:
+	var player: Player = _spawn()
+
+	# 1. ชาร์จแล้ว cancel ด้วย dodge
+	player.set_intent(Vector2.ZERO, Vector2.RIGHT, true, false, false, false, true)
+	player.tick(0.0)
+	player.tick(player.charge_threshold)
+	var was_charging: bool = player.is_charging()
+
+	player.set_intent(Vector2.ZERO, Vector2.RIGHT, false, true, false, false, false) # dodge
+	player.tick(0.0)
+	var dodge_cancelled: bool = player.state == Player.State.DODGE and not player.is_charging()
+
+	# จบ dodge
+	player.tick(player.dodge_time)
+
+	# 2. ชาร์จแล้ว cancel ด้วย parry
+	player.set_intent(Vector2.ZERO, Vector2.RIGHT, true, false, false, false, true)
+	player.tick(0.0)
+	player.tick(player.charge_threshold)
+
+	player.set_intent(Vector2.ZERO, Vector2.RIGHT, false, false, true, false, false) # parry
+	player.tick(0.0)
+	var parry_cancelled: bool = player.state == Player.State.PARRY and not player.is_charging()
+
+	player.free()
+	return was_charging and dodge_cancelled and parry_cancelled
+
+
+func test_hit_during_charging_interrupts_and_damages() -> bool:
+	var player: Player = _spawn()
+
+	# เริ่มกดชาร์จ
+	player.set_intent(Vector2.ZERO, Vector2.RIGHT, true, false, false, false, true)
+	player.tick(0.0)
+	player.tick(player.charge_threshold)
+
+	var in_charging: bool = player.is_charging()
+
+	# โดนโจมตีระหว่าง CHARGING
+	var hit := DamageInfo.new()
+	hit.team = Combat.Team.ENEMY
+	hit.amount = 4
+	hit.knockback = Vector2(-50.0, 0.0)
+	player.hurtbox.receive(hit)
+
+	var hp_reduced: bool = player.health.hp == (player.max_hp - 4)
+	var state_hurt: bool = player.state == Player.State.HURT
+	var charge_cancelled: bool = not player.is_charging() and player.attack_phase == Player.AttackPhase.NONE
+	var hitbox_off: bool = not player.hitbox.monitoring
+
+	player.free()
+	return in_charging and hp_reduced and state_hurt and charge_cancelled and hitbox_off
+
+
+func test_charge_attack_no_stamina_empty_if_normal_attack_possible() -> bool:
+	var player: Player = _spawn()
+	# stamina พอฟันธรรมดา (15) แต่ไม่พอชาร์จเต็ม (30)
 	player.stamina = 20.0
 
 	var empty_events: Array[bool] = []
@@ -295,14 +441,49 @@ func test_charge_attack_insufficient_stamina_fails() -> bool:
 	player.set_intent(Vector2.ZERO, Vector2.RIGHT, true, false, false, false, true)
 	player.tick(0.0)
 
-	# สเต็ปจบ windup -> ตรวจสอบว่า stamina ไม่พอชาร์จ
-	player.tick(player.windup_time)
+	# สเต็ปผ่าน charge_threshold -> เข้า charging โดยไม่ emit stamina_empty
+	player.tick(player.charge_threshold)
 
-	var empty_emitted: bool = empty_events.size() == 1
-	# ไม่ได้เข้า charging แต่ปล่อยเป็นท่าธรรมดา
-	var not_charging: bool = not player.is_charging()
+	var no_empty_yet: bool = empty_events.is_empty()
+	var in_charging: bool = player.is_charging()
+
+	# ปล่อยก่อน charge_time -> ฟันธรรมดา โดยไม่ emit stamina_empty
+	player.set_intent(Vector2.ZERO, Vector2.RIGHT, false, false, false, false, false)
+	player.tick(0.0)
+
+	var still_no_empty: bool = empty_events.is_empty()
 	var normal_damage: bool = player.hitbox.damage == player.attack_damage
 
 	player.stamina_empty.disconnect(cb)
 	player.free()
-	return empty_emitted and not_charging and normal_damage
+	return no_empty_yet and in_charging and still_no_empty and normal_damage
+
+
+func test_charge_attack_insufficient_stamina_fails_on_releasing_full_charge() -> bool:
+	var player: Player = _spawn()
+	# stamina พอฟันธรรมดา (15) แต่ไม่พอชาร์จเต็ม (30)
+	player.stamina = 20.0
+
+	var empty_events: Array[bool] = []
+	var cb := func() -> void:
+		empty_events.append(true)
+	player.stamina_empty.connect(cb)
+
+	# กดโจมตีค้างจนครบ charge_time
+	player.set_intent(Vector2.ZERO, Vector2.RIGHT, true, false, false, false, true)
+	player.tick(0.0)
+	player.tick(player.charge_threshold)
+	player.tick(player.charge_time)
+
+	var charged_ok: bool = player.is_charged()
+
+	# ปล่อยท่าชาร์จเมื่อ stamina ไม่พอสำหรับค่าชาร์จส่วนเพิ่ม
+	player.set_intent(Vector2.ZERO, Vector2.RIGHT, false, false, false, false, false)
+	player.tick(0.0)
+
+	var empty_emitted: bool = empty_events.size() == 1
+	var normal_damage: bool = player.hitbox.damage == player.attack_damage
+
+	player.stamina_empty.disconnect(cb)
+	player.free()
+	return charged_ok and empty_emitted and normal_damage

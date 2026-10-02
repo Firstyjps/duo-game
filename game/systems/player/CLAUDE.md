@@ -34,7 +34,10 @@
 - Input actions (`move_*`, `attack`, `dodge`, `parry`, `lock_on`) ลงทะเบียนตอน runtime ด้วย `ensure_input_actions()` เสมอ (ห้ามแก้ `project.godot`)
 - ระหว่าง dodge ให้เปลี่ยน `collision_mask` เหลือเพียง `Combat.LAYER_WORLD` เท่านั้น แล้วคืนค่า `WORLD | ENEMY` เมื่อจบ dodge
 - ขณะ Parry อยู่ในหน้าต่าง `parry_window` หากโดนโจมตีจะไม่เสีย HP และได้รับ stamina คืน `parry_refund`
-- ท่าชาร์จเริ่มนับเวลาเมื่อกดโจมตีค้าง หากค้างครบ `charge_time` แล้วปล่อยจะทำดาเมจ ×`charge_mult` และใช้ stamina `charge_cost`
+- ท่าชาร์จเข้าสู่ `CHARGING` เมื่อกดค้างครบ `charge_threshold` (0.15s) ไม่ใช่ windup_time; ปล่อยก่อน `charge_time` เป็นท่าฟันธรรมดาหัก stamina แค่ `attack_cost`; ระหว่างชาร์จสามารถกด dodge หรือ parry ยกเลิกได้
+- ห้ามอ่านข้อมูลภายใน enemy entity (`Health`, `is_dead`, `Dummy`) จาก `player.gd` โดยเด็ดขาด — ตรวจหาศัตรูผ่าน `LockArea` (Area2D ที่ตรวจจับ `Hurtbox` ฝั่งศัตรู) เท่านั้น และปลดเป้าหมายผ่าน `EventBus.enemy_died`, หลุดระยะ buffer (`lock_range * lock_release_mult`), หรือ instance ถูกทำลาย
+- ใช้ `is_instance_valid(lock_target)` แทนการเช็ค `!= null` ทุกที่ เนื่องจากใน GDScript 4 วัตถุที่ถูก `free()` ไปแล้วจะเทียบ `== null` เป็น true ทำให้ `_set_lock_target(null)` return ก่อนส่งสัญญาณหากไม่ตรวจ `is_instance_valid`
+- ต่อ `EventBus.enemy_died` ใน `_enter_tree()` และ disconnect ใน `_exit_tree()` (รวมทั้งใน `NOTIFICATION_PREDELETE`) เสมอ
 
 ## เทสต์
 - `game/tests/test_player_combat.gd` (เทสต์พื้นฐานเดิม)

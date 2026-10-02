@@ -38,10 +38,15 @@ enum AttackPhase { NONE, WINDUP, CHARGING, ACTIVE, RECOVER }
 @export var attack_damage: int = 3
 @export var attack_knockback: float = 170.0
 @export var attack_stagger: float = 1.0
+@export var rush_speed: float = 140.0
 @export var hitbox_distance: float = 24.0
 
 @export_group("Lock-on")
-@export var lock_range: float = 240.0
+@export var lock_range: float = 240.0:
+	set(val):
+		lock_range = val
+		_update_lock_area_radius()
+@export var lock_release_mult: float = 1.2
 
 @export_group("Parry")
 @export var parry_cost: float = 15.0
@@ -50,9 +55,12 @@ enum AttackPhase { NONE, WINDUP, CHARGING, ACTIVE, RECOVER }
 @export var parry_refund: float = 20.0
 
 @export_group("Charge Attack")
+@export var charge_threshold: float = 0.15
 @export var charge_time: float = 0.45
 @export var charge_mult: float = 2.0
 @export var charge_cost: float = 30.0
+@export var charge_rush_speed: float = 200.0
+@export var charge_recover_mult: float = 1.2
 
 @export_group("Hurt")
 @export var hurt_time: float = 0.2
@@ -69,6 +77,7 @@ var swing: float = 0.0
 var manual_control: bool = false
 var lock_target: Node2D = null
 var test_targets: Array[Node2D] = []
+var _has_lock_target: bool = false
 
 var _state_t: float = 0.0
 var _regen_wait: float = 0.0
@@ -82,6 +91,7 @@ var _charge_t: float = 0.0
 var _is_heavy_attack: bool = false
 var _walk_t: float = 0.0
 var _flash_t: float = 0.0
+var _flash_color: Color = Color.WHITE
 var _ghost_t: float = 0.0
 var _combo_side: float = 1.0
 
@@ -97,9 +107,20 @@ func _ready() -> void:
 	setup()
 
 
+func _enter_tree() -> void:
+	if not EventBus.enemy_died.is_connected(_on_enemy_died):
+		EventBus.enemy_died.connect(_on_enemy_died)
+
+
 func _exit_tree() -> void:
 	if EventBus.enemy_died.is_connected(_on_enemy_died):
 		EventBus.enemy_died.disconnect(_on_enemy_died)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		if EventBus != null and EventBus.enemy_died.is_connected(_on_enemy_died):
+			EventBus.enemy_died.disconnect(_on_enemy_died)
 
 
 ## ผูก node ลูก + signal + input action — แยกจาก _ready ให้เทสต์เรียกได้โดยไม่ต้องอยู่ใน scene tree
@@ -152,10 +173,16 @@ func setup() -> void:
 		lock_area.monitorable = false
 		var shape_node: CollisionShape2D = lock_area.get_node_or_null("CollisionShape2D") as CollisionShape2D
 		if shape_node != null and shape_node.shape is CircleShape2D:
-			(shape_node.shape as CircleShape2D).radius = lock_range
+			shape_node.shape = shape_node.shape.duplicate()
+		_update_lock_area_radius()
 
-	if not EventBus.enemy_died.is_connected(_on_enemy_died):
-		EventBus.enemy_died.connect(_on_enemy_died)
+
+func _update_lock_area_radius() -> void:
+	if lock_area == null:
+		return
+	var shape_node: CollisionShape2D = lock_area.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if shape_node != null and shape_node.shape is CircleShape2D:
+		(shape_node.shape as CircleShape2D).radius = lock_range
 
 
 ## ลงทะเบียน input action ตอน runtime ถ้ายังไม่มีใน InputMap
@@ -228,8 +255,8 @@ func tick(delta: float) -> void:
 	if _intent_lock_on:
 		cycle_lock_target()
 
-	if lock_target != null:
-		if not _is_valid_target(lock_target):
+	if _has_lock_target:
+		if not is_instance_valid(lock_target) or not _is_valid_locked_target(lock_target):
 			_set_lock_target(null)
 		else:
 			var to_target: Vector2 = lock_target.global_position - (global_position + Vector2(0.0, body_y))
@@ -388,31 +415,39 @@ func _state_attack(delta: float) -> void:
 			velocity = aim * 30.0
 			_state_t += delta
 			_charge_t += delta
-			if _state_t >= windup_time:
-				if _intent_attack_held:
-					var add_cost: float = charge_cost - attack_cost
-					if stamina < add_cost:
-						stamina_empty.emit()
-						_unleash_attack(false)
-					else:
-						attack_phase = AttackPhase.CHARGING
-						_state_t = 0.0
-				else:
+			if _intent_attack_held:
+				if _charge_t >= charge_threshold:
+					attack_phase = AttackPhase.CHARGING
+					_state_t = 0.0
+			else:
+				if _state_t >= windup_time:
 					_unleash_attack(false)
 		AttackPhase.CHARGING:
+			if _intent_dodge:
+				if _start_dodge():
+					return
+			elif _intent_parry:
+				if _start_parry():
+					return
+
 			velocity = Vector2.ZERO
 			_state_t += delta
 			_charge_t += delta
 			if not _intent_attack_held:
 				if _charge_t >= charge_time:
-					_spend_stamina(charge_cost - attack_cost)
-					_unleash_attack(true)
+					var extra_cost: float = charge_cost - attack_cost
+					if stamina >= extra_cost:
+						_spend_stamina(extra_cost)
+						_unleash_attack(true)
+					else:
+						stamina_empty.emit()
+						_unleash_attack(false)
 				else:
 					_unleash_attack(false)
 		AttackPhase.ACTIVE:
 			var k: float = clampf(1.0 - _state_t / active_time, 0.0, 1.0)
-			var rush_speed: float = 200.0 if _is_heavy_attack else 140.0
-			velocity = aim * rush_speed * k
+			var current_rush: float = charge_rush_speed if _is_heavy_attack else rush_speed
+			velocity = aim * current_rush * k
 			swing = clampf(_state_t / active_time, 0.0, 1.0)
 			_state_t += delta
 			if _state_t >= active_time:
@@ -428,7 +463,8 @@ func _state_attack(delta: float) -> void:
 				if _start_dodge():
 					return
 			_state_t += delta
-			var rec_time: float = recover_time * (1.2 if _is_heavy_attack else 1.0)
+			var rec_mult: float = charge_recover_mult if _is_heavy_attack else 1.0
+			var rec_time: float = recover_time * rec_mult
 			if _state_t >= rec_time:
 				state = State.MOVE
 				attack_phase = AttackPhase.NONE
@@ -493,6 +529,7 @@ func _on_hurt(info: DamageInfo) -> void:
 		stamina_changed.emit(stamina, stamina_max)
 		parried.emit(info)
 		_flash_t = 0.15
+		_flash_color = Color(2.5, 2.3, 1.2)
 		state = State.MOVE
 		_state_t = 0.0
 		return
@@ -502,6 +539,7 @@ func _on_hurt(info: DamageInfo) -> void:
 	EventBus.damage_dealt.emit(self, info, dealt)
 	knock = info.knockback
 	_flash_t = 0.1
+	_flash_color = Color(2.5, 0.7, 0.7)
 	if not health.is_dead:
 		state = State.HURT
 		attack_phase = AttackPhase.NONE
@@ -533,7 +571,7 @@ func is_dead() -> bool:
 
 
 func is_locked_on() -> bool:
-	return lock_target != null and is_instance_valid(lock_target)
+	return is_instance_valid(lock_target)
 
 
 func is_parrying() -> bool:
@@ -553,6 +591,8 @@ func is_charged() -> bool:
 
 
 func can_charge() -> bool:
+	if state == State.ATTACK and attack_phase == AttackPhase.CHARGING:
+		return stamina >= (charge_cost - attack_cost)
 	return stamina >= charge_cost
 
 
@@ -568,7 +608,7 @@ func cycle_lock_target() -> void:
 	candidates.sort_custom(func(a: Node2D, b: Node2D) -> bool:
 		return global_position.distance_squared_to(a.global_position) < global_position.distance_squared_to(b.global_position)
 	)
-	if lock_target == null or not candidates.has(lock_target):
+	if not is_instance_valid(lock_target) or not candidates.has(lock_target):
 		_set_lock_target(candidates[0])
 	else:
 		var idx: int = candidates.find(lock_target)
@@ -577,9 +617,10 @@ func cycle_lock_target() -> void:
 
 
 func _set_lock_target(target: Node2D) -> void:
-	if lock_target == target:
+	if is_instance_valid(lock_target) and lock_target == target:
 		return
 	lock_target = target
+	_has_lock_target = is_instance_valid(target)
 	lock_target_changed.emit(lock_target)
 
 
@@ -589,77 +630,44 @@ func get_lock_candidates() -> Array[Node2D]:
 
 	if lock_area != null and lock_area.is_inside_tree():
 		for area: Area2D in lock_area.get_overlapping_areas():
-			if area is Hurtbox and (area as Hurtbox).team == Combat.Team.ENEMY:
+			if area is Hurtbox and (area as Hurtbox).team != Combat.Team.PLAYER and (area as Hurtbox).monitorable:
 				var entity: Node2D = _resolve_target_entity(area)
-				if entity != null and not seen.has(entity) and _is_valid_target(entity):
-					seen[entity] = true
-					candidates.append(entity)
-
-	if candidates.is_empty() and get_parent() != null:
-		for child: Node in get_parent().get_children():
-			if child != self and child is Node2D:
-				var c2d := child as Node2D
-				if _is_valid_enemy_target(c2d) and _is_valid_target(c2d):
-					if not seen.has(c2d):
-						seen[c2d] = true
-						candidates.append(c2d)
+				if entity != null and is_instance_valid(entity) and not seen.has(entity):
+					if global_position.distance_to(entity.global_position) <= lock_range:
+						seen[entity] = true
+						candidates.append(entity)
 
 	for t: Node2D in test_targets:
-		if is_instance_valid(t) and not seen.has(t) and _is_valid_target(t):
-			seen[t] = true
-			candidates.append(t)
+		if is_instance_valid(t) and not seen.has(t):
+			if global_position.distance_to(t.global_position) <= lock_range:
+				seen[t] = true
+				candidates.append(t)
 
 	return candidates
 
 
-func _resolve_target_entity(node: Node2D) -> Node2D:
-	if node is Hurtbox:
-		var hb := node as Hurtbox
-		if hb.owner is Node2D:
-			return hb.owner as Node2D
-		if hb.get_parent() is Node2D:
-			return hb.get_parent() as Node2D
-	return node
+func _resolve_target_entity(area: Area2D) -> Node2D:
+	if area is Hurtbox:
+		if area.owner is Node2D:
+			return area.owner as Node2D
+		if area.get_parent() is Node2D:
+			return area.get_parent() as Node2D
+	return area
 
 
-func _is_valid_enemy_target(node: Node2D) -> bool:
-	if node is Hurtbox and (node as Hurtbox).team == Combat.Team.ENEMY:
-		return true
-	var hb: Hurtbox = node.get_node_or_null("Hurtbox") as Hurtbox
-	if hb != null and hb.team == Combat.Team.ENEMY:
-		return true
-	if node.is_in_group(&"enemy") or node.is_in_group(&"enemies"):
-		return true
-	if node is Dummy or node.name.begins_with("Dummy"):
-		return true
-	return false
-
-
-func _is_valid_target(t: Node2D) -> bool:
-	if t == null or not is_instance_valid(t) or t.is_queued_for_deletion():
+func _is_valid_locked_target(t: Node2D) -> bool:
+	if not is_instance_valid(t) or t.is_queued_for_deletion():
 		return false
-	if global_position.distance_to(t.global_position) > lock_range:
-		return false
-	if t is Hurtbox and not (t as Hurtbox).monitorable:
-		return false
-	var entity: Node2D = _resolve_target_entity(t)
-	var h: Health = entity.get_node_or_null("Health") as Health
-	if h == null and "health" in entity:
-		var raw_h: Variant = entity.get("health")
-		if raw_h is Health:
-			h = raw_h
-	if h != null and h.is_dead:
-		return false
-	if entity.has_method("is_dead") and entity.call("is_dead"):
-		return false
-	if "is_dead" in entity and bool(entity.get("is_dead")):
+	if global_position.distance_to(t.global_position) > lock_range * lock_release_mult:
 		return false
 	return true
 
 
 func _on_enemy_died(enemy: Node, _id: StringName, _pos: Vector2) -> void:
-	if lock_target != null:
+	if is_instance_valid(lock_target):
 		if lock_target == enemy or lock_target.owner == enemy or lock_target.get_parent() == enemy:
+			_set_lock_target(null)
+		elif enemy.is_inside_tree() and lock_target.is_inside_tree() and enemy.is_ancestor_of(lock_target):
 			_set_lock_target(null)
 
 
@@ -726,7 +734,7 @@ func _animate(delta: float) -> void:
 
 	if _flash_t > 0.0:
 		_flash_t -= delta
-		sprite.self_modulate = Color(2.5, 0.7, 0.7)
+		sprite.self_modulate = _flash_color
 	else:
 		sprite.self_modulate = Color.WHITE
 
