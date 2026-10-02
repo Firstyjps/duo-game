@@ -9,9 +9,9 @@
 ## ไฟล์สำคัญ
 | ไฟล์ | หน้าที่ |
 |---|---|
-| `slime/slime.tscn` + `slime.gd` | สไลม์: IDLE → CHASE (เด้ง) → WINDUP (วงเตือน) → LEAP (Hitbox เปิด) → RECOVER · HURT · DEAD |
+| `slime/slime.tscn` + `slime.gd` | สไลม์: IDLE → CHASE (เด้ง) → WINDUP (ย่อตัว + กระพริบแดง) → LEAP (Hitbox เปิด) → RECOVER · HURT · DEAD |
 | `slime/slime_sheet.png` | sprite 11 เฟรม 32×32 — สร้างจาก `slime/tools/gen_slime_sheet.gd` (placeholder art, แก้สีแล้วรันใหม่) |
-| `common/telegraph_marker.gd` | `TelegraphMarker` วงเตือนบนพื้น ใช้ซ้ำกับศัตรูตัวอื่นได้ |
+| `common/telegraph_marker.gd` | `TelegraphMarker` วงเตือนบนพื้น — ยังไม่มีศัตรูตัวไหนใช้ (สไลม์เลิกใช้แล้ว) |
 | `debug/enemy_sandbox.tscn` | scene ลองศัตรู (F6) มีหุ่นแทนผู้เล่น: ลูกศรเดิน, Space ฟัน |
 
 ## ส่ง / รับ ข้ามระบบ
@@ -22,7 +22,7 @@
 ## กติกาเฉพาะระบบ / กับดักที่เคยเจอ
 - art ตามสเปกใน `docs/DESIGN.md` (pixel 32 px, top-down 3/4) · sprite `offset.y = -14` ให้เท้าอยู่ที่ origin (y-sort ถูก)
 - ห้ามโจมตีโดยไม่มี telegraph — `Hitbox.activate()` หลัง windup เท่านั้น
-- `TelegraphMarker` ต้อง `top_level = true` + `z_index = -1` → พื้น/TileMap ต้อง z ต่ำกว่า -1 ไม่งั้นบังวง
+- ถ้าใช้ `TelegraphMarker`: ต้อง `top_level = true` + `z_index = -1` → พื้น/TileMap ต้อง z ต่ำกว่า -1 ไม่งั้นบังวง
 - เทสต์รันตอน root ยังไม่อยู่ใน tree → อย่าใช้ `@onready` กับ node ที่เทสต์ต้องใช้ · ผูก node ใน `setup()` และแยก AI ไว้ใน `tick()` (ไม่มี physics)
 
 ## เทสต์

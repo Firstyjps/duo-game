@@ -1,11 +1,10 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://systems/enemy/slime/slime.gd" id="1_slime"]
 [ext_resource type="Texture2D" path="res://systems/enemy/slime/slime_sheet.png" id="2_sheet"]
 [ext_resource type="Script" path="res://core/combat/health.gd" id="3_health"]
 [ext_resource type="Script" path="res://core/combat/hurtbox.gd" id="4_hurtbox"]
 [ext_resource type="Script" path="res://core/combat/hitbox.gd" id="5_hitbox"]
-[ext_resource type="Script" path="res://systems/enemy/common/telegraph_marker.gd" id="6_tele"]
 
 [sub_resource type="CircleShape2D" id="Shape_body"]
 radius = 7.0
@@ -61,9 +60,3 @@ shape = SubResource("Shape_hit")
 
 [node name="Shape" type="CollisionShape2D" parent="Detect"]
 shape = SubResource("Shape_detect")
-
-[node name="Telegraph" type="Node2D" parent="."]
-top_level = true
-z_index = -1
-script = ExtResource("6_tele")
-radius = 16.0
