@@ -18,10 +18,11 @@ func _init() -> void:
 		img.resize(w, h, Image.INTERPOLATE_NEAREST)
 		img.save_png("res://mockup/assets/%s.png" % name)
 		print(name, " ", used.size, " -> ", Vector2i(w, h))
-	var arena := Image.load_from_file(src.path_join("arena.png"))
-	arena.resize(960, 536, Image.INTERPOLATE_BILINEAR)
-	arena.save_png("res://mockup/assets/arena.png")
-	print("arena -> 960x536")
+	for bg: String in ["arena", "arena_grass"]:
+		var arena := Image.load_from_file(src.path_join(bg + ".png"))
+		arena.resize(960, 536, Image.INTERPOLATE_BILINEAR)
+		arena.save_png("res://mockup/assets/%s.png" % bg)
+		print(bg, " -> 960x536")
 	quit()
 
 
