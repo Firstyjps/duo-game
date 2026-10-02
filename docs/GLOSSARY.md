@@ -5,6 +5,15 @@
 | คำ (ในเกม/คุยกัน) | ชื่อในโค้ด | ความหมาย | ระบบ |
 |---|---|---|---|
 | _ตัวอย่าง:_ ห้อง | `Room` | พื้นที่ 1 จอ ปิดประตูจนกว่าศัตรูหมด | world |
+| ข้อมูลดาเมจ | `DamageInfo` | ข้อมูลการโจมตี 1 ครั้ง (ดาเมจก่อนหัก defense, knockback, stagger) | core/combat |
+| ฝั่ง / ทีม | `Combat.Team` | PLAYER / ENEMY / NEUTRAL — ฝั่งเดียวกันไม่โดนกัน | core/combat |
+| พลังชีวิต / HP | `Health` | HP ของผู้เล่น/ศัตรู/ของทำลายได้ | core/combat |
+| ช่วง active | — | ช่วงเฟรมที่ Hitbox ของท่าเปิดอยู่ (`activate()` → `deactivate()`) | core/combat |
+| i-frames / อมตะชั่วคราว | `Hurtbox.invulnerable` | ช่วงที่โดนตีไม่เข้า เช่นระหว่าง dodge | core/combat |
+| ตัวรับดาเมจ | `Hurtbox` | พื้นที่บนตัวที่โดนตีได้ | core/combat |
+| ตัวทำดาเมจ | `Hitbox` | พื้นที่ของท่าโจมตีที่ทำดาเมจ | core/combat |
+| เซ / poise | `DamageInfo.stagger` | แรงขัดท่า — ผู้รับตัดสินเองว่าเซไหม | core/combat |
+| ท่าเตรียม | telegraph | ท่า/VFX บอกล่วงหน้าก่อนศัตรูโจมตี (บังคับทุกท่า) | enemy |
 
 ## คำที่ห้ามใช้ปนกัน
 <!-- เช่น "ด่าน" vs "ห้อง" — ตกลงว่าใช้คำไหน -->
