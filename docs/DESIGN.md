@@ -1,7 +1,7 @@
 # Game Design
 
 > แก้ผ่าน PR · เรื่องที่ตัดสินแล้วให้ลง `DECISIONS.md` ด้วย
-> สถานะ: **ร่างโดย Few — รอ Kron ยืนยัน** (#8)
+> สถานะ: **ตกลงแล้วทั้งคู่** (#8 ร่างโดย Few · Kron approve ใน #9)
 
 ## Pitch (1 ย่อหน้า)
 Action RPG แบบ real-time ภาพ pixel art มุม top-down 3/4 เล่นคนเดียวบน PC — ต่อสู้ใช้ฝีมือแบบ Souls-lite (อ่านท่าศัตรู, dodge, จัดการ stamina) ผสมการล่าของและสร้าง build ลึก ๆ แบบ Diablo / Path of Exile ในโลกที่มืดและมีแสงสวยแบบ Core Keeper
@@ -23,11 +23,11 @@ Action RPG แบบ real-time ภาพ pixel art มุม top-down 3/4 เล
 | มุมมอง | top-down 3/4 (แบบ Zelda: ALttP / Romestead / Core Keeper) — **ไม่ใช่** isometric |
 | Rendering | Godot 2D: `TileMapLayer` + y-sort · ความลึกได้จากแสงและการเรียงลำดับ ไม่ใช้โมเดล 3D |
 | ขนาด tile | **32×32 px** · ตัวละครสูงประมาณ 48–64 px |
-| ความละเอียดฐาน | 960×540 → scale จำนวนเต็ม (×2 = 1920×1080, ×4 = 4K) · stretch mode `viewport` |
+| ความละเอียดฐาน | 960×540 · stretch `viewport` + aspect `expand` + scale `integer` → 1080p = ×2 พอดี · 1440p = ×2 เห็นพื้นที่ 1280×720 · 4K = ×4 · HUD ต้อง anchor ขอบจอ · ระยะ aggro/spawn ห้ามผูกกับขนาดจอ |
 | Texture | filter `nearest` (pixel คม) · ไม่หมุน/scale sprite แบบไม่เป็นจำนวนเต็ม |
 | แสง | `CanvasModulate` ทำฉากมืด + `PointLight2D` (คบเพลิง, เวท, ดรอป) · normal map เฉพาะ sprite หลัก |
 | Palette | palette กลางไฟล์เดียวใน `game/core/assets/` ใช้ร่วมกันทั้งสองคน (เลือกทีหลัง) |
-| กล้อง | ตามผู้เล่นแบบนุ่ม · snap ทีละ pixel กันภาพสั่น |
+| กล้อง | ตามผู้เล่นแบบนุ่ม · snap ทีละ pixel ด้วย `rendering/2d/snap/snap_2d_transforms_to_pixel` (เปิดแล้ว ไม่ต้องเขียนเอง) |
 | Combat readability | ศัตรูทุกตัวต้องมี telegraph (ท่าเตรียม + VFX) ก่อนโจมตี |
 
 ## ระบบหลัก
