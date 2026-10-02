@@ -273,3 +273,11 @@ func test_player_sandbox_instantiates_cleanly() -> bool:
 	var ok: bool = sandbox != null and sandbox.has_node("Player") and sandbox.has_node("Dummy")
 	sandbox.free()
 	return ok
+
+
+func test_player_in_player_group() -> bool:
+	var p: Node = load("res://systems/player/player.tscn").instantiate()
+	p.setup()
+	var ok: bool = p.is_in_group(&"player")
+	p.free()
+	return ok

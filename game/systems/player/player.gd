@@ -75,6 +75,8 @@ func _ready() -> void:
 
 ## ผูก node ลูก + signal + input action — แยกจาก _ready ให้เทสต์เรียกได้โดยไม่ต้องอยู่ใน scene tree
 func setup() -> void:
+	# กล้อง/HUD แยกว่าใครโดนตีด้วย group นี้ (สั่นแรงกว่า, สีตัวเลขต่างกัน)
+	add_to_group(&"player")
 	ensure_input_actions()
 	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
 	collision_layer = Combat.LAYER_PLAYER
