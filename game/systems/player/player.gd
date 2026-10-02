@@ -646,12 +646,14 @@ func get_lock_candidates() -> Array[Node2D]:
 	return candidates
 
 
-func _resolve_target_entity(area: Area2D) -> Node2D:
+## เป้า = parent ของ Hurtbox (ตัวศัตรู) — ไม่ใช้ owner: ศัตรูที่วางตรง ๆ ใน .tscn ของห้อง owner = ห้องทั้งห้อง
+static func _resolve_target_entity(area: Area2D) -> Node2D:
 	if area is Hurtbox:
+		var p: Node = area.get_parent()
+		if p is Node2D:
+			return p as Node2D
 		if area.owner is Node2D:
 			return area.owner as Node2D
-		if area.get_parent() is Node2D:
-			return area.get_parent() as Node2D
 	return area
 
 
@@ -664,6 +666,8 @@ func _is_valid_locked_target(t: Node2D) -> bool:
 
 
 func _on_enemy_died(enemy: Node, _id: StringName, _pos: Vector2) -> void:
+	if not is_instance_valid(enemy):
+		return
 	if is_instance_valid(lock_target):
 		if lock_target == enemy or lock_target.owner == enemy or lock_target.get_parent() == enemy:
 			_set_lock_target(null)

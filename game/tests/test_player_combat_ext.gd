@@ -487,3 +487,18 @@ func test_charge_attack_insufficient_stamina_fails_on_releasing_full_charge() ->
 	player.stamina_empty.disconnect(cb)
 	player.free()
 	return charged_ok and empty_emitted and normal_damage
+
+
+## เป้าที่วางตรง ๆ ใน scene ห้อง (owner = ห้อง) ต้อง resolve เป็นตัวศัตรู ไม่ใช่ห้อง
+func test_resolve_target_uses_parent_not_scene_owner() -> bool:
+	var room := Node2D.new()
+	var enemy := Node2D.new()
+	enemy.position = Vector2(200, 100)
+	room.add_child(enemy)
+	enemy.owner = room
+	var hb := Hurtbox.new()
+	enemy.add_child(hb)
+	hb.owner = room
+	var ok: bool = Player._resolve_target_entity(hb) == enemy
+	room.free()
+	return ok
