@@ -24,12 +24,17 @@ var silhouette_sprite: Sprite2D = null
 var detection_area: Area2D = null
 var detection_shape: CollisionShape2D = null
 var mock_occluders: Array = []
+var _overlapping_tiles: Dictionary = {} # RID -> { "layer": TileMapLayer, "coords": Vector2i }
 
 var _shader_mat: ShaderMaterial = null
 
 
 func _ready() -> void:
 	setup()
+
+
+func _exit_tree() -> void:
+	_overlapping_tiles.clear()
 
 
 ## กำหนดค่าเริ่มต้นและผูก node — แยกจาก _ready ให้เทสต์เรียกได้โดยไม่ต้องอยู่ใน scene tree
@@ -87,6 +92,11 @@ func _setup_detection_area() -> void:
 	detection_area.monitoring = true
 	detection_area.monitorable = false
 
+	if not detection_area.body_shape_entered.is_connected(_on_body_shape_entered):
+		detection_area.body_shape_entered.connect(_on_body_shape_entered)
+	if not detection_area.body_shape_exited.is_connected(_on_body_shape_exited):
+		detection_area.body_shape_exited.connect(_on_body_shape_exited)
+
 	if detection_shape == null:
 		detection_shape = detection_area.get_node_or_null("CollisionShape2D") as CollisionShape2D
 		if detection_shape == null:
@@ -102,10 +112,28 @@ func _setup_detection_area() -> void:
 	detection_shape.position = detection_offset
 
 
+func _on_body_shape_entered(body_rid: RID, body: Node, _body_shape_index: int, _local_shape_index: int) -> void:
+	if body is TileMapLayer:
+		var layer: TileMapLayer = body as TileMapLayer
+		var coords: Vector2i = layer.get_coords_for_body_rid(body_rid)
+		if coords != Vector2i(-1, -1):
+			_overlapping_tiles[body_rid] = {
+				"layer": layer,
+				"coords": coords
+			}
+
+
+func _on_body_shape_exited(body_rid: RID, _body: Node, _body_shape_index: int, _local_shape_index: int) -> void:
+	_overlapping_tiles.erase(body_rid)
+
+
 ## อัปเดตข้อมูลภาพของ silhouette ให้ตรงกับ target sprite (Sprite2D หรือ AnimatedSprite2D)
+## ใช้ global_transform ตาม target เพื่อรองรับสไปรต์ซ้อน node หรือ scale flip
 func sync_with_sprite() -> void:
 	if target_sprite == null or silhouette_sprite == null:
 		return
+
+	silhouette_sprite.global_transform = target_sprite.global_transform
 
 	if target_sprite is Sprite2D:
 		var s: Sprite2D = target_sprite as Sprite2D
@@ -119,7 +147,6 @@ func sync_with_sprite() -> void:
 		silhouette_sprite.centered = s.centered
 		silhouette_sprite.region_enabled = s.region_enabled
 		silhouette_sprite.region_rect = s.region_rect
-		silhouette_sprite.transform = s.transform
 	elif target_sprite is AnimatedSprite2D:
 		var a: AnimatedSprite2D = target_sprite as AnimatedSprite2D
 		var frames: SpriteFrames = a.sprite_frames
@@ -133,7 +160,6 @@ func sync_with_sprite() -> void:
 		silhouette_sprite.flip_v = a.flip_v
 		silhouette_sprite.offset = a.offset
 		silhouette_sprite.centered = a.centered
-		silhouette_sprite.transform = a.transform
 
 
 ## ดึงตำแหน่ง bounding box ของสไปรต์ใน world coordinate
@@ -142,13 +168,17 @@ func get_sprite_world_rect() -> Rect2:
 	if target_sprite is Sprite2D:
 		var s: Sprite2D = target_sprite as Sprite2D
 		var sz: Vector2 = detection_size
-		if s.texture != null:
+		if s.region_enabled and s.region_rect.size != Vector2.ZERO:
+			sz = s.region_rect.size
+		elif s.texture != null:
 			sz = s.texture.get_size()
 			if s.hframes > 1:
 				sz.x /= float(s.hframes)
 			if s.vframes > 1:
 				sz.y /= float(s.vframes)
-		var top_left: Vector2 = s.global_position + s.offset - (sz * 0.5 if s.centered else Vector2.ZERO)
+		var scale_factor: Vector2 = s.global_scale.abs()
+		sz = sz * scale_factor
+		var top_left: Vector2 = s.global_position + (s.offset * s.global_scale) - (sz * 0.5 if s.centered else Vector2.ZERO)
 		return Rect2(top_left, sz)
 	elif target_sprite is AnimatedSprite2D:
 		var a: AnimatedSprite2D = target_sprite as AnimatedSprite2D
@@ -158,13 +188,15 @@ func get_sprite_world_rect() -> Rect2:
 			var tex: Texture2D = frames.get_frame_texture(a.animation, a.frame)
 			if tex != null:
 				sz = tex.get_size()
-		var top_left: Vector2 = a.global_position + a.offset - (sz * 0.5 if a.centered else Vector2.ZERO)
+		var scale_factor: Vector2 = a.global_scale.abs()
+		sz = sz * scale_factor
+		var top_left: Vector2 = a.global_position + (a.offset * a.global_scale) - (sz * 0.5 if a.centered else Vector2.ZERO)
 		return Rect2(top_left, sz)
 
 	return Rect2(base_pos + detection_offset - detection_size * 0.5, detection_size)
 
 
-## ตัดสินว่าขณะนี้ตัวละครถูกวัตถุบังหรือไม่
+## ตัดสินว่าขณะนี้ตัวละครถูกวัตถุบังหรือไม่ โดยเรียก is_occluding() เสมอ
 func evaluate_occlusion() -> bool:
 	var feet_y: float = global_position.y
 	if get_parent() != null and get_parent() is Node2D:
@@ -182,45 +214,68 @@ func evaluate_occlusion() -> bool:
 					return true
 			elif item is Node2D:
 				var occ_node: Node2D = item as Node2D
-				var occ_y: float = occ_node.global_position.y
-				if occ_node.has_meta(&"occluder_y"):
-					occ_y = float(occ_node.get_meta(&"occluder_y"))
-				if is_in_front(feet_y, occ_y):
+				var occ_y: float = get_occluder_y(occ_node)
+				var occ_rect: Rect2 = get_occluder_rect(occ_node)
+				if is_occluding(feet_y, occ_y, spr_rect, occ_rect):
 					return true
 		return false
 
-	# 2. โหมดรันจริงผ่าน Area2D physics overlap
+	# 2. โหมดรันจริง: TileMapLayer ที่ทับซ้อน (บันทึกจาก body_shape_entered/exited)
+	var invalid_rids: Array[RID] = []
+	for rid: RID in _overlapping_tiles:
+		var item: Dictionary = _overlapping_tiles[rid]
+		var layer: TileMapLayer = item.get("layer") as TileMapLayer
+		if not is_instance_valid(layer) or not layer.is_inside_tree():
+			invalid_rids.append(rid)
+			continue
+		var coords: Vector2i = item.get("coords", Vector2i(-1, -1))
+		if coords == Vector2i(-1, -1):
+			invalid_rids.append(rid)
+			continue
+		var occ_y: float = get_tile_occluder_y(layer, coords)
+		var occ_rect: Rect2 = get_tile_world_rect(layer, coords)
+		if is_occluding(feet_y, occ_y, spr_rect, occ_rect):
+			return true
+
+	for rid: RID in invalid_rids:
+		_overlapping_tiles.erase(rid)
+
+	# 3. โหมดรันจริง: Area2D และ Bodies อื่น ๆ
 	if detection_area != null:
 		var parent_node: Node = get_parent()
-		var bodies: Array[Node2D] = detection_area.get_overlapping_bodies()
-		for body: Node2D in bodies:
-			if body == parent_node or body == self:
-				continue
-			var occ_y: float = body.global_position.y
-			if body.has_meta(&"occluder_y"):
-				occ_y = float(body.get_meta(&"occluder_y"))
-			if is_in_front(feet_y, occ_y):
-				return true
 
 		var areas: Array[Area2D] = detection_area.get_overlapping_areas()
 		for area: Area2D in areas:
 			if area == detection_area or area == self or area.get_parent() == parent_node:
 				continue
-			var occ_y: float = area.global_position.y
-			if area.has_meta(&"occluder_y"):
-				occ_y = float(area.get_meta(&"occluder_y"))
-			elif area.get_parent() != null and area.get_parent() is Node2D:
-				occ_y = (area.get_parent() as Node2D).global_position.y
-			if is_in_front(feet_y, occ_y):
+			var occ_y: float = get_occluder_y(area)
+			var occ_rect: Rect2 = get_occluder_rect(area)
+			if is_occluding(feet_y, occ_y, spr_rect, occ_rect):
+				return true
+
+		var bodies: Array[Node2D] = detection_area.get_overlapping_bodies()
+		for body: Node2D in bodies:
+			if body == parent_node or body == self or body is TileMapLayer:
+				continue
+			var occ_y: float = get_occluder_y(body)
+			var occ_rect: Rect2 = get_occluder_rect(body)
+			if is_occluding(feet_y, occ_y, spr_rect, occ_rect):
 				return true
 
 	return false
 
 
 ## อัปเดตสถานะ silhouette 1 เฟรม — คืนค่า true หากถูกบัง
+## ซ่อนทันทีหาก target_sprite ไม่อยู่ในสถานะ visible_in_tree
 func tick(_delta: float = 0.0) -> bool:
 	sync_with_sprite()
-	var occluded: bool = evaluate_occlusion()
+
+	var is_target_visible: bool = is_node_visible_in_hierarchy(target_sprite)
+
+	var occluded: bool = false
+	if is_target_visible:
+		occluded = evaluate_occlusion()
+
 	if silhouette_sprite != null:
 		silhouette_sprite.visible = occluded
 		if _shader_mat != null:
@@ -228,11 +283,27 @@ func tick(_delta: float = 0.0) -> bool:
 	return occluded
 
 
-func _physics_process(delta: float) -> void:
+## ตรวจสอบว่า CanvasItem และบรรพบุรุษทั้งหมดแสดงผลอยู่หรือไม่ (รองรับทั้งใน tree และ node hierarchy นอก tree)
+static func is_node_visible_in_hierarchy(node: CanvasItem) -> bool:
+	if node == null:
+		return false
+	if node.is_inside_tree():
+		return node.is_visible_in_tree()
+	var cur: Node = node
+	while cur != null:
+		if cur is CanvasItem:
+			if not (cur as CanvasItem).visible:
+				return false
+		cur = cur.get_parent()
+	return true
+
+
+## ซิงก์ใน _process เพื่อให้ทันตาม frame อนิเมชันและการเคลื่อนไหวในจอ render
+func _process(delta: float) -> void:
 	tick(delta)
 
 
-# ── Static Logic สำหรับ Unit Test ──
+# ── Static Logic สำหรับ Unit Test & Helper ที่โหมดจริงใช้ ──
 
 ## ตัดสินว่าวัตถุบังตัวละครหรือไม่ (static สำหรับเทสต์)
 ## - occluder_y > feet_y: วัตถุอยู่ "ข้างหน้า" ในแกนลึก (y มากกว่า = หน้ากว่าใน iso y-sort)
@@ -246,3 +317,95 @@ static func is_occluding(feet_y: float, occluder_y: float, sprite_rect: Rect2, o
 ## ตัดสินว่าตำแหน่ง Y ของวัตถุอยู่ข้างหน้าเท้าของตัวละครหรือไม่
 static func is_in_front(feet_y: float, occluder_y: float) -> bool:
 	return occluder_y > feet_y
+
+
+## คำนวณค่า Y สำหรับ Y-sort occlusion ของ tile ใน TileMapLayer
+static func get_tile_occluder_y(layer: TileMapLayer, coords: Vector2i) -> float:
+	if layer == null:
+		return 0.0
+	var local_pos: Vector2 = layer.map_to_local(coords)
+	var world_pos: Vector2 = layer.to_global(local_pos)
+	var tile_data: TileData = layer.get_cell_tile_data(coords)
+	if tile_data != null and tile_data.has_meta(&"occluder_y"):
+		return float(tile_data.get_meta(&"occluder_y"))
+	return world_pos.y
+
+
+## คำนวณ bounding box ของ tile ใน world coordinate
+static func get_tile_world_rect(layer: TileMapLayer, coords: Vector2i) -> Rect2:
+	if layer == null or layer.tile_set == null:
+		return Rect2()
+	var local_center: Vector2 = layer.map_to_local(coords)
+	var world_center: Vector2 = layer.to_global(local_center)
+	var source_id: int = layer.get_cell_source_id(coords)
+	if source_id == -1:
+		var sz: Vector2 = Vector2(layer.tile_set.tile_size)
+		return Rect2(world_center - sz * 0.5, sz)
+
+	var tile_data: TileData = layer.get_cell_tile_data(coords)
+	if tile_data != null and tile_data.has_meta(&"occluder_rect"):
+		var rel_rect: Rect2 = tile_data.get_meta(&"occluder_rect") as Rect2
+		return Rect2(world_center + rel_rect.position, rel_rect.size)
+
+	var atlas_coords: Vector2i = layer.get_cell_atlas_coords(coords)
+	var source: TileSetSource = layer.tile_set.get_source(source_id)
+	var tile_size: Vector2 = Vector2(layer.tile_set.tile_size)
+	var origin: Vector2 = Vector2.ZERO
+	if source is TileSetAtlasSource:
+		var atlas: TileSetAtlasSource = source as TileSetAtlasSource
+		var reg_size: Vector2i = atlas.get_tile_texture_region_size(atlas_coords)
+		if reg_size != Vector2i.ZERO:
+			tile_size = Vector2(reg_size)
+		if tile_data != null:
+			origin = Vector2(tile_data.texture_origin)
+
+	var top_left: Vector2 = world_center - origin - (tile_size * 0.5)
+	return Rect2(top_left, tile_size)
+
+
+## คำนวณค่า Y สำหรับ Y-sort occlusion ของ node วัตถุ (meta "occluder_y" หรือ parent global_position.y)
+static func get_occluder_y(node: Node) -> float:
+	if node == null:
+		return 0.0
+	if node.has_meta(&"occluder_y"):
+		return float(node.get_meta(&"occluder_y"))
+	if node.get_parent() != null and node.get_parent().has_meta(&"occluder_y"):
+		return float(node.get_parent().get_meta(&"occluder_y"))
+	if node is Area2D and node.get_parent() != null and node.get_parent() is Node2D:
+		return (node.get_parent() as Node2D).global_position.y
+	if node is Node2D:
+		return (node as Node2D).global_position.y
+	return 0.0
+
+
+## คำนวณ bounding box ของ node วัตถุใน world coordinate
+static func get_occluder_rect(node: Node) -> Rect2:
+	if node == null:
+		return Rect2()
+	if node.has_meta(&"occluder_rect"):
+		return node.get_meta(&"occluder_rect") as Rect2
+	if node.get_parent() != null and node.get_parent().has_meta(&"occluder_rect"):
+		return node.get_parent().get_meta(&"occluder_rect") as Rect2
+
+	var shape_owner: Node = node
+	if not (node is CollisionObject2D) and node.has_node("OcclusionArea"):
+		shape_owner = node.get_node("OcclusionArea")
+
+	for child: Node in shape_owner.get_children():
+		if child is CollisionShape2D:
+			var cs: CollisionShape2D = child as CollisionShape2D
+			if cs.shape != null:
+				if cs.shape is RectangleShape2D:
+					var sz: Vector2 = (cs.shape as RectangleShape2D).size
+					return Rect2(cs.global_position - sz * 0.5, sz)
+				elif cs.shape is CircleShape2D:
+					var r: float = (cs.shape as CircleShape2D).radius
+					return Rect2(cs.global_position - Vector2(r, r), Vector2(r * 2.0, r * 2.0))
+				else:
+					var lr: Rect2 = cs.shape.get_rect()
+					return Rect2(cs.global_position + lr.position, lr.size)
+
+	if node is Node2D:
+		var n2d: Node2D = node as Node2D
+		return Rect2(n2d.global_position - Vector2(16, 16), Vector2(32, 32))
+	return Rect2()

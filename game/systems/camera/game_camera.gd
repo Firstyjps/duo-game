@@ -114,12 +114,46 @@ func slide_to(rect: Rect2, duration: float) -> void:
 		slide_completed.emit()
 		return
 
-	_slide_start_pos = _internal_pos
+	if _is_camera_in_tree():
+		force_update_scroll()
+		_slide_start_pos = (self as Variant).get_screen_center_position()
+	else:
+		_slide_start_pos = _internal_pos
+
+	_internal_pos = _slide_start_pos
 	_slide_target_pos = rect.get_center()
 	_slide_target_rect = rect
 	_slide_duration = duration
 	_slide_elapsed = 0.0
 	_is_sliding = true
+
+	var union_rect: Rect2 = Rect2()
+	if bounds.size != Vector2.ZERO:
+		union_rect = bounds.merge(rect)
+	_apply_limits(union_rect)
+
+
+## คืนค่าตำแหน่งกึ่งกลางหน้าจอของกล้องใน global coordinate (คำนวณ clamp ขอบเขต limit)
+@warning_ignore("native_method_override")
+func get_screen_center_position() -> Vector2:
+	if is_inside_tree() and get_viewport() != null:
+		var sc: Vector2 = super.get_screen_center_position()
+		if sc != Vector2.ZERO:
+			return sc
+	var min_x: float = float(limit_left)
+	var max_x: float = float(limit_right)
+	var min_y: float = float(limit_top)
+	var max_y: float = float(limit_bottom)
+	var p: Vector2 = position
+	if limit_left != -10000000 and limit_right != 10000000 and max_x >= min_x:
+		p.x = clampf(p.x, min_x, max_x)
+	if limit_top != -10000000 and limit_bottom != 10000000 and max_y >= min_y:
+		p.y = clampf(p.y, min_y, max_y)
+	return p
+
+
+func _is_camera_in_tree() -> bool:
+	return is_inside_tree() or get_parent() != null
 
 
 ## คืนค่า true หากกล้องกำลังอยู่ในระหว่าง slide_to
@@ -136,6 +170,12 @@ func set_camera_position(pos: Vector2) -> void:
 ## กำหนดขอบเขตกล้อง (Rect2)
 func set_bounds(rect: Rect2) -> void:
 	bounds = rect
+	_apply_limits(bounds)
+	_internal_pos = clamp_to_bounds(_internal_pos, bounds)
+	position = _internal_pos.round()
+
+
+func _apply_limits(rect: Rect2) -> void:
 	if rect.size == Vector2.ZERO:
 		limit_left = -10000000
 		limit_top = -10000000
@@ -146,8 +186,6 @@ func set_bounds(rect: Rect2) -> void:
 		limit_top = int(minf(rect.position.y, rect.end.y))
 		limit_right = int(maxf(rect.position.x, rect.end.x))
 		limit_bottom = int(maxf(rect.position.y, rect.end.y))
-	_internal_pos = clamp_to_bounds(_internal_pos, bounds)
-	position = _internal_pos.round()
 
 
 ## เพิ่มค่า trauma สำหรับสั่น (clamp ที่ 0.0 ถึง 1.0)

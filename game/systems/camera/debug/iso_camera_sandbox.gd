@@ -25,6 +25,7 @@ var _current_room_id: int = 1
 
 func _ready() -> void:
 	_setup_inputs()
+	_setup_tilemaps()
 	if camera != null:
 		camera.set_bounds(ROOM_1)
 		camera.follow(player, true)
@@ -55,7 +56,166 @@ func _setup_inputs() -> void:
 				InputMap.action_add_event(action, e)
 
 
-func _physics_process(delta: float) -> void:
+func _setup_tilemaps() -> void:
+	var ts := _make_tileset()
+
+	# 1. Floor layer สำหรับพื้น isometric
+	var floor_layer := TileMapLayer.new()
+	floor_layer.name = "FloorLayer"
+	floor_layer.tile_set = ts
+	add_child(floor_layer)
+	move_child(floor_layer, 0)
+
+	# 2. Walls layer ใน YEntities เพื่อให้ y_sort ทำงานร่วมกับตัวละคร
+	var y_entities: Node2D = get_node_or_null("YEntities") as Node2D
+	var walls_layer := TileMapLayer.new()
+	walls_layer.name = "WallsLayer"
+	walls_layer.tile_set = ts
+	walls_layer.y_sort_enabled = true
+	if y_entities != null:
+		y_entities.add_child(walls_layer)
+		y_entities.move_child(walls_layer, 0)
+	else:
+		add_child(walls_layer)
+
+	# วางพื้นทั่วทั้งสองห้อง (x: 0..1920, y: 0..540)
+	for gy in range(-6, 32):
+		for gx in range(-6, 40):
+			var world_pos: Vector2 = floor_layer.map_to_local(Vector2i(gx, gy))
+			if world_pos.x >= -64.0 and world_pos.x <= 1984.0 and world_pos.y >= -32.0 and world_pos.y <= 580.0:
+				var kind: int = (abs(gx) + abs(gy)) % 3
+				floor_layer.set_cell(Vector2i(gx, gy), 0, Vector2i(kind, 1))
+
+	# วางกำแพง TileMapLayer เพื่อพิสูจน์การตรวจจับ occlusion ของ silhouette
+	var wall_coords_room1: Array[Vector2i] = [
+		Vector2i(6, 8), Vector2i(7, 8), Vector2i(8, 8),
+		Vector2i(12, 12), Vector2i(13, 12),
+		Vector2i(4, 14), Vector2i(10, 6)
+	]
+	for c in wall_coords_room1:
+		walls_layer.set_cell(c, 0, Vector2i(3, 0))
+
+	var wall_coords_room2: Array[Vector2i] = [
+		Vector2i(20, 8), Vector2i(21, 8), Vector2i(22, 8),
+		Vector2i(26, 12), Vector2i(27, 12),
+		Vector2i(18, 14), Vector2i(24, 6)
+	]
+	for c in wall_coords_room2:
+		walls_layer.set_cell(c, 0, Vector2i(3, 0))
+
+
+func _make_tileset() -> TileSet:
+	var img := _generate_tiles_image()
+	var tex := ImageTexture.create_from_image(img)
+
+	var ts := TileSet.new()
+	ts.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
+	ts.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_DOWN
+	ts.tile_size = Vector2i(64, 32)
+	ts.add_physics_layer()
+
+	var src := TileSetAtlasSource.new()
+	src.texture = tex
+	src.texture_region_size = Vector2i(64, 32)
+	ts.add_source(src, 0)
+
+	# พื้น 3 แบบ (ขนาด 64x32 อยู่แถวล่างของ atlas)
+	for i: int in 3:
+		src.create_tile(Vector2i(i, 1))
+
+	# บล็อกกำแพง 64x64 (ขนาด 1x2 ช่อง)
+	src.create_tile(Vector2i(3, 0), Vector2i(1, 2))
+	var block: TileData = src.get_tile_data(Vector2i(3, 0), 0)
+	block.texture_origin = Vector2i(0, 16)
+	block.add_collision_polygon(0)
+	block.set_collision_polygon_points(0, 0, PackedVector2Array([
+		Vector2(0, -16), Vector2(32, 0), Vector2(0, 16), Vector2(-32, 0)
+	]))
+
+	return ts
+
+
+func _generate_tiles_image() -> Image:
+	var img := Image.create(256, 64, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	# 1. Floor 0: (0..63, 32..63)
+	_draw_iso_diamond(img, Vector2(31.5, 47.5), Color(0.20, 0.23, 0.29), Color(0.28, 0.32, 0.40))
+	# 2. Floor 1: (64..127, 32..63)
+	_draw_iso_diamond(img, Vector2(95.5, 47.5), Color(0.18, 0.21, 0.27), Color(0.25, 0.29, 0.37))
+	# 3. Floor 2: (128..191, 32..63)
+	_draw_iso_diamond(img, Vector2(159.5, 47.5), Color(0.22, 0.26, 0.33), Color(0.30, 0.35, 0.44))
+
+	# 4. Wall Block: (192..255, 0..63)
+	_draw_iso_wall_block(img, 192)
+
+	return img
+
+
+func _draw_iso_diamond(img: Image, center: Vector2, fill_col: Color, border_col: Color) -> void:
+	var hw: float = 32.0
+	var hh: float = 16.0
+	var min_x: int = int(center.x - hw)
+	var max_x: int = int(center.x + hw)
+	var min_y: int = int(center.y - hh)
+	var max_y: int = int(center.y + hh)
+
+	for y in range(min_y, max_y + 1):
+		for x in range(min_x, max_x + 1):
+			var dx: float = absf(float(x) - center.x) / hw
+			var dy: float = absf(float(y) - center.y) / hh
+			var dist: float = dx + dy
+			if dist <= 1.0:
+				if dist >= 0.88:
+					img.set_pixel(x, y, border_col)
+				else:
+					img.set_pixel(x, y, fill_col)
+
+
+func _draw_iso_wall_block(img: Image, start_x: int) -> void:
+	var top_center := Vector2(float(start_x) + 31.5, 15.5)
+	var hw: float = 32.0
+	var hh: float = 16.0
+
+	var top_col := Color(0.42, 0.48, 0.58)
+	var top_border := Color(0.55, 0.62, 0.72)
+	var left_col := Color(0.26, 0.30, 0.38)
+	var left_border := Color(0.18, 0.20, 0.26)
+	var right_col := Color(0.18, 0.22, 0.28)
+	var right_border := Color(0.12, 0.15, 0.20)
+
+	for y in range(16, 64):
+		for x in range(start_x, start_x + 64):
+			var rel_x: float = float(x - start_x)
+			var side_is_left: bool = rel_x < 32.0
+			var bot_y: float = 47.5 + (1.0 - absf(rel_x - 31.5) / hw) * hh
+			var top_edge_y: float = 15.5 + (1.0 - absf(rel_x - 31.5) / hw) * hh
+
+			if float(y) >= top_edge_y and float(y) <= bot_y:
+				if side_is_left:
+					if rel_x <= 1.0 or float(y) >= bot_y - 1.0:
+						img.set_pixel(x, y, left_border)
+					else:
+						img.set_pixel(x, y, left_col)
+				else:
+					if rel_x >= 62.0 or float(y) >= bot_y - 1.0 or rel_x == 32.0:
+						img.set_pixel(x, y, right_border)
+					else:
+						img.set_pixel(x, y, right_col)
+
+	for y in range(0, 32):
+		for x in range(start_x, start_x + 64):
+			var dx: float = absf(float(x) - top_center.x) / hw
+			var dy: float = absf(float(y) - top_center.y) / hh
+			var dist: float = dx + dy
+			if dist <= 1.0:
+				if dist >= 0.88:
+					img.set_pixel(x, y, top_border)
+				else:
+					img.set_pixel(x, y, top_col)
+
+
+func _physics_process(_delta: float) -> void:
 	# การเคลื่อนที่ตัวละครแบบ screen-space (ขึ้น = ขึ้นจอ, ตามกติกาข้อ 5)
 	var dir: Vector2 = Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
 	if player != null:
@@ -99,35 +259,14 @@ func _update_hud() -> void:
 
 	hud_label.text = "=== ISO CAMERA & OCCLUSION SILHOUETTE SANDBOX ===\n" \
 		+ "Controls: Arrows/WASD = Move | 1/2 = Slide Room 1/2 | L = Toggle Lock-on Focus | Space = Shake | H = Hitstop\n" \
+		+ "TileSet: ISOMETRIC DIAMOND_DOWN 64x32 | Walls: TileMapLayer\n" \
 		+ "Room Target: %d | Slide: %s | Focus Target: %s\n" % [_current_room_id, slide_text, focus_text] \
 		+ "Cam Pos: %s | Player Pos: %s | Bounds: %s\n" % [camera.position, player.position.round() if player != null else Vector2.ZERO, camera.bounds] \
-		+ "Silhouette Active (Occluded behind block): %s" % ["YES (Tinted Purple)" if is_sil_active else "NO"]
+		+ "Silhouette Active (Behind wall/block): %s" % ["YES (Tinted Purple)" if is_sil_active else "NO"]
 
 
 func _draw() -> void:
-	# 1. วาดพื้น Isometric Diamond Grid 64x32
-	var tile_w: float = 64.0
-	var tile_h: float = 32.0
-	var hw: float = tile_w * 0.5
-	var hh: float = tile_h * 0.5
-
-	# ครอบคลุมสองห้อง (x: 0..1920, y: 0..540)
-	for y in range(0, 540 + int(tile_h), int(tile_h)):
-		for x in range(0, 1920 + int(tile_w), int(tile_w)):
-			var shift: float = hw if (int(y / tile_h) % 2 == 1) else 0.0
-			var cx: float = float(x) + shift
-			var cy: float = float(y)
-			var pts := PackedVector2Array([
-				Vector2(cx, cy - hh),
-				Vector2(cx + hw, cy),
-				Vector2(cx, cy + hh),
-				Vector2(cx - hw, cy),
-			])
-			var col := Color(0.12, 0.14, 0.18) if ((int(x / tile_w) + int(y / tile_h)) % 2 == 0) else Color(0.14, 0.16, 0.21)
-			draw_colored_polygon(pts, col)
-			draw_polyline(pts, Color(0.18, 0.21, 0.27), 1.0)
-
-	# 2. วาดขอบเขตของ Room 1 และ Room 2
+	# วาดขอบเขตของ Room 1 และ Room 2
 	draw_rect(ROOM_1, Color(0.3, 0.8, 0.4, 0.6), false, 2.0)
 	draw_rect(ROOM_2, Color(0.3, 0.5, 0.9, 0.6), false, 2.0)
 

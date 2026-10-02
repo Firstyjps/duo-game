@@ -6,7 +6,7 @@ extends RefCounted
 func test_slide_to_ends_at_rect_and_pixel_rounded() -> bool:
 	var cam := GameCamera.new()
 	cam.setup()
-	cam.position = Vector2(480.2, 270.8)
+	cam.set_camera_position(Vector2(480.2, 270.8))
 
 	var target_rect := Rect2(960, 0, 960, 540) # Center = Vector2(1440, 270)
 	var duration: float = 0.5
@@ -44,7 +44,7 @@ func test_slide_to_ends_at_rect_and_pixel_rounded() -> bool:
 func test_slide_instant_zero_duration() -> bool:
 	var cam := GameCamera.new()
 	cam.setup()
-	cam.position = Vector2(100.2, 100.8)
+	cam.set_camera_position(Vector2(100.2, 100.8))
 
 	var target_rect := Rect2(800, 400, 600, 400) # Center = (1100, 600)
 	cam.slide_to(target_rect, 0.0)
@@ -55,6 +55,127 @@ func test_slide_instant_zero_duration() -> bool:
 
 	cam.free()
 	return not_sliding and bounds_ok and pos_ok
+
+
+func test_slide_in_tree_screen_center_smooth_without_jump() -> bool:
+	var root: Window = (Engine.get_main_loop() as SceneTree).root
+	var cam: Variant = GameCamera.new()
+	var room1 := Rect2(0, 0, 960, 540)
+	var room2 := Rect2(960, 0, 960, 540)
+
+	cam.set_bounds(room1)
+	cam.set_camera_position(room1.get_center()) # (480, 270)
+	cam.setup()
+	root.add_child(cam)
+
+	var start_screen_pos: Vector2 = cam.get_screen_center_position()
+	var start_pos_ok: bool = start_screen_pos.is_equal_approx(Vector2(480, 270))
+	var start_limits_ok: bool = cam.limit_left == 0 and cam.limit_right == 960
+
+	# เริ่ม slide ไป room 2
+	cam.slide_to(room2, 0.5)
+
+	# limits ต้องขยายเป็น union ระหว่าง room 1 และ room 2 (x: 0..1920)
+	var union_limits_ok: bool = cam.limit_left == 0 and cam.limit_right == 1920
+
+	# ก้าวแรก (ครึ่งทาง): 0.25s
+	cam.tick(0.25)
+	var mid_screen_pos: Vector2 = cam.get_screen_center_position()
+	# หน้าจอต้องค่อย ๆ เปลี่ยน ไม่กระโดดไป 1440 ทันที และไม่ค้างอยู่ที่ 480
+	var mid_changed: bool = mid_screen_pos.x > 480.0 and mid_screen_pos.x < 1440.0
+	var mid_smooth: bool = is_equal_approx(mid_screen_pos.x, 960.0)
+
+	# ก้าวที่สอง: เลื่อนจนเสร็จสิ้น (อีก 0.3s)
+	cam.tick(0.3)
+	var final_screen_pos: Vector2 = cam.get_screen_center_position()
+	var final_pos_ok: bool = final_screen_pos.is_equal_approx(room2.get_center())
+	var final_limits_ok: bool = cam.limit_left == 960 and cam.limit_right == 1920
+	var final_bounds_ok: bool = cam.bounds == room2
+	var final_not_sliding: bool = not cam.is_sliding()
+
+	root.remove_child(cam)
+	cam.free()
+
+	return start_pos_ok \
+		and start_limits_ok \
+		and union_limits_ok \
+		and mid_changed \
+		and mid_smooth \
+		and final_pos_ok \
+		and final_limits_ok \
+		and final_bounds_ok \
+		and final_not_sliding
+
+
+
+func test_camera_does_not_follow_during_slide() -> bool:
+	var cam := GameCamera.new()
+	cam.setup()
+	cam.set_camera_position(Vector2(480, 270))
+
+	var target := Node2D.new()
+	target.position = Vector2(480, 270)
+	cam.follow(target, false)
+
+	var room2 := Rect2(960, 0, 960, 540) # Center = (1440, 270)
+	cam.slide_to(room2, 1.0)
+
+	# ระหว่าง slide ให้ target กระโดดไปที่อื่นไกล ๆ
+	target.position = Vector2(-1000, -1000)
+
+	# tick กล้องครึ่งทาง (0.5s)
+	cam.tick(0.5)
+
+	# กล้องต้องไม่ตาม target (-1000, -1000) แต่ต้องกำลังมุ่งหน้าไปทาง room2 (1440)
+	var mid_pos: Vector2 = cam.position
+	var ignore_target: bool = mid_pos.x > 480.0 and mid_pos.x < 1440.0 and mid_pos.y == 270.0
+
+	# tick จนจบ slide (อีก 0.6s)
+	cam.tick(0.6)
+	var finished_sliding: bool = not cam.is_sliding()
+	var at_destination: bool = cam.position == Vector2(1440, 270)
+
+	# หลังจาก slide จบแล้ว ใน tick ถัดไป กล้องจึงกลับมา follow target
+	cam.tick(0.1)
+	var resumed_follow: bool = cam.position.x < 1440.0 # เริ่มขยับตาม target ที่อยู่ติดลบ
+
+	target.free()
+	cam.free()
+
+	return ignore_target and finished_sliding and at_destination and resumed_follow
+
+
+func test_focus_target_freed_midway() -> bool:
+	var cam := GameCamera.new()
+	cam.setup()
+	cam.follow_smooth_speed = 100.0 # snap เร็วสำหรับเทสต์
+
+	var player := Node2D.new()
+	player.position = Vector2(100, 100)
+	cam.follow(player, true)
+
+	var dummy := Node2D.new()
+	dummy.position = Vector2(200, 100) # target_pos ระหว่างสองตัว ~ (135, 100)
+	cam.set_focus_target(dummy)
+
+	cam.tick(0.1)
+	var framing_ok: bool = cam.position.x > 100.0 and cam.position.x <= 135.0
+
+	# ทำลาย dummy กลางทาง
+	dummy.free()
+
+	# กล้องต้องไม่ error หรือ crash และต้อง fallback กลับมาติดตาม player (100, 100)
+	cam.tick(0.5)
+	var fallback_ok: bool = cam.position == Vector2(100, 100)
+
+	# ทดสอบ snap_to_target ตอน focus_target ถูก free
+	cam.snap_to_target()
+	var snap_ok: bool = cam.position == Vector2(100, 100)
+
+	player.free()
+	cam.free()
+
+	return framing_ok and fallback_ok and snap_ok
 
 
 func test_slide_static_interpolation() -> bool:
@@ -160,6 +281,115 @@ func test_occlusion_decision_front_vs_back() -> bool:
 		and in_front_ok \
 		and not_in_front_ok \
 		and same_y_ok
+
+
+func test_occlusion_real_mode_helpers() -> bool:
+	# 1. ทดสอบ get_occluder_y และ get_occluder_rect สำหรับ Node2D ทั่วไปและ meta
+	var dummy_node := Node2D.new()
+	dummy_node.position = Vector2(300, 400)
+	var def_y: float = OcclusionSilhouette.get_occluder_y(dummy_node)
+	var def_rect: Rect2 = OcclusionSilhouette.get_occluder_rect(dummy_node)
+	var node_ok: bool = def_y == 400.0 and def_rect.get_center().is_equal_approx(Vector2(300, 400))
+
+	# กำหนด meta occluder_y และ occluder_rect
+	dummy_node.set_meta(&"occluder_y", 450.0)
+	dummy_node.set_meta(&"occluder_rect", Rect2(250, 350, 100, 80))
+	var meta_y: float = OcclusionSilhouette.get_occluder_y(dummy_node)
+	var meta_rect: Rect2 = OcclusionSilhouette.get_occluder_rect(dummy_node)
+	var meta_ok: bool = meta_y == 450.0 and meta_rect == Rect2(250, 350, 100, 80)
+	dummy_node.free()
+
+	# 2. ทดสอบ get_tile_occluder_y และ get_tile_world_rect กับ TileMapLayer
+	var ts := TileSet.new()
+	ts.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
+	ts.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_DOWN
+	ts.tile_size = Vector2i(64, 32)
+
+	var layer := TileMapLayer.new()
+	layer.tile_set = ts
+
+	var coords := Vector2i(2, 3)
+	var expected_center: Vector2 = layer.map_to_local(coords)
+	var tile_y: float = OcclusionSilhouette.get_tile_occluder_y(layer, coords)
+	var tile_rect: Rect2 = OcclusionSilhouette.get_tile_world_rect(layer, coords)
+
+	var tile_y_ok: bool = tile_y == expected_center.y
+	var tile_rect_center_ok: bool = tile_rect.get_center().is_equal_approx(expected_center)
+	var tile_rect_size_ok: bool = tile_rect.size == Vector2(64, 32)
+
+	layer.free()
+
+	return node_ok and meta_ok and tile_y_ok and tile_rect_center_ok and tile_rect_size_ok
+
+
+func test_silhouette_global_transform_and_scale_flip() -> bool:
+	var tree_root: Window = (Engine.get_main_loop() as SceneTree).root
+	var root := Node2D.new()
+	root.position = Vector2(100, 100)
+	root.scale = Vector2(-2.0, 2.0) # Parent scale flip and scaled 2x
+	tree_root.add_child(root)
+
+	var spr := Sprite2D.new()
+	spr.name = "CharacterSprite"
+	spr.position = Vector2(10, 20)
+	spr.rotation = 0.5
+	root.add_child(spr)
+
+	var sil := OcclusionSilhouette.new()
+	sil.sprite_path = NodePath("../CharacterSprite")
+	root.add_child(sil)
+	sil.setup()
+
+	# sync
+	sil.sync_with_sprite()
+
+	# ตรวจว่า silhouette_sprite มี global_transform ตรงกับ spr.global_transform
+	var gt_matched: bool = sil.silhouette_sprite.global_transform.is_equal_approx(spr.global_transform)
+	var flip_detected: bool = sil.silhouette_sprite.global_transform.determinant() < 0.0
+
+	tree_root.remove_child(root)
+	root.free()
+	return gt_matched and flip_detected
+
+
+func test_silhouette_hides_when_target_sprite_invisible_in_tree() -> bool:
+	var root: Window = (Engine.get_main_loop() as SceneTree).root
+	var char_root := Node2D.new()
+	char_root.position = Vector2(100, 200)
+
+	var spr := Sprite2D.new()
+	spr.name = "CharSprite"
+	char_root.add_child(spr)
+
+	var sil := OcclusionSilhouette.new()
+	sil.sprite_path = NodePath("../CharSprite")
+	char_root.add_child(sil)
+	sil.setup()
+
+	root.add_child(char_root)
+
+	# วัตถุอยู่ข้างหน้าและทับสไปรต์ -> ขณะ sprite แสดงอยู่ silhouette ต้องปรากฏ
+	sil.mock_occluders = [
+		{"y": 250.0, "rect": Rect2(80, 150, 40, 60)}
+	]
+	sil.tick(0.0)
+	var visible_when_active: bool = sil.silhouette_sprite != null and sil.silhouette_sprite.visible
+
+	# ซ่อน target_sprite -> sil.tick() ต้องซ่อน silhouette_sprite
+	spr.visible = false
+	sil.tick(0.0)
+	var hidden_when_target_hidden: bool = sil.silhouette_sprite != null and not sil.silhouette_sprite.visible
+
+	# หรือหาก parent ของ sprite ซ่อน
+	spr.visible = true
+	char_root.visible = false
+	sil.tick(0.0)
+	var hidden_when_parent_hidden: bool = sil.silhouette_sprite != null and not sil.silhouette_sprite.visible
+
+	root.remove_child(char_root)
+	char_root.free()
+
+	return visible_when_active and hidden_when_target_hidden and hidden_when_parent_hidden
 
 
 func test_silhouette_node_sprite_tracking_and_visibility() -> bool:

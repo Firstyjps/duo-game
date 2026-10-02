@@ -35,31 +35,6 @@ position = Vector2(400, 320)
 script = ExtResource("3_block")
 block_height = 64.0
 
-[node name="Block2" type="StaticBody2D" parent="YEntities"]
-position = Vector2(260, 220)
-script = ExtResource("3_block")
-block_height = 72.0
-
-[node name="Block3" type="StaticBody2D" parent="YEntities"]
-position = Vector2(550, 180)
-script = ExtResource("3_block")
-block_height = 56.0
-
-[node name="Block4" type="StaticBody2D" parent="YEntities"]
-position = Vector2(1200, 240)
-script = ExtResource("3_block")
-block_height = 64.0
-
-[node name="Block5" type="StaticBody2D" parent="YEntities"]
-position = Vector2(1440, 350)
-script = ExtResource("3_block")
-block_height = 80.0
-
-[node name="Block6" type="StaticBody2D" parent="YEntities"]
-position = Vector2(1600, 200)
-script = ExtResource("3_block")
-block_height = 64.0
-
 [node name="Dummy" type="Node2D" parent="YEntities"]
 position = Vector2(680, 270)
 
