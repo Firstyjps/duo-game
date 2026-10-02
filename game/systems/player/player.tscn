@@ -1,0 +1,51 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://systems/player/player.gd" id="1_player"]
+[ext_resource type="Texture2D" path="res://systems/player/art/knight.png" id="2_art"]
+[ext_resource type="Script" path="res://core/combat/health.gd" id="3_health"]
+[ext_resource type="Script" path="res://core/combat/hurtbox.gd" id="4_hurtbox"]
+[ext_resource type="Script" path="res://core/combat/hitbox.gd" id="5_hitbox"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 8.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
+radius = 10.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hit"]
+radius = 22.0
+
+[node name="Player" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 5
+motion_mode = 1
+script = ExtResource("1_player")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_art")
+offset = Vector2(0, -28)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_body")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("3_health")
+max_hp = 12
+
+[node name="Hurtbox" type="Area2D" parent="."]
+script = ExtResource("4_hurtbox")
+team = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+position = Vector2(0, -16)
+shape = SubResource("CircleShape2D_hurt")
+
+[node name="Hitbox" type="Area2D" parent="."]
+script = ExtResource("5_hitbox")
+team = 0
+damage = 3
+knockback_force = 170.0
+stagger = 1.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hitbox"]
+shape = SubResource("CircleShape2D_hit")
