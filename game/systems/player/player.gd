@@ -95,7 +95,9 @@ var _flash_color: Color = Color.WHITE
 var _ghost_t: float = 0.0
 var _combo_side: float = 1.0
 
-var sprite: Sprite2D
+## ภาพตัวละคร: `DirSprite` (8 ทิศ iso) หรือ Sprite2D (placeholder เดิม) — เอฟเฟกต์ scale/สีใช้ร่วมกัน
+var sprite: Node2D
+var dir_sprite: DirSprite
 var collision_shape: CollisionShape2D
 var health: Health
 var hurtbox: Hurtbox
@@ -132,9 +134,12 @@ func setup() -> void:
 	collision_layer = Combat.LAYER_PLAYER
 	collision_mask = Combat.LAYER_WORLD | Combat.LAYER_ENEMY
 
-	sprite = get_node_or_null("Sprite2D") as Sprite2D
+	dir_sprite = get_node_or_null("DirSprite") as DirSprite
+	sprite = dir_sprite
 	if sprite == null:
-		sprite = get_node_or_null("Sprite") as Sprite2D
+		sprite = get_node_or_null("Sprite2D") as Node2D
+	if sprite == null:
+		sprite = get_node_or_null("Sprite") as Node2D
 	collision_shape = get_node_or_null("CollisionShape2D") as CollisionShape2D
 	health = get_node_or_null("Health") as Health
 	hurtbox = get_node_or_null("Hurtbox") as Hurtbox
@@ -562,7 +567,11 @@ func _on_died() -> void:
 		hitbox.deactivate()
 	set_deferred(&"collision_layer", 0)
 	EventBus.player_died.emit()
-	if sprite != null and is_inside_tree():
+	if dir_sprite != null:
+		dir_sprite.self_modulate = Color.WHITE
+		dir_sprite.scale = Vector2.ONE
+		dir_sprite.play_action(&"death")  # ค้างเฟรมสุดท้าย (ท่า death ไม่ loop)
+	elif sprite != null and is_inside_tree():
 		var tw: Tween = create_tween()
 		tw.tween_property(sprite, "modulate", Color(0.4, 0.2, 0.2, 0.0), 1.2)
 
@@ -728,11 +737,15 @@ func _draw() -> void:
 func _animate(delta: float) -> void:
 	if sprite == null or state == State.DEAD:
 		return
-	sprite.flip_h = aim.x < 0.0
 	var moving: bool = state == State.MOVE and velocity.length() > 10.0
+	if dir_sprite != null:
+		_animate_dir_sprite(moving)
+	elif sprite is Sprite2D:
+		(sprite as Sprite2D).flip_h = aim.x < 0.0
 	if moving:
 		_walk_t += delta * 14.0
-	var bob: float = absf(sin(_walk_t)) * 2.0 if moving else 0.0
+	# ภาพ 8 ทิศมีท่าเดินเองแล้ว → ไม่เด้งตัวด้วยโค้ด
+	var bob: float = absf(sin(_walk_t)) * 2.0 if moving and dir_sprite == null else 0.0
 	sprite.position = Vector2(0.0, -bob)
 	sprite.scale = Vector2.ONE
 	sprite.skew = 0.0
@@ -768,16 +781,49 @@ func _animate(delta: float) -> void:
 			sprite.modulate.a = 1.0
 
 
+## ท่าของ DirSprite ตาม state · หันตามทิศเดิน (ตอนเดิน) หรือทิศเล็ง (โจมตี/parry/lock-on)
+func _animate_dir_sprite(moving: bool) -> void:
+	var face: Vector2 = aim
+	if state == State.MOVE and moving and not is_locked_on():
+		face = velocity
+	elif state == State.DODGE:
+		face = dodge_dir
+	elif state == State.HURT:
+		face = Vector2.ZERO  # โดนตีแล้วคงทิศเดิม
+	dir_sprite.set_facing(face)
+	match state:
+		State.MOVE:
+			dir_sprite.play_action(&"walk" if moving else &"idle")
+		State.DODGE:
+			dir_sprite.play_action(&"dodge")
+		State.HURT:
+			dir_sprite.play_action(&"hurt")
+		_:
+			dir_sprite.play_action(&"idle")  # ATTACK/PARRY ใช้ idle + เอฟเฟกต์จนกว่าจะมีท่าฟัน
+
+
 func _spawn_ghost() -> void:
-	if sprite == null or sprite.texture == null:
+	if sprite == null:
+		return
+	var tex: Texture2D = null
+	var off: Vector2 = Vector2.ZERO
+	var flip: bool = false
+	if dir_sprite != null and dir_sprite.sprite_frames != null:
+		tex = dir_sprite.sprite_frames.get_frame_texture(dir_sprite.animation, dir_sprite.frame)
+		off = dir_sprite.offset
+	elif sprite is Sprite2D:
+		tex = (sprite as Sprite2D).texture
+		off = (sprite as Sprite2D).offset
+		flip = (sprite as Sprite2D).flip_h
+	if tex == null:
 		return
 	var parent_node: Node = get_parent()
 	if parent_node == null:
 		return
 	var g := Sprite2D.new()
-	g.texture = sprite.texture
-	g.offset = sprite.offset
-	g.flip_h = sprite.flip_h
+	g.texture = tex
+	g.offset = off
+	g.flip_h = flip
 	g.global_position = global_position + sprite.position
 	g.modulate = Color(0.55, 0.8, 1.0, 0.5)
 	parent_node.add_child(g)

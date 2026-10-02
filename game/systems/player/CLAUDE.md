@@ -9,9 +9,9 @@
 ## ไฟล์สำคัญ
 | ไฟล์ | หน้าที่ |
 |---|---|
-| `player.tscn` | scene หลักของผู้เล่น (Sprite2D, Health, Hurtbox, Hitbox, LockArea, CollisionShape2D) |
+| `player.tscn` | scene หลักของผู้เล่น (DirSprite ตัวเอก Kintsugi 8 ทิศ, Health, Hurtbox, Hitbox, LockArea, CollisionShape2D) |
 | `player.gd` | logic ผู้เล่น FSM, stamina, input intent, dodge, parry, charge attack, lock-on, damage handling |
-| `art/knight.png` | ภาพ sprite ตัวละคร placeholder |
+| `art/knight.png` | ภาพอัศวิน placeholder เดิม (ไม่ได้ใช้ใน player.tscn แล้ว — `setup()` ยังรองรับ Sprite2D) |
 | `debug/player_sandbox.tscn` | sandbox สำหรับเปิดลองเดิน ฟัน ชาร์จ dodge parry และ lock-on กับหุ่นฝึก |
 | `debug/player_sandbox.gd` | ควบคุม UI HUD และรับปุ่ม T เพื่อสั่งหุ่น Dummy โจมตีทดสอบ parry |
 | `debug/dummy.gd` | หุ่นลองรับดาเมจและสั่งโจมตีปล่อย Hitbox เพื่อทดสอบ parry |
@@ -47,6 +47,8 @@
 - isometric (#37): ช่อง atlas 96 px เท้าอยู่ที่ y≈80 → `DirSprite.offset.y = -32` · PixelLab ท่า v3 ขยาย canvas (เช่น 92) — pipeline วางกลางช่องให้เท้าตรงกัน
 - ทิศ north ของ kintsugi_hero ผมออกมาเป็นเบจ → `--fix-north-hair` remap เป็นลาเวนเดอร์ (ใช้ทุกครั้งที่ build)
 - ตัวละครนี้อิง sample Merakintsugi ที่ยังไม่เช็คสิทธิ์ → ใช้ทดสอบเท่านั้น ก่อนขายต้องออกแบบใหม่
+
+- ภาพ: `sprite` = node ภาพ (DirSprite หรือ Sprite2D) ใช้ทำเอฟเฟกต์ scale/สี · `_animate_dir_sprite()` เลือกท่าตาม state (ATTACK/PARRY ใช้ idle + เอฟเฟกต์จนกว่าจะมีท่าฟัน) · เดิน = หันตามทิศเดิน, โจมตี/lock-on = หันตาม aim, โดนตี = คงทิศ
 
 ## เทสต์
 - `game/tests/test_player_combat.gd` (เทสต์พื้นฐานเดิม)
