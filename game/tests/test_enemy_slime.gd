@@ -72,7 +72,8 @@ func test_dies_once_and_emits_enemy_died_once() -> bool:
 	return ok
 
 
-func test_windup_shows_telegraph_before_leap() -> bool:
+## telegraph ของสไลม์ = ท่าย่อตัว + กระพริบ (state WINDUP) ก่อนเปิด Hitbox
+func test_windup_before_leap() -> bool:
 	var slime: Slime = _spawn()
 	var dummy := Node2D.new()
 	dummy.position = Vector2(40, 0)
@@ -81,10 +82,9 @@ func test_windup_shows_telegraph_before_leap() -> bool:
 	# ครึ่งหลังของรอบเด้ง (อยู่บนพื้น) + อยู่ในระยะ → windup
 	slime._state_t = slime.hop_interval * 0.6
 	slime.tick(0.0)
-	var winding: bool = slime.state == Slime.State.WINDUP and slime.telegraph.visible \
-		and not slime.hitbox.monitoring
+	var winding: bool = slime.state == Slime.State.WINDUP and not slime.hitbox.monitoring
 	slime.tick(slime.windup_time)
-	var leaping: bool = slime.state == Slime.State.LEAP and not slime.telegraph.visible
+	var leaping: bool = slime.state == Slime.State.LEAP
 	slime.free()
 	dummy.free()
 	return chasing and winding and leaping

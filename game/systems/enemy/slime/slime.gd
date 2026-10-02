@@ -52,7 +52,6 @@ var health: Health
 var hurtbox: Hurtbox
 var hitbox: Hitbox
 var detect: Area2D
-var telegraph: TelegraphMarker
 
 
 func _ready() -> void:
@@ -66,7 +65,6 @@ func setup() -> void:
 	hurtbox = $Hurtbox
 	hitbox = $Hitbox
 	detect = $Detect
-	telegraph = $Telegraph
 	if not is_inside_tree():
 		health.reset()
 	hitbox.source = self
@@ -76,7 +74,6 @@ func setup() -> void:
 	detect.collision_mask = Combat.LAYER_PLAYER
 	detect.body_entered.connect(_on_body_entered)
 	detect.body_exited.connect(_on_body_exited)
-	telegraph.visible = false
 	_play(&"idle")
 
 
@@ -114,7 +111,6 @@ func tick(delta: float) -> void:
 			_tick_chase()
 		State.WINDUP:
 			velocity = Vector2.ZERO
-			telegraph.progress = _state_t / windup_time
 			if _state_t >= windup_time:
 				_enter(State.LEAP)
 		State.LEAP:
@@ -177,7 +173,6 @@ func _enter(next: State) -> void:
 	if prev == State.LEAP:
 		hitbox.deactivate()
 	if prev == State.WINDUP:
-		telegraph.visible = false
 		sprite.self_modulate = Color.WHITE
 	state = next
 	_state_t = 0.0
@@ -188,7 +183,6 @@ func _enter(next: State) -> void:
 		State.WINDUP:
 			_leap_from = global_position
 			_leap_to = leap_target(global_position, target.global_position, leap_distance)
-			telegraph.show_at(_leap_to)
 			_play(&"windup")
 		State.LEAP:
 			_leap_from = global_position
