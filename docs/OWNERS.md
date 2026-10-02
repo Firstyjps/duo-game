@@ -5,7 +5,7 @@
 | คน | GitHub | git user.name | เป็นเจ้าของ |
 |---|---|---|---|
 | Kron | @Firstyjps | Kron Kasem | `game/systems/<ระบบ A>/` — _ใส่ชื่อระบบ_ |
-| _เพื่อน_ | @_TBD_ | _TBD_ | `game/systems/<ระบบ B>/` — _ใส่ชื่อระบบ_ |
+| Few | @kronkawin2549-create | Few | `game/systems/<ระบบ B>/` — _ใส่ชื่อระบบ_ |
 | **ร่วม** (รีวิวทั้งคู่) | — | — | `game/core/` · `docs/contracts/` · `game/project.godot` · `CLAUDE.md` · `docs/WORKFLOW.md` |
 
 ## ตัวอย่างการแบ่ง (เลือก/แก้ได้)
