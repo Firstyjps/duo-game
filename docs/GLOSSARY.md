@@ -16,7 +16,7 @@
 | ท่าเตรียม | telegraph · `TelegraphMarker` (วงเตือนบนพื้น) | ท่า/VFX บอกล่วงหน้าก่อนศัตรูโจมตี (บังคับทุกท่า) | enemy |
 | สไลม์ | `Slime` · `enemy_id = &"slime"` | ศัตรูตัวแรก: เด้งเข้าหา → ย่อตัว + กระพริบแดง (telegraph) → พุ่งทับ | enemy |
 | เงาตามตัว | after-image · `_spawn_afterimage()` | สำเนาสไปรต์จาง ๆ ที่ทิ้งไว้ระหว่างพุ่ง | enemy |
-| บอสมิโนทอร์ | `boss_minotaur` (ยังไม่มีคลาส) | ผู้สมัครบอส MVP: วัวถือขวานสงคราม 8 ทิศ (ยังไม่ได้ตัดสินว่าเป็นบอสตัวจริง) | enemy |
+| บอสมิโนทอร์ | `BossMinotaur` · `enemy_id = &"boss_minotaur"` | บอสวัวถือขวานสงคราม 8 ทิศ: 6 ท่าโจมตี, 2 Phase, Poise สะสม | enemy |
 | บอสสไลม์ | `boss_slime` (ยังไม่มีคลาส) | ผู้สมัครบอสร่างเก่า เก็บไว้ (ยังไม่ได้ตัดสิน) | enemy |
 | ทิศ 8 ทิศ | `Dir8` | ทิศของสไปรต์บนจอ ชื่อตาม PixelLab (south, south-east, …) ลำดับ = แถวใน atlas | player/iso |
 | สไปรต์ 8 ทิศ | `DirSprite` | AnimatedSprite2D เล่นท่า `"<ท่า>_<ทิศ>"` · `set_facing()` + `play_action()` | player/iso |
