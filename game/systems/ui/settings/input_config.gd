@@ -4,6 +4,7 @@ extends RefCounted
 ## รองรับ rebind คีย์บอร์ดและจอย, กันปุ่มซ้ำ, reset default, เซฟ/โหลด user://input.cfg
 
 const CONFIG_PATH: String = "user://input.cfg"
+static var config_path: String = CONFIG_PATH
 
 const ACTIONS: Array[StringName] = [
 	&"move_up",
@@ -15,9 +16,16 @@ const ACTIONS: Array[StringName] = [
 	&"ui_pause",
 ]
 
+const UI_PROTECTED_ACTIONS: Array[StringName] = [
+	&"ui_accept",
+	&"ui_cancel",
+	&"ui_pause",
+]
+
 
 static func make_key_event(keycode: Key) -> InputEventKey:
 	var ev := InputEventKey.new()
+	ev.device = -1
 	ev.physical_keycode = keycode
 	ev.keycode = keycode
 	return ev
@@ -25,18 +33,21 @@ static func make_key_event(keycode: Key) -> InputEventKey:
 
 static func make_mouse_event(button: MouseButton) -> InputEventMouseButton:
 	var ev := InputEventMouseButton.new()
+	ev.device = -1
 	ev.button_index = button
 	return ev
 
 
 static func make_joy_button_event(button: JoyButton) -> InputEventJoypadButton:
 	var ev := InputEventJoypadButton.new()
+	ev.device = -1
 	ev.button_index = button
 	return ev
 
 
 static func make_joy_motion_event(axis: JoyAxis, axis_value: float) -> InputEventJoypadMotion:
 	var ev := InputEventJoypadMotion.new()
+	ev.device = -1
 	ev.axis = axis
 	ev.axis_value = axis_value
 	return ev
@@ -77,19 +88,21 @@ static func get_default_events(action: StringName) -> Array[InputEvent]:
 
 
 ## ลงทะเบียน input actions ตอน runtime ถ้ายังไม่มีใน InputMap
+## ใส่ default เฉพาะตอนสร้าง action ใหม่เท่านั้น
 static func ensure_input_actions() -> void:
+	# นำ Space ออกจาก ui_accept เพื่อให้ Space ใช้กับ dodge ได้โดยไม่ชน
+	if InputMap.has_action(&"ui_accept"):
+		for ev: InputEvent in InputMap.action_get_events(&"ui_accept"):
+			if ev is InputEventKey and (ev.physical_keycode == KEY_SPACE or ev.keycode == KEY_SPACE):
+				InputMap.action_erase_event(&"ui_accept", ev)
+
 	for action: StringName in ACTIONS:
-		if not InputMap.has_action(action):
-			InputMap.add_action(action)
+		if InputMap.has_action(action):
+			continue
+		InputMap.add_action(action)
 		var defaults: Array[InputEvent] = get_default_events(action)
 		for ev: InputEvent in defaults:
-			var already_has: bool = false
-			for cur: InputEvent in InputMap.action_get_events(action):
-				if events_match(cur, ev):
-					already_has = true
-					break
-			if not already_has:
-				InputMap.action_add_event(action, ev)
+			InputMap.action_add_event(action, ev)
 
 
 static func events_match(a: InputEvent, b: InputEvent) -> bool:
@@ -122,7 +135,21 @@ static func get_event_category(ev: InputEvent) -> String:
 	return "unknown"
 
 
+## หา event ที่ category และ index ที่กำหนดใน action
+static func get_action_event_at(action: StringName, category: String, index: int) -> InputEvent:
+	if not InputMap.has_action(action):
+		return null
+	var count: int = 0
+	for ev: InputEvent in InputMap.action_get_events(action):
+		if get_event_category(ev) == category:
+			if count == index:
+				return ev
+			count += 1
+	return null
+
+
 ## ค้นหาว่า event นี้ถูกผูกอยู่กับ action อื่นแล้วหรือไม่ (กันปุ่มซ้ำ)
+## ตรวจสอบทั้ง ACTIONS และ UI actions (ui_accept, ui_cancel, ui_pause)
 ## คืนชื่อ action ที่พบ หรือ StringName(&"") ถ้ายังไม่ถูกผูก
 static func find_action_with_event(event: InputEvent, exclude_action: StringName = &"") -> StringName:
 	for action: StringName in ACTIONS:
@@ -133,47 +160,77 @@ static func find_action_with_event(event: InputEvent, exclude_action: StringName
 		for cur: InputEvent in InputMap.action_get_events(action):
 			if events_match(cur, event):
 				return action
+
+	for action: StringName in UI_PROTECTED_ACTIONS:
+		if action == exclude_action:
+			continue
+		if not InputMap.has_action(action):
+			continue
+		for cur: InputEvent in InputMap.action_get_events(action):
+			if events_match(cur, event):
+				return action
+
 	return &""
 
 
-## Rebind action: แทนที่ event เดิมด้วย new_event
+## Rebind action: แทนที่ event ที่ index เดิม (ไม่ต่อท้าย)
 ## ถ้า new_event ชนกับ action อื่น จะคืน false (กันปุ่มซ้ำ)
+## ถ้าเปลี่ยนเป็นปุ่มที่ action เดียวกันมีอยู่แล้ว จะสลับตำแหน่ง (swap) ไม่ลบเงียบ
 static func rebind(action: StringName, new_event: InputEvent, old_event: InputEvent = null) -> bool:
+	if new_event != null:
+		new_event.device = -1
+
 	if not InputMap.has_action(action):
 		InputMap.add_action(action)
 
-	# 1. กันปุ่มซ้ำ: เช็คว่าปุ่มใหม่ซ้ำกับ action อื่นหรือไม่
+	# 1. กันปุ่มซ้ำ: เช็คว่าปุ่มใหม่ซ้ำกับ action อื่น หรือ UI actions หรือไม่
 	var conflict: StringName = find_action_with_event(new_event, action)
 	if not conflict.is_empty():
 		return false
 
 	var current_events: Array[InputEvent] = InputMap.action_get_events(action)
+	var new_events: Array[InputEvent] = current_events.duplicate()
 
-	# 2. ถ้ามี old_event ระบุ ให้ลบ old_event ที่ตรงกันออก
+	# 2. ตรวจสอบว่า new_event มีอยู่ใน action นี้อยู่แล้วหรือไม่ (เพื่อสลับตำแหน่ง)
+	var existing_idx: int = -1
+	for i: int in range(new_events.size()):
+		if events_match(new_events[i], new_event):
+			existing_idx = i
+			break
+
+	# 3. หาตำแหน่งของ old_event ใน current_events
+	var old_idx: int = -1
 	if old_event != null:
-		var removed := false
-		for ev: InputEvent in current_events:
-			if events_match(ev, old_event):
-				InputMap.action_erase_event(action, ev)
-				removed = true
-				break
-		# ถ้าลบไม่ได้ (อาจไม่เจอ) ให้เช็ค category เดียวกัน
-		if not removed:
-			var cat: String = get_event_category(new_event)
-			for ev: InputEvent in current_events:
-				if get_event_category(ev) == cat:
-					InputMap.action_erase_event(action, ev)
-					break
-	else:
-		# ถ้าไม่ระบุ old_event ให้แทนที่ event ประเภทเดียวกัน (keyboard/mouse vs joypad)
-		var cat: String = get_event_category(new_event)
-		for ev: InputEvent in current_events:
-			if get_event_category(ev) == cat:
-				InputMap.action_erase_event(action, ev)
+		for i: int in range(new_events.size()):
+			if events_match(new_events[i], old_event):
+				old_idx = i
 				break
 
-	# 3. เพิ่ม new_event เข้าไป
-	InputMap.action_add_event(action, new_event)
+	if old_idx == -1:
+		var cat: String = get_event_category(new_event)
+		for i: int in range(new_events.size()):
+			if get_event_category(new_events[i]) == cat:
+				old_idx = i
+				break
+
+	if existing_idx != -1:
+		# มี new_event ใน action เดียวกันอยู่แล้ว -> สลับตำแหน่ง (swap)
+		if old_idx != -1 and old_idx != existing_idx:
+			var temp: InputEvent = new_events[old_idx]
+			new_events[old_idx] = new_events[existing_idx]
+			new_events[existing_idx] = temp
+	else:
+		# แทนที่ที่ตำแหน่ง index เดิม (ไม่ต่อท้าย)
+		if old_idx != -1:
+			new_events[old_idx] = new_event
+		else:
+			new_events.append(new_event)
+
+	# อัปเดต InputMap คืนตามลำดับเดิม
+	InputMap.action_erase_events(action)
+	for ev: InputEvent in new_events:
+		InputMap.action_add_event(action, ev)
+
 	return true
 
 
@@ -184,6 +241,11 @@ static func rebind_event(action: StringName, old_event: InputEvent, new_event: I
 
 ## คืนค่าเริ่มต้นทุก action
 static func reset_to_defaults() -> void:
+	if InputMap.has_action(&"ui_accept"):
+		for ev: InputEvent in InputMap.action_get_events(&"ui_accept"):
+			if ev is InputEventKey and (ev.physical_keycode == KEY_SPACE or ev.keycode == KEY_SPACE):
+				InputMap.action_erase_event(&"ui_accept", ev)
+
 	for action: StringName in ACTIONS:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -259,7 +321,8 @@ static func get_event_text(ev: InputEvent) -> String:
 	return "None"
 
 
-static func save_to_file(path: String = CONFIG_PATH) -> Error:
+static func save_to_file(path: String = "") -> Error:
+	var target_path: String = path if not path.is_empty() else config_path
 	var cfg := ConfigFile.new()
 	for action: StringName in ACTIONS:
 		var list: Array = []
@@ -269,12 +332,13 @@ static func save_to_file(path: String = CONFIG_PATH) -> Error:
 				if not d.is_empty():
 					list.append(d)
 		cfg.set_value("input", String(action), list)
-	return cfg.save(path)
+	return cfg.save(target_path)
 
 
-static func load_from_file(path: String = CONFIG_PATH) -> Error:
+static func load_from_file(path: String = "") -> Error:
+	var target_path: String = path if not path.is_empty() else config_path
 	var cfg := ConfigFile.new()
-	var err: Error = cfg.load(path)
+	var err: Error = cfg.load(target_path)
 	if err != OK:
 		return err
 	for action: StringName in ACTIONS:
@@ -295,7 +359,9 @@ static func load_from_file(path: String = CONFIG_PATH) -> Error:
 	return OK
 
 
-static func load_and_apply(path: String = CONFIG_PATH) -> void:
+static func load_and_apply(path: String = "") -> void:
+	var target_path: String = path if not path.is_empty() else config_path
 	ensure_input_actions()
-	if FileAccess.file_exists(path):
-		load_from_file(path)
+	if FileAccess.file_exists(target_path):
+		load_from_file(target_path)
+

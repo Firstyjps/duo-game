@@ -5,6 +5,10 @@ extends Control
 
 signal closed
 
+@export var settings_config_path: String = SettingsConfig.CONFIG_PATH
+@export var input_config_path: String = InputConfig.CONFIG_PATH
+@export var config_path: String = ""
+
 var btn_tab_general: Button
 var btn_tab_controls: Button
 var page_general: Control
@@ -35,7 +39,17 @@ func _ready() -> void:
 	setup()
 
 
-func setup() -> void:
+func setup(p_settings_path: String = "", p_input_path: String = "") -> void:
+	if not p_settings_path.is_empty():
+		settings_config_path = p_settings_path
+	elif not config_path.is_empty():
+		settings_config_path = config_path
+
+	if not p_input_path.is_empty():
+		input_config_path = p_input_path
+	elif not config_path.is_empty():
+		input_config_path = config_path
+
 	# ค้นหาโหนดต่างๆ
 	lbl_title = get_node_or_null("Center/Panel/VBox/Header/TitleLabel") as Label
 	btn_tab_general = get_node_or_null("Center/Panel/VBox/TabsRow/BtnTabGeneral") as Button
@@ -76,7 +90,7 @@ func setup() -> void:
 		opt_language.set_item_metadata(1, "th")
 
 	if key_rebind != null:
-		key_rebind.setup()
+		key_rebind.setup(input_config_path)
 
 	# ซิงค์ข้อมูลจากการตั้งค่าปัจจุบัน
 	sync_ui_from_config()
@@ -211,6 +225,7 @@ func _on_tab_controls_pressed() -> void:
 func _on_master_slider_changed(value: float) -> void:
 	var linear_vol: float = value / 100.0
 	SettingsConfig.set_master_volume(linear_vol)
+	SettingsConfig.save_to_file(settings_config_path)
 	if lbl_master_val != null:
 		lbl_master_val.text = "%d%%" % int(value)
 
@@ -218,6 +233,7 @@ func _on_master_slider_changed(value: float) -> void:
 func _on_music_slider_changed(value: float) -> void:
 	var linear_vol: float = value / 100.0
 	SettingsConfig.set_music_volume(linear_vol)
+	SettingsConfig.save_to_file(settings_config_path)
 	if lbl_music_val != null:
 		lbl_music_val.text = "%d%%" % int(value)
 
@@ -225,12 +241,14 @@ func _on_music_slider_changed(value: float) -> void:
 func _on_sfx_slider_changed(value: float) -> void:
 	var linear_vol: float = value / 100.0
 	SettingsConfig.set_sfx_volume(linear_vol)
+	SettingsConfig.save_to_file(settings_config_path)
 	if lbl_sfx_val != null:
 		lbl_sfx_val.text = "%d%%" % int(value)
 
 
 func _on_fullscreen_toggled(button_pressed: bool) -> void:
 	SettingsConfig.set_fullscreen(button_pressed)
+	SettingsConfig.save_to_file(settings_config_path)
 
 
 func _on_language_selected(index: int) -> void:
@@ -238,14 +256,15 @@ func _on_language_selected(index: int) -> void:
 		return
 	var lang: String = opt_language.get_item_metadata(index)
 	SettingsConfig.set_language(lang)
+	SettingsConfig.save_to_file(settings_config_path)
 	update_texts()
 
 
 func _on_reset_all_pressed() -> void:
 	SettingsConfig.reset_to_defaults()
 	InputConfig.reset_to_defaults()
-	SettingsConfig.save_to_file()
-	InputConfig.save_to_file()
+	SettingsConfig.save_to_file(settings_config_path)
+	InputConfig.save_to_file(input_config_path)
 	sync_ui_from_config()
 	if key_rebind != null:
 		key_rebind.refresh_rows()
@@ -253,12 +272,14 @@ func _on_reset_all_pressed() -> void:
 
 
 func _on_back_pressed() -> void:
-	SettingsConfig.save_to_file()
-	InputConfig.save_to_file()
+	SettingsConfig.save_to_file(settings_config_path)
+	InputConfig.save_to_file(input_config_path)
 	closed.emit()
 
 
 func grab_initial_focus() -> void:
+	if not is_inside_tree():
+		return
 	if btn_tab_general != null:
 		btn_tab_general.grab_focus()
 	elif slider_master != null:

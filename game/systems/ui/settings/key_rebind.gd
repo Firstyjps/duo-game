@@ -6,6 +6,8 @@ extends Control
 
 signal closed
 
+@export var config_path: String = InputConfig.CONFIG_PATH
+
 var container_actions: VBoxContainer
 var btn_reset: Button
 var overlay_listening: Control
@@ -14,6 +16,8 @@ var lbl_status: Label
 var btn_cancel_listen: Button
 
 var _listening_action: StringName = &""
+var _listening_category: String = ""
+var _listening_slot_index: int = 0
 var _listening_old_event: InputEvent = null
 var _listening_source_btn: Button = null
 var _row_buttons: Array[Button] = []
@@ -23,7 +27,10 @@ func _ready() -> void:
 	setup()
 
 
-func setup() -> void:
+func setup(p_config_path: String = "") -> void:
+	if not p_config_path.is_empty():
+		config_path = p_config_path
+
 	container_actions = get_node_or_null("VBox/Scroll/ActionList") as VBoxContainer
 	btn_reset = get_node_or_null("VBox/BottomRow/BtnReset") as Button
 	overlay_listening = get_node_or_null("ListeningOverlay") as Control
@@ -66,31 +73,25 @@ func build_rows() -> void:
 		lbl_name.text = _get_action_label(action)
 		row.add_child(lbl_name)
 
-		# หา event คีย์บอร์ด/เมาส์ และจอย
-		var kb_event: InputEvent = null
-		var joy_event: InputEvent = null
-		for ev: InputEvent in InputMap.action_get_events(action):
-			var cat: String = InputConfig.get_event_category(ev)
-			if cat == "keyboard_mouse" and kb_event == null:
-				kb_event = ev
-			elif cat == "joypad" and joy_event == null:
-				joy_event = ev
+		# หา event จริงของ index 0 ของแต่ละประเภท
+		var kb_event: InputEvent = InputConfig.get_action_event_at(action, "keyboard_mouse", 0)
+		var joy_event: InputEvent = InputConfig.get_action_event_at(action, "joypad", 0)
 
-		# ปุ่มสำหรับ Keyboard / Mouse
+		# ปุ่มสำหรับ Keyboard / Mouse (ช่อง keyboard_mouse index 0)
 		var btn_kb := Button.new()
 		btn_kb.custom_minimum_size = Vector2(140, 32)
 		btn_kb.focus_mode = Control.FOCUS_ALL
 		btn_kb.text = InputConfig.get_event_text(kb_event) if kb_event != null else "-"
-		btn_kb.pressed.connect(_on_slot_clicked.bind(action, kb_event, btn_kb))
+		btn_kb.pressed.connect(_on_slot_clicked.bind(action, "keyboard_mouse", 0, btn_kb))
 		row.add_child(btn_kb)
 		_row_buttons.append(btn_kb)
 
-		# ปุ่มสำหรับ Joypad
+		# ปุ่มสำหรับ Joypad (ช่อง joypad index 0)
 		var btn_joy := Button.new()
 		btn_joy.custom_minimum_size = Vector2(140, 32)
 		btn_joy.focus_mode = Control.FOCUS_ALL
 		btn_joy.text = InputConfig.get_event_text(joy_event) if joy_event != null else "-"
-		btn_joy.pressed.connect(_on_slot_clicked.bind(action, joy_event, btn_joy))
+		btn_joy.pressed.connect(_on_slot_clicked.bind(action, "joypad", 0, btn_joy))
 		row.add_child(btn_joy)
 		_row_buttons.append(btn_joy)
 
@@ -143,14 +144,8 @@ func refresh_rows() -> void:
 		if lbl_name != null:
 			lbl_name.text = _get_action_label(action)
 
-		var kb_event: InputEvent = null
-		var joy_event: InputEvent = null
-		for ev: InputEvent in InputMap.action_get_events(action):
-			var cat: String = InputConfig.get_event_category(ev)
-			if cat == "keyboard_mouse" and kb_event == null:
-				kb_event = ev
-			elif cat == "joypad" and joy_event == null:
-				joy_event = ev
+		var kb_event: InputEvent = InputConfig.get_action_event_at(action, "keyboard_mouse", 0)
+		var joy_event: InputEvent = InputConfig.get_action_event_at(action, "joypad", 0)
 
 		if btn_kb != null:
 			btn_kb.text = InputConfig.get_event_text(kb_event) if kb_event != null else "-"
@@ -177,15 +172,20 @@ func _get_action_label(action: StringName) -> String:
 		&"attack": return tr("UI_ATTACK")
 		&"dodge": return tr("UI_DODGE")
 		&"ui_pause": return tr("UI_PAUSE")
+		&"ui_accept": return "UI Accept"
+		&"ui_cancel": return "UI Cancel"
 	return String(action)
 
 
-func _on_slot_clicked(action: StringName, old_event: InputEvent, source_btn: Button) -> void:
-	start_listening(action, old_event, source_btn)
+func _on_slot_clicked(action: StringName, category: String, slot_index: int, source_btn: Button) -> void:
+	var cur_event: InputEvent = InputConfig.get_action_event_at(action, category, slot_index)
+	start_listening(action, category, slot_index, cur_event, source_btn)
 
 
-func start_listening(action: StringName, old_event: InputEvent, source_btn: Button) -> void:
+func start_listening(action: StringName, category: String, slot_index: int, old_event: InputEvent, source_btn: Button) -> void:
 	_listening_action = action
+	_listening_category = category
+	_listening_slot_index = slot_index
 	_listening_old_event = old_event
 	_listening_source_btn = source_btn
 
@@ -193,18 +193,26 @@ func start_listening(action: StringName, old_event: InputEvent, source_btn: Butt
 		lbl_status.text = ""
 	if overlay_listening != null:
 		overlay_listening.visible = true
-	if btn_cancel_listen != null:
+	if btn_cancel_listen != null and is_inside_tree():
 		btn_cancel_listen.grab_focus()
 
 
 func cancel_listening() -> void:
 	_listening_action = &""
+	_listening_category = ""
+	_listening_slot_index = 0
 	_listening_old_event = null
 	if overlay_listening != null:
 		overlay_listening.visible = false
-	if _listening_source_btn != null and is_instance_valid(_listening_source_btn):
+	if _listening_source_btn != null and is_instance_valid(_listening_source_btn) and is_inside_tree():
 		_listening_source_btn.grab_focus()
 	_listening_source_btn = null
+
+
+func _set_input_handled() -> void:
+	var vp: Viewport = get_viewport()
+	if vp != null:
+		vp.set_input_as_handled()
 
 
 func _input(event: InputEvent) -> void:
@@ -215,6 +223,28 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		return
 
+	# 1. เช็คคลิกบน btn_cancel_listen = ยกเลิก (เช็คก่อนจับเป็น input ปุ่ม)
+	if event is InputEventMouseButton and event.is_pressed():
+		if btn_cancel_listen != null and (btn_cancel_listen.is_visible_in_tree() or (overlay_listening != null and overlay_listening.visible)):
+			if btn_cancel_listen.get_global_rect().has_point(event.global_position):
+				_set_input_handled()
+				cancel_listening()
+				return
+
+	# 2. เช็ค Esc หรือ Joypad Back = ยกเลิก ไม่ให้ Esc ทะลุไปเปิด/ปิด pause
+	if event is InputEventKey and event.is_pressed() and not event.is_echo():
+		if event.keycode == KEY_ESCAPE or event.physical_keycode == KEY_ESCAPE:
+			_set_input_handled()
+			cancel_listening()
+			return
+
+	if event is InputEventJoypadButton and event.is_pressed():
+		if event.button_index == JOY_BUTTON_BACK:
+			_set_input_handled()
+			cancel_listening()
+			return
+
+	# 3. ตรวจสอบว่าอินพุตถูกต้องหรือไม่
 	var is_valid_input: bool = false
 	if event is InputEventKey and event.is_pressed() and not event.is_echo():
 		is_valid_input = true
@@ -228,29 +258,40 @@ func _input(event: InputEvent) -> void:
 	if not is_valid_input:
 		return
 
-	get_viewport().set_input_as_handled()
+	_set_input_handled()
 
-	var success: bool = InputConfig.rebind(_listening_action, event, _listening_old_event)
+	# คัดลอก event และตั้ง device = -1
+	var captured: InputEvent = event.duplicate()
+	captured.device = -1
+
+	# หา old_event ล่าสุดของช่องนี้อีกครั้งเพื่อความปลอดภัย
+	var current_old: InputEvent = _listening_old_event
+	if current_old == null:
+		current_old = InputConfig.get_action_event_at(_listening_action, _listening_category, _listening_slot_index)
+
+	var success: bool = InputConfig.rebind(_listening_action, captured, current_old)
 	if success:
-		InputConfig.save_to_file()
+		InputConfig.save_to_file(config_path)
 		refresh_rows()
 		var btn_to_focus: Button = _listening_source_btn
 		cancel_listening()
-		if btn_to_focus != null and is_instance_valid(btn_to_focus):
+		if btn_to_focus != null and is_instance_valid(btn_to_focus) and is_inside_tree():
 			btn_to_focus.grab_focus()
 	else:
 		if lbl_status != null:
-			var conflict: StringName = InputConfig.find_action_with_event(event, _listening_action)
+			var conflict: StringName = InputConfig.find_action_with_event(captured, _listening_action)
 			lbl_status.text = tr("UI_KEY_EXISTS") + (" (%s)" % _get_action_label(conflict) if not conflict.is_empty() else "")
 
 
 func _on_reset_pressed() -> void:
 	InputConfig.reset_to_defaults()
-	InputConfig.save_to_file()
+	InputConfig.save_to_file(config_path)
 	refresh_rows()
 
 
 func grab_initial_focus() -> void:
+	if not is_inside_tree():
+		return
 	if not _row_buttons.is_empty() and is_instance_valid(_row_buttons[0]):
 		_row_buttons[0].grab_focus()
 	elif btn_reset != null:

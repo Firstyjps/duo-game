@@ -4,6 +4,10 @@ extends CanvasLayer
 ## CanvasLayer ทำงานตอน get_tree().paused = true (process_mode = ALWAYS)
 ## รับ input ui_pause (Esc / จอย Start)
 
+@export var settings_config_path: String = SettingsConfig.CONFIG_PATH
+@export var input_config_path: String = InputConfig.CONFIG_PATH
+@export var config_path: String = ""
+
 var root_control: Control
 var menu_container: Control
 var lbl_paused: Label
@@ -18,12 +22,22 @@ func _ready() -> void:
 	visible = false
 
 
-func setup() -> void:
+func setup(p_settings_path: String = "", p_input_path: String = "") -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 100
 
-	InputConfig.load_and_apply()
-	SettingsConfig.load_and_apply()
+	if not p_settings_path.is_empty():
+		settings_config_path = p_settings_path
+	elif not config_path.is_empty():
+		settings_config_path = config_path
+
+	if not p_input_path.is_empty():
+		input_config_path = p_input_path
+	elif not config_path.is_empty():
+		input_config_path = config_path
+
+	InputConfig.load_and_apply(input_config_path)
+	SettingsConfig.load_and_apply(settings_config_path)
 
 	root_control = get_node_or_null("Root") as Control
 	menu_container = get_node_or_null("Root/Center/VBox/MenuButtons") as Control
@@ -41,7 +55,7 @@ func setup() -> void:
 		btn_title.pressed.connect(_on_title_pressed)
 
 	if settings_menu != null:
-		settings_menu.setup()
+		settings_menu.setup(settings_config_path, input_config_path)
 		settings_menu.visible = false
 		if not settings_menu.closed.is_connected(_on_settings_closed):
 			settings_menu.closed.connect(_on_settings_closed)
@@ -82,7 +96,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				_on_settings_closed()
 			else:
 				resume_game()
-		get_viewport().set_input_as_handled()
+		var vp: Viewport = get_viewport()
+		if vp != null:
+			vp.set_input_as_handled()
 
 
 func _get_active_tree() -> SceneTree:
@@ -129,6 +145,8 @@ func _on_settings_pressed() -> void:
 
 
 func _on_settings_closed() -> void:
+	SettingsConfig.save_to_file(settings_config_path)
+	InputConfig.save_to_file(input_config_path)
 	if settings_menu != null:
 		settings_menu.visible = false
 	if menu_container != null:

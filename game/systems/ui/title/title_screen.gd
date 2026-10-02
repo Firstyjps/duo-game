@@ -4,6 +4,9 @@ extends Control
 ## ออกแบบสำหรับความละเอียด 960x540 integer scale
 
 @export_file("*.tscn") var start_scene: String = "res://mockup/mockup.tscn"
+@export var settings_config_path: String = SettingsConfig.CONFIG_PATH
+@export var input_config_path: String = InputConfig.CONFIG_PATH
+@export var config_path: String = ""
 
 var btn_play: Button
 var btn_settings: Button
@@ -19,9 +22,19 @@ func _ready() -> void:
 		btn_play.grab_focus()
 
 
-func setup() -> void:
-	InputConfig.load_and_apply()
-	SettingsConfig.load_and_apply()
+func setup(p_settings_path: String = "", p_input_path: String = "") -> void:
+	if not p_settings_path.is_empty():
+		settings_config_path = p_settings_path
+	elif not config_path.is_empty():
+		settings_config_path = config_path
+
+	if not p_input_path.is_empty():
+		input_config_path = p_input_path
+	elif not config_path.is_empty():
+		input_config_path = config_path
+
+	InputConfig.load_and_apply(input_config_path)
+	SettingsConfig.load_and_apply(settings_config_path)
 
 	lbl_title = get_node_or_null("Center/VBox/TitleLabel") as Label
 	menu_container = get_node_or_null("Center/VBox/MenuButtons") as Control
@@ -38,7 +51,7 @@ func setup() -> void:
 		btn_quit.pressed.connect(_on_quit_pressed)
 
 	if settings_menu != null:
-		settings_menu.setup()
+		settings_menu.setup(settings_config_path, input_config_path)
 		settings_menu.visible = false
 		if not settings_menu.closed.is_connected(_on_settings_closed):
 			settings_menu.closed.connect(_on_settings_closed)
@@ -92,6 +105,8 @@ func _on_settings_pressed() -> void:
 
 
 func _on_settings_closed() -> void:
+	SettingsConfig.save_to_file(settings_config_path)
+	InputConfig.save_to_file(input_config_path)
 	if settings_menu != null:
 		settings_menu.visible = false
 	if menu_container != null:
