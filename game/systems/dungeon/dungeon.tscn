@@ -1,14 +1,22 @@
 [gd_scene format=4]
 
-[ext_resource type="Script" path="res://systems/dungeon/dungeon.gd" id="1_pxbpp"]
-[ext_resource type="Script" path="res://systems/dungeon/room/room.gd" id="2_5h1m7"]
-[ext_resource type="TileSet" path="res://systems/dungeon/dungeon_tileset.tres" id="3_70who"]
-[ext_resource type="PackedScene" path="res://systems/dungeon/room/door.tscn" id="4_hutm6"]
-[ext_resource type="Script" path="res://systems/dungeon/room/door.gd" id="5_0kb0w"]
-[ext_resource type="Texture2D" path="res://systems/dungeon/art/iso_tiles.png" id="6_3v5xf"]
+[ext_resource type="Script" path="res://systems/dungeon/dungeon.gd" id="1_tgq4k"]
+[ext_resource type="Script" path="res://systems/dungeon/room/room.gd" id="2_pxbpp"]
+[ext_resource type="TileSet" path="res://systems/dungeon/dungeon_tileset.tres" id="3_5h1m7"]
+[ext_resource type="PackedScene" path="res://systems/dungeon/room/door.tscn" id="4_70who"]
+[ext_resource type="Script" path="res://systems/dungeon/room/door.gd" id="5_hutm6"]
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_exit"]
-radius = 14.0
+[sub_resource type="Gradient" id="Gradient_0kb0w"]
+offsets = PackedFloat32Array(0, 0.35, 0.7, 1)
+colors = PackedColorArray(1, 0.9, 0.6, 1, 1, 0.6, 0.2, 0.65, 0.8, 0.4, 0.1, 0.2, 0, 0, 0, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_3v5xf"]
+gradient = SubResource("Gradient_0kb0w")
+width = 128
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(0.5, 0)
 
 [sub_resource type="Gradient" id="Gradient_q1i37"]
 offsets = PackedFloat32Array(0, 0.35, 0.7, 1)
@@ -34,310 +42,230 @@ fill = 1
 fill_from = Vector2(0.5, 0.5)
 fill_to = Vector2(0.5, 0)
 
-[sub_resource type="Gradient" id="Gradient_ka4ck"]
-offsets = PackedFloat32Array(0, 0.35, 0.7, 1)
-colors = PackedColorArray(1, 0.9, 0.6, 1, 1, 0.6, 0.2, 0.65, 0.8, 0.4, 0.1, 0.2, 0, 0, 0, 0)
-
-[sub_resource type="GradientTexture2D" id="GradientTexture2D_3vnky"]
-gradient = SubResource("Gradient_ka4ck")
-width = 128
-height = 128
-fill = 1
-fill_from = Vector2(0.5, 0.5)
-fill_to = Vector2(0.5, 0)
-
-[node name="Dungeon" type="Node2D" unique_id=2020152273]
-script = ExtResource("1_pxbpp")
-
-[node name="Room1" type="Node2D" parent="." unique_id=232423415]
+[node name="Dungeon" type="Node2D" unique_id=125388774]
 y_sort_enabled = true
-script = ExtResource("2_5h1m7")
+script = ExtResource("1_tgq4k")
+
+[node name="CanvasModulate" type="CanvasModulate" parent="." unique_id=637025796]
+color = Color(0.32, 0.32, 0.44, 1)
+
+[node name="Room1" type="Node2D" parent="." unique_id=171518273]
+y_sort_enabled = true
+script = ExtResource("2_pxbpp")
 room_id = &"room_1"
 
-[node name="FloorLayer" type="TileMapLayer" parent="Room1" unique_id=905594621]
+[node name="FloorLayer" type="TileMapLayer" parent="Room1" unique_id=1813569745]
 tile_map_data = PackedByteArray("AAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAUAAAABAAAAAAAAAAYAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAkAAAAAAAAAAAAAAAoAAAABAAAAAAABAAAAAAAAAAAAAAABAAEAAAAAAAAAAAABAAIAAAAAAAAAAAABAAMAAAAAAAAAAAABAAQAAAABAAAAAAABAAUAAAAAAAAAAAABAAYAAAAAAAAAAAABAAcAAAAAAAAAAAABAAgAAAAAAAAAAAABAAkAAAABAAAAAAABAAoAAAAAAAAAAAACAAAAAAAAAAAAAAACAAEAAAAAAAAAAAACAAIAAAAAAAAAAAACAAMAAAABAAAAAAACAAQAAAAAAAAAAAACAAUAAAAAAAAAAAACAAYAAAAAAAAAAAACAAcAAAAAAAAAAAACAAgAAAABAAAAAAACAAkAAAAAAAAAAAACAAoAAAAAAAAAAAADAAAAAAAAAAAAAAADAAEAAAAAAAAAAAADAAIAAAABAAAAAAADAAMAAAAAAAAAAAADAAQAAAAAAAAAAAADAAUAAAAAAAAAAAADAAYAAAAAAAAAAAADAAcAAAABAAAAAAADAAgAAAAAAAAAAAADAAkAAAAAAAAAAAADAAoAAAAAAAAAAAAEAAAAAAAAAAAAAAAEAAEAAAABAAAAAAAEAAIAAAAAAAAAAAAEAAMAAAAAAAAAAAAEAAQAAAAAAAAAAAAEAAUAAAACAAAAAAAEAAYAAAABAAAAAAAEAAcAAAAAAAAAAAAEAAgAAAAAAAAAAAAEAAkAAAAAAAAAAAAEAAoAAAAAAAAAAAAFAAAAAAABAAAAAAAFAAEAAAAAAAAAAAAFAAIAAAAAAAAAAAAFAAMAAAAAAAAAAAAFAAQAAAADAAAAAAAFAAUAAAAEAAAAAAAFAAYAAAADAAAAAAAFAAcAAAAAAAAAAAAFAAgAAAAAAAAAAAAFAAkAAAAAAAAAAAAFAAoAAAABAAAAAAAGAAAAAAAAAAAAAAAGAAEAAAAAAAAAAAAGAAIAAAAAAAAAAAAGAAMAAAAAAAAAAAAGAAQAAAABAAAAAAAGAAUAAAACAAAAAAAGAAYAAAAAAAAAAAAGAAcAAAAAAAAAAAAGAAgAAAAAAAAAAAAGAAkAAAABAAAAAAAGAAoAAAAAAAAAAAAHAAAAAAAAAAAAAAAHAAEAAAAAAAAAAAAHAAIAAAAAAAAAAAAHAAMAAAABAAAAAAAHAAQAAAAAAAAAAAAHAAUAAAAAAAAAAAAHAAYAAAAAAAAAAAAHAAcAAAAAAAAAAAAHAAgAAAABAAAAAAAHAAkAAAAAAAAAAAAHAAoAAAAAAAAAAAAIAAAAAAAAAAAAAAAIAAEAAAAAAAAAAAAIAAIAAAABAAAAAAAIAAMAAAAAAAAAAAAIAAQAAAAAAAAAAAAIAAUAAAAAAAAAAAAIAAYAAAAAAAAAAAAIAAcAAAABAAAAAAAIAAgAAAAAAAAAAAAIAAkAAAAAAAAAAAAIAAoAAAAAAAAAAAAJAAAAAAAAAAAAAAAJAAEAAAABAAAAAAAJAAIAAAAAAAAAAAAJAAMAAAAAAAAAAAAJAAQAAAAAAAAAAAAJAAUAAAAAAAAAAAAJAAYAAAABAAAAAAAJAAcAAAAAAAAAAAAJAAgAAAAAAAAAAAAJAAkAAAAAAAAAAAAJAAoAAAAAAAAAAAAKAAAAAAABAAAAAAAKAAEAAAAAAAAAAAAKAAIAAAAAAAAAAAAKAAMAAAAAAAAAAAAKAAQAAAAAAAAAAAAKAAUAAAAGAAAAAAAKAAYAAAAAAAAAAAAKAAcAAAAAAAAAAAAKAAgAAAAAAAAAAAAKAAkAAAAAAAAAAAAKAAoAAAABAAAAAAA=")
-tile_set = ExtResource("3_70who")
+tile_set = ExtResource("3_5h1m7")
 
-[node name="WallLayer" type="TileMapLayer" parent="Room1" unique_id=1707341335]
+[node name="WallLayer" type="TileMapLayer" parent="Room1" unique_id=922579565]
 y_sort_enabled = true
 tile_map_data = PackedByteArray("AAAAAAAAAAAAAAEAAAAAAAEAAAAAAAEAAAAAAAIAAAAGAAEAAAAAAAMAAAAAAAEAAAAAAAQAAAAAAAEAAAAAAAUAAAABAAEAAAAAAAYAAAAAAAEAAAAAAAcAAAAAAAEAAAAAAAgAAAAGAAEAAAAAAAkAAAAAAAEAAAAAAAoAAAAAAAEAAAABAAAAAAAAAAEAAAABAAoAAAAAAAEAAAACAAAAAAAGAAEAAAACAAoAAAAAAAEAAAADAAAAAAAAAAEAAAADAAoAAAAAAAEAAAAEAAAAAAAAAAEAAAAEAAoAAAAAAAEAAAAFAAAAAAABAAEAAAAFAAoAAAAAAAEAAAAGAAAAAAAAAAEAAAAGAAoAAAAAAAEAAAAHAAAAAAAAAAEAAAAHAAoAAAAAAAEAAAAIAAAAAAAGAAEAAAAIAAoAAAAAAAEAAAAJAAAAAAAAAAEAAAAJAAoAAAAAAAEAAAAKAAAAAAAAAAEAAAAKAAEAAAAAAAEAAAAKAAIAAAAAAAEAAAAKAAMAAAAAAAEAAAAKAAQAAAAAAAEAAAAKAAYAAAAAAAEAAAAKAAcAAAAAAAEAAAAKAAgAAAAAAAEAAAAKAAkAAAAAAAEAAAAKAAoAAAAAAAEAAAA=")
-tile_set = ExtResource("3_70who")
+tile_set = ExtResource("3_5h1m7")
 
-[node name="Doors" type="Node2D" parent="Room1" unique_id=532032134]
+[node name="Doors" type="Node2D" parent="Room1" unique_id=812861124]
 y_sort_enabled = true
 
-[node name="ExitDoor" type="Node2D" parent="Room1/Doors" unique_id=817091126 instance=ExtResource("4_hutm6")]
+[node name="ExitDoor" type="Node2D" parent="Room1/Doors" unique_id=686978994 instance=ExtResource("4_70who")]
 y_sort_enabled = true
 position = Vector2(192, 256)
-script = ExtResource("5_0kb0w")
+script = ExtResource("5_hutm6")
 
-[node name="Sprite2D" type="Sprite2D" parent="Room1/Doors/ExitDoor" unique_id=2113486360]
-texture = ExtResource("6_3v5xf")
-offset = Vector2(0, -16)
-region_enabled = true
-region_rect = Rect2(256, 32, 64, 64)
-
-[node name="Blocker" type="StaticBody2D" parent="Room1/Doors/ExitDoor" unique_id=35319745]
-collision_mask = 0
-
-[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Room1/Doors/ExitDoor/Blocker" unique_id=362959780]
-polygon = PackedVector2Array(0, -16, 32, 0, 0, 16, -32, 0)
-
-[node name="ExitTrigger" type="Area2D" parent="Room1/Doors/ExitDoor" unique_id=518617195]
-collision_layer = 0
-collision_mask = 2
-monitoring = false
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Room1/Doors/ExitDoor/ExitTrigger" unique_id=333001103]
-shape = SubResource("CircleShape2D_exit")
-disabled = true
-
-[node name="PlayerDetector" type="Area2D" parent="Room1" unique_id=589478147]
+[node name="PlayerDetector" type="Area2D" parent="Room1" unique_id=745131550]
 collision_layer = 0
 collision_mask = 2
 
-[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Room1/PlayerDetector" unique_id=408188688]
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Room1/PlayerDetector" unique_id=898200130]
 polygon = PackedVector2Array(32, 64, 256, 176, 32, 288, -192, 176)
 
-[node name="SpawnPoints" type="Node2D" parent="Room1" unique_id=632548942]
+[node name="SpawnPoints" type="Node2D" parent="Room1" unique_id=1765805132]
 
-[node name="Spawn1" type="Marker2D" parent="Room1/SpawnPoints" unique_id=962490932]
+[node name="Spawn1" type="Marker2D" parent="Room1/SpawnPoints" unique_id=1883374689]
 position = Vector2(32, 144)
 
-[node name="Spawn2" type="Marker2D" parent="Room1/SpawnPoints" unique_id=810618290]
+[node name="Spawn2" type="Marker2D" parent="Room1/SpawnPoints" unique_id=1630311225]
 position = Vector2(32, 208)
 
-[node name="EnemyContainer" type="Node2D" parent="Room1" unique_id=341490186]
+[node name="EnemyContainer" type="Node2D" parent="Room1" unique_id=68479439]
 y_sort_enabled = true
 
-[node name="PlayerSpawnPoint" type="Marker2D" parent="Room1" unique_id=1755144424]
+[node name="PlayerSpawnPoint" type="Marker2D" parent="Room1" unique_id=1557969268]
 position = Vector2(-64, 128)
 
-[node name="Lighting" type="Node2D" parent="Room1" unique_id=2091435130]
+[node name="Lighting" type="Node2D" parent="Room1" unique_id=1616053205]
 
-[node name="CanvasModulate" type="CanvasModulate" parent="Room1/Lighting" unique_id=1115471087]
-color = Color(0.32, 0.32, 0.44, 1)
-
-[node name="LanternLight1" type="PointLight2D" parent="Room1/Lighting" unique_id=1433107078]
+[node name="LanternLight1" type="PointLight2D" parent="Room1/Lighting" unique_id=1838032278]
 position = Vector2(96, 32)
 color = Color(1, 0.85, 0.55, 1)
 energy = 1.3
-texture = SubResource("GradientTexture2D_lun5j")
+texture = SubResource("GradientTexture2D_3v5xf")
 texture_scale = 2.2
 
-[node name="LanternLight2" type="PointLight2D" parent="Room1/Lighting" unique_id=1828711040]
+[node name="LanternLight2" type="PointLight2D" parent="Room1/Lighting" unique_id=501929222]
 position = Vector2(-32, 32)
 color = Color(1, 0.85, 0.55, 1)
 energy = 1.3
-texture = SubResource("GradientTexture2D_lun5j")
+texture = SubResource("GradientTexture2D_3v5xf")
 texture_scale = 2.2
 
-[node name="LanternLight3" type="PointLight2D" parent="Room1/Lighting" unique_id=803746221]
+[node name="LanternLight3" type="PointLight2D" parent="Room1/Lighting" unique_id=1519668114]
 position = Vector2(288, 128)
 color = Color(1, 0.85, 0.55, 1)
 energy = 1.3
-texture = SubResource("GradientTexture2D_lun5j")
+texture = SubResource("GradientTexture2D_3v5xf")
 texture_scale = 2.2
 
-[node name="LanternLight4" type="PointLight2D" parent="Room1/Lighting" unique_id=1234620501]
+[node name="LanternLight4" type="PointLight2D" parent="Room1/Lighting" unique_id=841522734]
 position = Vector2(-224, 128)
 color = Color(1, 0.85, 0.55, 1)
 energy = 1.3
-texture = SubResource("GradientTexture2D_lun5j")
+texture = SubResource("GradientTexture2D_3v5xf")
 texture_scale = 2.2
 
-[node name="Room2" type="Node2D" parent="." unique_id=2051368009]
+[node name="Room2" type="Node2D" parent="." unique_id=984997546]
 y_sort_enabled = true
 position = Vector2(1400, 0)
-script = ExtResource("2_5h1m7")
+script = ExtResource("2_pxbpp")
 room_id = &"room_2"
 
-[node name="FloorLayer" type="TileMapLayer" parent="Room2" unique_id=1104527310]
+[node name="FloorLayer" type="TileMapLayer" parent="Room2" unique_id=315700887]
 tile_map_data = PackedByteArray("AAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAUAAAABAAAAAAAAAAYAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAkAAAAAAAAAAAAAAAoAAAABAAAAAAABAAAAAAAAAAAAAAABAAEAAAAAAAAAAAABAAIAAAAAAAAAAAABAAMAAAAAAAAAAAABAAQAAAABAAAAAAABAAUAAAAAAAAAAAABAAYAAAAAAAAAAAABAAcAAAAAAAAAAAABAAgAAAAAAAAAAAABAAkAAAABAAAAAAABAAoAAAAAAAAAAAACAAAAAAAAAAAAAAACAAEAAAAAAAAAAAACAAIAAAAAAAAAAAACAAMAAAABAAAAAAACAAQAAAAAAAAAAAACAAUAAAAAAAAAAAACAAYAAAAAAAAAAAACAAcAAAAAAAAAAAACAAgAAAABAAAAAAACAAkAAAAAAAAAAAACAAoAAAAAAAAAAAADAAAAAAAAAAAAAAADAAEAAAAAAAAAAAADAAIAAAABAAAAAAADAAMAAAAAAAAAAAADAAQAAAAAAAAAAAADAAUAAAAAAAAAAAADAAYAAAAAAAAAAAADAAcAAAABAAAAAAADAAgAAAAAAAAAAAADAAkAAAAAAAAAAAADAAoAAAAAAAAAAAAEAAAAAAAAAAAAAAAEAAEAAAABAAAAAAAEAAIAAAAAAAAAAAAEAAMAAAAAAAAAAAAEAAQAAAAAAAAAAAAEAAUAAAACAAAAAAAEAAYAAAABAAAAAAAEAAcAAAAAAAAAAAAEAAgAAAAAAAAAAAAEAAkAAAAAAAAAAAAEAAoAAAAAAAAAAAAFAAAAAAABAAAAAAAFAAEAAAAAAAAAAAAFAAIAAAAAAAAAAAAFAAMAAAAAAAAAAAAFAAQAAAADAAAAAAAFAAUAAAAEAAAAAAAFAAYAAAADAAAAAAAFAAcAAAAAAAAAAAAFAAgAAAAAAAAAAAAFAAkAAAAAAAAAAAAFAAoAAAABAAAAAAAGAAAAAAAAAAAAAAAGAAEAAAAAAAAAAAAGAAIAAAAAAAAAAAAGAAMAAAAAAAAAAAAGAAQAAAABAAAAAAAGAAUAAAACAAAAAAAGAAYAAAAAAAAAAAAGAAcAAAAAAAAAAAAGAAgAAAAAAAAAAAAGAAkAAAABAAAAAAAGAAoAAAAAAAAAAAAHAAAAAAAAAAAAAAAHAAEAAAAAAAAAAAAHAAIAAAAAAAAAAAAHAAMAAAABAAAAAAAHAAQAAAAAAAAAAAAHAAUAAAAAAAAAAAAHAAYAAAAAAAAAAAAHAAcAAAAAAAAAAAAHAAgAAAABAAAAAAAHAAkAAAAAAAAAAAAHAAoAAAAAAAAAAAAIAAAAAAAAAAAAAAAIAAEAAAAAAAAAAAAIAAIAAAABAAAAAAAIAAMAAAAAAAAAAAAIAAQAAAAAAAAAAAAIAAUAAAAAAAAAAAAIAAYAAAAAAAAAAAAIAAcAAAABAAAAAAAIAAgAAAAAAAAAAAAIAAkAAAAAAAAAAAAIAAoAAAAAAAAAAAAJAAAAAAAAAAAAAAAJAAEAAAABAAAAAAAJAAIAAAAAAAAAAAAJAAMAAAAAAAAAAAAJAAQAAAAAAAAAAAAJAAUAAAAAAAAAAAAJAAYAAAABAAAAAAAJAAcAAAAAAAAAAAAJAAgAAAAAAAAAAAAJAAkAAAAAAAAAAAAJAAoAAAAAAAAAAAAKAAAAAAABAAAAAAAKAAEAAAAAAAAAAAAKAAIAAAAAAAAAAAAKAAMAAAAAAAAAAAAKAAQAAAAAAAAAAAAKAAUAAAAGAAAAAAAKAAYAAAAAAAAAAAAKAAcAAAAAAAAAAAAKAAgAAAAAAAAAAAAKAAkAAAAAAAAAAAAKAAoAAAABAAAAAAA=")
-tile_set = ExtResource("3_70who")
+tile_set = ExtResource("3_5h1m7")
 
-[node name="WallLayer" type="TileMapLayer" parent="Room2" unique_id=1993859061]
+[node name="WallLayer" type="TileMapLayer" parent="Room2" unique_id=1765922333]
 y_sort_enabled = true
 tile_map_data = PackedByteArray("AAAAAAAAAAAAAAEAAAAAAAEAAAAAAAEAAAAAAAIAAAAGAAEAAAAAAAMAAAAAAAEAAAAAAAQAAAAAAAEAAAAAAAUAAAABAAEAAAAAAAYAAAAAAAEAAAAAAAcAAAAAAAEAAAAAAAgAAAAGAAEAAAAAAAkAAAAAAAEAAAAAAAoAAAAAAAEAAAABAAAAAAAAAAEAAAABAAoAAAAAAAEAAAACAAAAAAAGAAEAAAACAAoAAAAAAAEAAAADAAAAAAAAAAEAAAADAAoAAAAAAAEAAAAEAAAAAAAAAAEAAAAEAAoAAAAAAAEAAAAFAAAAAAABAAEAAAAFAAoAAAAAAAEAAAAGAAAAAAAAAAEAAAAGAAoAAAAAAAEAAAAHAAAAAAAAAAEAAAAHAAoAAAAAAAEAAAAIAAAAAAAGAAEAAAAIAAoAAAAAAAEAAAAJAAAAAAAAAAEAAAAJAAoAAAAAAAEAAAAKAAAAAAAAAAEAAAAKAAEAAAAAAAEAAAAKAAIAAAAAAAEAAAAKAAMAAAAAAAEAAAAKAAQAAAAAAAEAAAAKAAYAAAAAAAEAAAAKAAcAAAAAAAEAAAAKAAgAAAAAAAEAAAAKAAkAAAAAAAEAAAAKAAoAAAAAAAEAAAA=")
-tile_set = ExtResource("3_70who")
+tile_set = ExtResource("3_5h1m7")
 
-[node name="Doors" type="Node2D" parent="Room2" unique_id=475155018]
+[node name="Doors" type="Node2D" parent="Room2" unique_id=1673024766]
 y_sort_enabled = true
 
-[node name="ExitDoor" type="Node2D" parent="Room2/Doors" unique_id=1081458050 instance=ExtResource("4_hutm6")]
+[node name="ExitDoor" type="Node2D" parent="Room2/Doors" unique_id=723350098 instance=ExtResource("4_70who")]
 y_sort_enabled = true
 position = Vector2(192, 256)
-script = ExtResource("5_0kb0w")
+script = ExtResource("5_hutm6")
 
-[node name="Sprite2D" type="Sprite2D" parent="Room2/Doors/ExitDoor" unique_id=635824348]
-texture = ExtResource("6_3v5xf")
-offset = Vector2(0, -16)
-region_enabled = true
-region_rect = Rect2(256, 32, 64, 64)
-
-[node name="Blocker" type="StaticBody2D" parent="Room2/Doors/ExitDoor" unique_id=783650101]
-collision_mask = 0
-
-[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Room2/Doors/ExitDoor/Blocker" unique_id=1197846748]
-polygon = PackedVector2Array(0, -16, 32, 0, 0, 16, -32, 0)
-
-[node name="ExitTrigger" type="Area2D" parent="Room2/Doors/ExitDoor" unique_id=1603622883]
-collision_layer = 0
-collision_mask = 2
-monitoring = false
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Room2/Doors/ExitDoor/ExitTrigger" unique_id=612221843]
-shape = SubResource("CircleShape2D_exit")
-disabled = true
-
-[node name="PlayerDetector" type="Area2D" parent="Room2" unique_id=1175532381]
+[node name="PlayerDetector" type="Area2D" parent="Room2" unique_id=792847713]
 collision_layer = 0
 collision_mask = 2
 
-[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Room2/PlayerDetector" unique_id=847812377]
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Room2/PlayerDetector" unique_id=72496942]
 polygon = PackedVector2Array(32, 64, 256, 176, 32, 288, -192, 176)
 
-[node name="SpawnPoints" type="Node2D" parent="Room2" unique_id=34706913]
+[node name="SpawnPoints" type="Node2D" parent="Room2" unique_id=1058786509]
 
-[node name="Spawn1" type="Marker2D" parent="Room2/SpawnPoints" unique_id=1272981500]
+[node name="Spawn1" type="Marker2D" parent="Room2/SpawnPoints" unique_id=232859783]
 position = Vector2(32, 112)
 
-[node name="Spawn2" type="Marker2D" parent="Room2/SpawnPoints" unique_id=90477211]
+[node name="Spawn2" type="Marker2D" parent="Room2/SpawnPoints" unique_id=1143314544]
 position = Vector2(160, 176)
 
-[node name="Spawn3" type="Marker2D" parent="Room2/SpawnPoints" unique_id=1891262193]
+[node name="Spawn3" type="Marker2D" parent="Room2/SpawnPoints" unique_id=1601150973]
 position = Vector2(-96, 176)
 
-[node name="Spawn4" type="Marker2D" parent="Room2/SpawnPoints" unique_id=860606070]
+[node name="Spawn4" type="Marker2D" parent="Room2/SpawnPoints" unique_id=1932923164]
 position = Vector2(32, 240)
 
-[node name="EnemyContainer" type="Node2D" parent="Room2" unique_id=1968585189]
+[node name="EnemyContainer" type="Node2D" parent="Room2" unique_id=2125164815]
 y_sort_enabled = true
 
-[node name="PlayerSpawnPoint" type="Marker2D" parent="Room2" unique_id=986990145]
+[node name="PlayerSpawnPoint" type="Marker2D" parent="Room2" unique_id=2110777447]
 position = Vector2(-64, 128)
 
-[node name="Lighting" type="Node2D" parent="Room2" unique_id=45378809]
+[node name="Lighting" type="Node2D" parent="Room2" unique_id=332057838]
 
-[node name="CanvasModulate" type="CanvasModulate" parent="Room2/Lighting" unique_id=1079125528]
-color = Color(0.32, 0.32, 0.44, 1)
-
-[node name="LanternLight1" type="PointLight2D" parent="Room2/Lighting" unique_id=2093277594]
+[node name="LanternLight1" type="PointLight2D" parent="Room2/Lighting" unique_id=956042060]
 position = Vector2(96, 32)
 color = Color(1, 0.85, 0.55, 1)
 energy = 1.3
-texture = SubResource("GradientTexture2D_8hgcb")
+texture = SubResource("GradientTexture2D_lun5j")
 texture_scale = 2.2
 
-[node name="LanternLight2" type="PointLight2D" parent="Room2/Lighting" unique_id=1457979956]
+[node name="LanternLight2" type="PointLight2D" parent="Room2/Lighting" unique_id=1938662041]
 position = Vector2(-32, 32)
 color = Color(1, 0.85, 0.55, 1)
 energy = 1.3
-texture = SubResource("GradientTexture2D_8hgcb")
+texture = SubResource("GradientTexture2D_lun5j")
 texture_scale = 2.2
 
-[node name="LanternLight3" type="PointLight2D" parent="Room2/Lighting" unique_id=2139948978]
+[node name="LanternLight3" type="PointLight2D" parent="Room2/Lighting" unique_id=1781473300]
 position = Vector2(288, 128)
 color = Color(1, 0.85, 0.55, 1)
 energy = 1.3
-texture = SubResource("GradientTexture2D_8hgcb")
+texture = SubResource("GradientTexture2D_lun5j")
 texture_scale = 2.2
 
-[node name="LanternLight4" type="PointLight2D" parent="Room2/Lighting" unique_id=1026569791]
+[node name="LanternLight4" type="PointLight2D" parent="Room2/Lighting" unique_id=1487806066]
 position = Vector2(-224, 128)
 color = Color(1, 0.85, 0.55, 1)
 energy = 1.3
-texture = SubResource("GradientTexture2D_8hgcb")
+texture = SubResource("GradientTexture2D_lun5j")
 texture_scale = 2.2
 
-[node name="Room3" type="Node2D" parent="." unique_id=1928147117]
+[node name="Room3" type="Node2D" parent="." unique_id=981644420]
 y_sort_enabled = true
 position = Vector2(2800, 0)
-script = ExtResource("2_5h1m7")
+script = ExtResource("2_pxbpp")
 room_id = &"room_3"
 
-[node name="FloorLayer" type="TileMapLayer" parent="Room3" unique_id=1840006225]
+[node name="FloorLayer" type="TileMapLayer" parent="Room3" unique_id=550506890]
 tile_map_data = PackedByteArray("AAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAUAAAABAAAAAAAAAAYAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAkAAAAAAAAAAAAAAAoAAAABAAAAAAABAAAAAAAAAAAAAAABAAEAAAAAAAAAAAABAAIAAAAAAAAAAAABAAMAAAAAAAAAAAABAAQAAAABAAAAAAABAAUAAAAAAAAAAAABAAYAAAAAAAAAAAABAAcAAAAAAAAAAAABAAgAAAAAAAAAAAABAAkAAAABAAAAAAABAAoAAAAAAAAAAAACAAAAAAAAAAAAAAACAAEAAAAAAAAAAAACAAIAAAAAAAAAAAACAAMAAAABAAAAAAACAAQAAAAAAAAAAAACAAUAAAAAAAAAAAACAAYAAAAAAAAAAAACAAcAAAAAAAAAAAACAAgAAAABAAAAAAACAAkAAAAAAAAAAAACAAoAAAAAAAAAAAADAAAAAAAAAAAAAAADAAEAAAAAAAAAAAADAAIAAAABAAAAAAADAAMAAAAAAAAAAAADAAQAAAAAAAAAAAADAAUAAAAAAAAAAAADAAYAAAAAAAAAAAADAAcAAAABAAAAAAADAAgAAAAAAAAAAAADAAkAAAAAAAAAAAADAAoAAAAAAAAAAAAEAAAAAAAAAAAAAAAEAAEAAAABAAAAAAAEAAIAAAAAAAAAAAAEAAMAAAAAAAAAAAAEAAQAAAAAAAAAAAAEAAUAAAACAAAAAAAEAAYAAAABAAAAAAAEAAcAAAAAAAAAAAAEAAgAAAAAAAAAAAAEAAkAAAAAAAAAAAAEAAoAAAAAAAAAAAAFAAAAAAABAAAAAAAFAAEAAAAAAAAAAAAFAAIAAAAAAAAAAAAFAAMAAAAAAAAAAAAFAAQAAAADAAAAAAAFAAUAAAAEAAAAAAAFAAYAAAADAAAAAAAFAAcAAAAAAAAAAAAFAAgAAAAAAAAAAAAFAAkAAAAAAAAAAAAFAAoAAAABAAAAAAAGAAAAAAAAAAAAAAAGAAEAAAAAAAAAAAAGAAIAAAAAAAAAAAAGAAMAAAAAAAAAAAAGAAQAAAABAAAAAAAGAAUAAAACAAAAAAAGAAYAAAAAAAAAAAAGAAcAAAAAAAAAAAAGAAgAAAAAAAAAAAAGAAkAAAABAAAAAAAGAAoAAAAAAAAAAAAHAAAAAAAAAAAAAAAHAAEAAAAAAAAAAAAHAAIAAAAAAAAAAAAHAAMAAAABAAAAAAAHAAQAAAAAAAAAAAAHAAUAAAAAAAAAAAAHAAYAAAAAAAAAAAAHAAcAAAAAAAAAAAAHAAgAAAABAAAAAAAHAAkAAAAAAAAAAAAHAAoAAAAAAAAAAAAIAAAAAAAAAAAAAAAIAAEAAAAAAAAAAAAIAAIAAAABAAAAAAAIAAMAAAAAAAAAAAAIAAQAAAAAAAAAAAAIAAUAAAAAAAAAAAAIAAYAAAAAAAAAAAAIAAcAAAABAAAAAAAIAAgAAAAAAAAAAAAIAAkAAAAAAAAAAAAIAAoAAAAAAAAAAAAJAAAAAAAAAAAAAAAJAAEAAAABAAAAAAAJAAIAAAAAAAAAAAAJAAMAAAAAAAAAAAAJAAQAAAAAAAAAAAAJAAUAAAAAAAAAAAAJAAYAAAABAAAAAAAJAAcAAAAAAAAAAAAJAAgAAAAAAAAAAAAJAAkAAAAAAAAAAAAJAAoAAAAAAAAAAAAKAAAAAAABAAAAAAAKAAEAAAAAAAAAAAAKAAIAAAAAAAAAAAAKAAMAAAAAAAAAAAAKAAQAAAAAAAAAAAAKAAUAAAAGAAAAAAAKAAYAAAAAAAAAAAAKAAcAAAAAAAAAAAAKAAgAAAAAAAAAAAAKAAkAAAAAAAAAAAAKAAoAAAABAAAAAAA=")
-tile_set = ExtResource("3_70who")
+tile_set = ExtResource("3_5h1m7")
 
-[node name="WallLayer" type="TileMapLayer" parent="Room3" unique_id=854721126]
+[node name="WallLayer" type="TileMapLayer" parent="Room3" unique_id=1733341449]
 y_sort_enabled = true
 tile_map_data = PackedByteArray("AAAAAAAAAAAAAAEAAAAAAAEAAAAAAAEAAAAAAAIAAAAGAAEAAAAAAAMAAAAAAAEAAAAAAAQAAAAAAAEAAAAAAAUAAAABAAEAAAAAAAYAAAAAAAEAAAAAAAcAAAAAAAEAAAAAAAgAAAAGAAEAAAAAAAkAAAAAAAEAAAAAAAoAAAAAAAEAAAABAAAAAAAAAAEAAAABAAoAAAAAAAEAAAACAAAAAAAGAAEAAAACAAoAAAAAAAEAAAADAAAAAAAAAAEAAAADAAoAAAAAAAEAAAAEAAAAAAAAAAEAAAAEAAoAAAAAAAEAAAAFAAAAAAABAAEAAAAFAAoAAAAAAAEAAAAGAAAAAAAAAAEAAAAGAAoAAAAAAAEAAAAHAAAAAAAAAAEAAAAHAAoAAAAAAAEAAAAIAAAAAAAGAAEAAAAIAAoAAAAAAAEAAAAJAAAAAAAAAAEAAAAJAAoAAAAAAAEAAAAKAAAAAAAAAAEAAAAKAAEAAAAAAAEAAAAKAAIAAAAAAAEAAAAKAAMAAAAAAAEAAAAKAAQAAAAAAAEAAAAKAAYAAAAAAAEAAAAKAAcAAAAAAAEAAAAKAAgAAAAAAAEAAAAKAAkAAAAAAAEAAAAKAAoAAAAAAAEAAAA=")
-tile_set = ExtResource("3_70who")
+tile_set = ExtResource("3_5h1m7")
 
-[node name="Doors" type="Node2D" parent="Room3" unique_id=1168166401]
+[node name="Doors" type="Node2D" parent="Room3" unique_id=167119510]
 y_sort_enabled = true
 
-[node name="ExitDoor" type="Node2D" parent="Room3/Doors" unique_id=494219037 instance=ExtResource("4_hutm6")]
+[node name="ExitDoor" type="Node2D" parent="Room3/Doors" unique_id=1460078500 instance=ExtResource("4_70who")]
 y_sort_enabled = true
 position = Vector2(192, 256)
-script = ExtResource("5_0kb0w")
+script = ExtResource("5_hutm6")
 
-[node name="Sprite2D" type="Sprite2D" parent="Room3/Doors/ExitDoor" unique_id=1210812261]
-texture = ExtResource("6_3v5xf")
-offset = Vector2(0, -16)
-region_enabled = true
-region_rect = Rect2(256, 32, 64, 64)
-
-[node name="Blocker" type="StaticBody2D" parent="Room3/Doors/ExitDoor" unique_id=90413039]
-collision_mask = 0
-
-[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Room3/Doors/ExitDoor/Blocker" unique_id=2129730463]
-polygon = PackedVector2Array(0, -16, 32, 0, 0, 16, -32, 0)
-
-[node name="ExitTrigger" type="Area2D" parent="Room3/Doors/ExitDoor" unique_id=1326578174]
-collision_layer = 0
-collision_mask = 2
-monitoring = false
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Room3/Doors/ExitDoor/ExitTrigger" unique_id=1842104718]
-shape = SubResource("CircleShape2D_exit")
-disabled = true
-
-[node name="PlayerDetector" type="Area2D" parent="Room3" unique_id=1893584583]
+[node name="PlayerDetector" type="Area2D" parent="Room3" unique_id=319675802]
 collision_layer = 0
 collision_mask = 2
 
-[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Room3/PlayerDetector" unique_id=502478256]
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Room3/PlayerDetector" unique_id=901894337]
 polygon = PackedVector2Array(32, 64, 256, 176, 32, 288, -192, 176)
 
-[node name="SpawnPoints" type="Node2D" parent="Room3" unique_id=657395440]
+[node name="SpawnPoints" type="Node2D" parent="Room3" unique_id=487790264]
 
-[node name="EnemyContainer" type="Node2D" parent="Room3" unique_id=574950763]
+[node name="EnemyContainer" type="Node2D" parent="Room3" unique_id=1189288452]
 y_sort_enabled = true
 
-[node name="PlayerSpawnPoint" type="Marker2D" parent="Room3" unique_id=819394682]
+[node name="PlayerSpawnPoint" type="Marker2D" parent="Room3" unique_id=1580790581]
 position = Vector2(-64, 128)
 
-[node name="Lighting" type="Node2D" parent="Room3" unique_id=795336488]
+[node name="Lighting" type="Node2D" parent="Room3" unique_id=351086548]
 
-[node name="CanvasModulate" type="CanvasModulate" parent="Room3/Lighting" unique_id=986860627]
-color = Color(0.32, 0.32, 0.44, 1)
-
-[node name="LanternLight1" type="PointLight2D" parent="Room3/Lighting" unique_id=1702104119]
+[node name="LanternLight1" type="PointLight2D" parent="Room3/Lighting" unique_id=1774254600]
 position = Vector2(96, 32)
 color = Color(1, 0.85, 0.55, 1)
 energy = 1.3
-texture = SubResource("GradientTexture2D_3vnky")
+texture = SubResource("GradientTexture2D_8hgcb")
 texture_scale = 2.2
 
-[node name="LanternLight2" type="PointLight2D" parent="Room3/Lighting" unique_id=408559822]
+[node name="LanternLight2" type="PointLight2D" parent="Room3/Lighting" unique_id=715407067]
 position = Vector2(-32, 32)
 color = Color(1, 0.85, 0.55, 1)
 energy = 1.3
-texture = SubResource("GradientTexture2D_3vnky")
+texture = SubResource("GradientTexture2D_8hgcb")
 texture_scale = 2.2
 
-[node name="LanternLight3" type="PointLight2D" parent="Room3/Lighting" unique_id=1113620106]
+[node name="LanternLight3" type="PointLight2D" parent="Room3/Lighting" unique_id=220643165]
 position = Vector2(288, 128)
 color = Color(1, 0.85, 0.55, 1)
 energy = 1.3
-texture = SubResource("GradientTexture2D_3vnky")
+texture = SubResource("GradientTexture2D_8hgcb")
 texture_scale = 2.2
 
-[node name="LanternLight4" type="PointLight2D" parent="Room3/Lighting" unique_id=658031800]
+[node name="LanternLight4" type="PointLight2D" parent="Room3/Lighting" unique_id=683028629]
 position = Vector2(-224, 128)
 color = Color(1, 0.85, 0.55, 1)
 energy = 1.3
-texture = SubResource("GradientTexture2D_3vnky")
+texture = SubResource("GradientTexture2D_8hgcb")
 texture_scale = 2.2

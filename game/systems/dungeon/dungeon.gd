@@ -6,6 +6,7 @@ extends Node2D
 signal room_changed(from_index: int, to_index: int, new_room: Room)
 signal dungeon_reset
 signal dungeon_completed
+signal run_reset_requested
 
 @export var rooms: Array[Room] = []
 @export var player: Node2D = null
@@ -69,10 +70,11 @@ func transition_to_room(target_index: int) -> void:
 	
 	teleport_player_to_room(current_room_index)
 	
-	if camera != null and new_room != null:
-		# กล้องตัดภาพ/เลื่อนไปตำแหน่งห้องใหม่
-		var room_center: Vector2 = new_room.global_position + Vector2(32, 176)
-		camera.global_position = room_center
+	if camera != null:
+		if camera.target != null:
+			camera.snap_to_target()
+		elif new_room != null:
+			camera.set_camera_position(new_room.global_position + Vector2(32, 176))
 	
 	room_changed.emit(prev_index, current_room_index, new_room)
 
@@ -94,14 +96,18 @@ func reset_dungeon() -> void:
 	teleport_player_to_room(0)
 	
 	var first_room: Room = get_current_room()
-	if camera != null and first_room != null:
-		camera.global_position = first_room.global_position + Vector2(32, 176)
+	if camera != null:
+		if camera.target != null:
+			camera.snap_to_target()
+		elif first_room != null:
+			camera.set_camera_position(first_room.global_position + Vector2(32, 176))
 	
 	dungeon_reset.emit()
 
 
 func _on_player_died() -> void:
 	reset_dungeon()
+	run_reset_requested.emit()
 
 
 func _on_room_door_entered(room: Room, _door: Door) -> void:

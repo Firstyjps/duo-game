@@ -122,16 +122,14 @@ func spawn_enemies() -> void:
 		if enemy_scene == null:
 			continue
 		var enemy: Node = enemy_scene.instantiate()
-		if enemy is Node2D:
-			(enemy as Node2D).global_position = marker.global_position
 		
 		if enemy_container != null:
 			enemy_container.add_child(enemy)
 		else:
 			add_child(enemy)
 		
-		if enemy.has_method("setup"):
-			enemy.setup()
+		if enemy is Node2D:
+			(enemy as Node2D).global_position = marker.global_position
 		
 		register_enemy(enemy)
 	
@@ -146,6 +144,15 @@ func register_enemy(enemy: Node) -> void:
 	if not (enemy in spawned_enemies):
 		spawned_enemies.append(enemy)
 		total_enemies = spawned_enemies.size()
+		if not enemy.tree_exiting.is_connected(_on_enemy_tree_exiting):
+			enemy.tree_exiting.connect(_on_enemy_tree_exiting.bind(enemy))
+
+
+func _on_enemy_tree_exiting(enemy: Node) -> void:
+	if enemy in spawned_enemies:
+		spawned_enemies.erase(enemy)
+		if state == State.LOCKED and spawned_enemies.is_empty():
+			clear_room()
 
 
 func _on_enemy_died(enemy: Node, _enemy_id: StringName, _pos: Vector2) -> void:
@@ -167,13 +174,18 @@ func clear_room() -> void:
 
 
 func reset_room() -> void:
-	for enemy: Node in spawned_enemies:
+	state = State.IDLE
+	var to_free: Array[Node] = spawned_enemies.duplicate()
+	spawned_enemies.clear()
+	for enemy: Node in to_free:
 		if is_instance_valid(enemy):
 			enemy.queue_free()
-	spawned_enemies.clear()
+	if enemy_container != null:
+		for child: Node in enemy_container.get_children():
+			if is_instance_valid(child):
+				child.queue_free()
 	enemies_killed = 0
 	total_enemies = 0
-	state = State.IDLE
 	open_all_doors()
 
 
@@ -208,7 +220,7 @@ func _on_player_detector_body_entered(body: Node2D) -> void:
 	if not auto_start_on_player_enter:
 		return
 	if state == State.IDLE and (body.is_in_group(&"player") or (body.collision_layer & Combat.LAYER_PLAYER) != 0):
-		start_room()
+		start_room.call_deferred()
 
 
 func _on_door_entered(door: Door) -> void:

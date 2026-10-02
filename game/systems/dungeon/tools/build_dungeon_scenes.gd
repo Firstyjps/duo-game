@@ -31,6 +31,14 @@ func _initialize() -> void:
 	# 2. สร้าง dungeon.tscn (3 ห้อง)
 	var dungeon: Node2D = dungeon_script.new()
 	dungeon.name = "Dungeon"
+	dungeon.y_sort_enabled = true
+	
+	# CanvasModulate ตัวเดียวที่ Dungeon
+	var modulate: CanvasModulate = CanvasModulate.new()
+	modulate.name = "CanvasModulate"
+	modulate.color = Color(0.32, 0.32, 0.44, 1.0)
+	dungeon.add_child(modulate)
+	modulate.owner = dungeon
 	
 	var r1: Node2D = _build_room("Room1", &"room_1", 2, Vector2i(10, 5), ts, door_scene, room_script)
 	r1.position = Vector2(0, 0)
@@ -182,15 +190,10 @@ func _build_room(node_name: String, r_id: StringName, spawn_count: int, exit_doo
 	p_spawn.position = floor_layer.map_to_local(Vector2i(2, 5))
 	room.add_child(p_spawn)
 	
-	# Lighting: CanvasModulate + PointLight2D lanterns
+	# Lighting: PointLight2D lanterns
 	var lighting: Node2D = Node2D.new()
 	lighting.name = "Lighting"
 	room.add_child(lighting)
-	
-	var modulate: CanvasModulate = CanvasModulate.new()
-	modulate.name = "CanvasModulate"
-	modulate.color = Color(0.32, 0.32, 0.44, 1.0)
-	lighting.add_child(modulate)
 	
 	var grad_tex: GradientTexture2D = _create_lantern_light_texture()
 	var lantern_coords: Array[Vector2i] = [Vector2i(2, 0), Vector2i(0, 2), Vector2i(8, 0), Vector2i(0, 8)]
@@ -231,5 +234,8 @@ func _create_lantern_light_texture() -> GradientTexture2D:
 func _set_owner_recursive(node: Node, new_owner: Node) -> void:
 	if node != new_owner:
 		node.owner = new_owner
+		# ไม่ตั้ง owner ให้ลูกของ node ที่มาจาก scene อื่น (เช่น Door ที่มี scene_file_path != "")
+		if node.scene_file_path != "":
+			return
 	for child: Node in node.get_children():
 		_set_owner_recursive(child, new_owner)

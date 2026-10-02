@@ -22,6 +22,7 @@ func _ready() -> void:
 		dungeon.room_changed.connect(_on_room_changed)
 		dungeon.dungeon_reset.connect(_on_dungeon_reset)
 		dungeon.dungeon_completed.connect(_on_dungeon_completed)
+		dungeon.run_reset_requested.connect(_on_run_reset_requested)
 		
 		for r: Room in dungeon.rooms:
 			r.room_started.connect(_on_room_state_changed)
@@ -41,9 +42,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	var key_event: InputEventKey = event as InputEventKey
 	match key_event.keycode:
 		KEY_R:
-			if dungeon != null:
-				dungeon.reset_dungeon()
-				_update_hud()
+			get_tree().reload_current_scene.call_deferred()
 		KEY_1:
 			if dungeon != null:
 				dungeon.transition_to_room(0)
@@ -57,13 +56,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				dungeon.transition_to_room(2)
 				_update_hud()
 		KEY_K:
-			# Debug: กำจัดศัตรูในห้องปัจจุบันทันทีเพื่อทดสอบประตูเปิด
+			# Debug: กำจัดศัตรูในห้องปัจจุบันทันทีเพื่อทดสอบประตูเปิด (ทำดาเมจอย่างเดียว ไม่ emit เอง)
 			var current: Room = dungeon.get_current_room() if dungeon != null else null
 			if current != null and current.state == Room.State.LOCKED:
 				var enemies_to_kill: Array[Node] = current.spawned_enemies.duplicate()
 				for enemy: Node in enemies_to_kill:
 					if is_instance_valid(enemy):
-						EventBus.enemy_died.emit(enemy, &"slime", enemy.global_position if enemy is Node2D else Vector2.ZERO)
 						if enemy.has_node("Health"):
 							var h: Health = enemy.get_node("Health") as Health
 							h.take_damage(999)
@@ -116,3 +114,8 @@ func _on_dungeon_reset() -> void:
 func _on_dungeon_completed() -> void:
 	print("Dungeon completed!")
 	_update_hud()
+
+
+func _on_run_reset_requested() -> void:
+	print("Run reset requested (player died) -> reloading scene")
+	get_tree().reload_current_scene.call_deferred()

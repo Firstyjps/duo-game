@@ -32,19 +32,19 @@ func _init() -> void:
 	for col in range(8):
 		src.create_tile(Vector2i(col, 0), Vector2i(1, 1))
 	
-	# Wall blocks & doors: Rows 1-2 (cols 0..7, size 1x2, texture_origin (0, -16))
+	# Wall blocks & doors: Rows 1-2 (cols 0..7, size 1x2, texture_origin (0, 16))
 	# Cols with full collision: 0, 1, 2, 3, 4 (door closed), 6 (lantern), 7 (altar)
 	for col in [0, 1, 2, 3, 4, 6, 7]:
 		src.create_tile(Vector2i(col, 1), Vector2i(1, 2))
 		var td: TileData = src.get_tile_data(Vector2i(col, 1), 0)
-		td.texture_origin = Vector2i(0, -16)
+		td.texture_origin = Vector2i(0, 16)
 		td.add_collision_polygon(0)
 		td.set_collision_polygon_points(0, 0, diamond_collision)
 	
-	# Col 5: Door Open (size 1x2, texture_origin (0, -16), passable without collision)
+	# Col 5: Door Open (size 1x2, texture_origin (0, 16), passable without collision)
 	src.create_tile(Vector2i(5, 1), Vector2i(1, 2))
 	var td_door_open: TileData = src.get_tile_data(Vector2i(5, 1), 0)
-	td_door_open.texture_origin = Vector2i(0, -16)
+	td_door_open.texture_origin = Vector2i(0, 16)
 	
 	# Special / accent floor tiles: Row 3 (cols 0..7, size 1x1)
 	for col in range(8):

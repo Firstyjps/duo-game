@@ -26,7 +26,13 @@
 
 ## กติกาเฉพาะระบบ / กับดักที่เคยเจอ
 - มุมมอง isometric: ใช้ TileSet `TILE_SHAPE_ISOMETRIC` + `TILE_LAYOUT_DIAMOND_DOWN` tile 64×32
-- บล็อกกำแพงสูง 32 px ใช้ `size_in_atlas = Vector2i(1, 2)` (64×64 px) และต้องตั้ง `texture_origin = Vector2i(0, -16)` เพื่อให้ diamond ฐานกำแพงประกบกับ diamond พื้นอย่างพอดี
+- บล็อกกำแพงสูง 32 px ใช้ `size_in_atlas = Vector2i(1, 2)` (64×64 px) และต้องตั้ง `texture_origin = Vector2i(0, 16)` (ห้ามใช้ค่าลบ -16) เพื่อให้ฐานเพชรของกำแพงตรงกับ collision polygon ของ cell พอดี
+- การสร้าง scene ซ้อน (`tools/build_dungeon_scenes.gd`): ห้ามตั้ง owner ให้ลูกของ node ที่มาจาก scene อื่น (`node.scene_file_path != ""`) เพราะ PackedScene จะบันทึก node ซ้ำซ้อนและทำให้เกิด RID leak ตอน instantiate/free
+- การ spawn ศัตรู: ต้อง `add_child` เข้า tree ก่อน แล้วค่อยตั้ง `global_position = marker.global_position` เพื่อให้พิกัดคำนวณถูกเมื่อห้องไม่ได้อยู่ที่ origin
+- ศัตรูที่ถูก free โดยไม่ผ่าน `EventBus.enemy_died`: ต้องต่อ `tree_exiting` ลบออกจาก `spawned_enemies` เพื่อไม่ให้ห้องค้างที่ LOCKED
+- Player detector callback: ใช้ `start_room.call_deferred()` หลีกเลี่ยงการสลับ physics state ระหว่าง query flush
+- Y-Sort: ต้องเปิด `y_sort_enabled = true` ที่ root ของ Sandbox, Dungeon, Room, EnemyContainer, Doors, WallLayer เพื่อให้การ render ทับซ้อนถูกต้อง
+- แสงสลัว: ใช้ `CanvasModulate` ตัวเดียวที่ระดับ `Dungeon` (ไม่ใส่ซ้ำในแต่ละห้อง) เพื่อไม่ให้สี modulate ทับซ้อนกัน
 - กำแพงต้องมี collision polygon รูปเพชร `[Vector2(0, -16), Vector2(32, 0), Vector2(0, 16), Vector2(-32, 0)]` บน physics layer `world` (`Combat.LAYER_WORLD`)
 - การ toggle `disabled` และ `monitoring` ของ `Door` ต้องใช้ `set_deferred` เมื่ออยู่ใน SceneTree เพื่อป้องกัน error `Can't change this state while flushing queries` ในช่วง physics callback
 - นับ `EventBus.enemy_died` เฉพาะตัวที่อยู่ใน `spawned_enemies` ของห้องนั้น ไม่นับศัตรูของห้องอื่น
