@@ -1,0 +1,63 @@
+{
+ "cell": 96,
+ "dirs": [
+  "south",
+  "south-east",
+  "east",
+  "north-east",
+  "north",
+  "north-west",
+  "west",
+  "south-west"
+ ],
+ "anims": [
+  {
+   "name": "idle",
+   "src": "idle",
+   "fps": 5.0,
+   "loop": true,
+   "row": 0,
+   "frames": 4
+  },
+  {
+   "name": "walk",
+   "src": "walk",
+   "fps": 10.0,
+   "loop": true,
+   "row": 8,
+   "frames": 8
+  },
+  {
+   "name": "run",
+   "src": "run",
+   "fps": 14.0,
+   "loop": true,
+   "row": 16,
+   "frames": 8
+  },
+  {
+   "name": "dodge",
+   "src": "dodge",
+   "fps": 16.0,
+   "loop": false,
+   "row": 24,
+   "frames": 7
+  },
+  {
+   "name": "hurt",
+   "src": "hurt",
+   "fps": 12.0,
+   "loop": false,
+   "row": 32,
+   "frames": 6
+  },
+  {
+   "name": "death",
+   "src": "death",
+   "fps": 8.0,
+   "loop": false,
+   "row": 40,
+   "frames": 7
+  }
+ ]
+}
