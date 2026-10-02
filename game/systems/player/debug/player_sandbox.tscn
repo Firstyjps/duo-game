@@ -1,15 +1,19 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://systems/player/debug/player_sandbox.gd" id="1_sandbox"]
 [ext_resource type="PackedScene" path="res://systems/player/player.tscn" id="2_player"]
 [ext_resource type="Script" path="res://systems/player/debug/dummy.gd" id="3_dummy"]
 [ext_resource type="Script" path="res://core/combat/health.gd" id="4_health"]
 [ext_resource type="Script" path="res://core/combat/hurtbox.gd" id="5_hurtbox"]
+[ext_resource type="Script" path="res://core/combat/hitbox.gd" id="6_hitbox"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_dummy_body"]
 radius = 12.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_dummy_hurt"]
+radius = 16.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_dummy_hit"]
 radius = 16.0
 
 [node name="PlayerSandbox" type="Node2D"]
@@ -24,7 +28,7 @@ color = Color(0.082, 0.094, 0.122, 1)
 position = Vector2(350, 270)
 
 [node name="Dummy" type="CharacterBody2D" parent="."]
-position = Vector2(580, 270)
+position = Vector2(560, 240)
 script = ExtResource("3_dummy")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Dummy"]
@@ -42,6 +46,16 @@ team = 1
 position = Vector2(0, -16)
 shape = SubResource("CircleShape2D_dummy_hurt")
 
+[node name="Hitbox" type="Area2D" parent="Dummy"]
+script = ExtResource("6_hitbox")
+team = 1
+damage = 3
+knockback_force = 120.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Dummy/Hitbox"]
+position = Vector2(0, -16)
+shape = SubResource("CircleShape2D_dummy_hit")
+
 [node name="Label" type="Label" parent="Dummy"]
 offset_left = -60.0
 offset_top = -60.0
@@ -50,18 +64,66 @@ offset_bottom = -37.0
 text = "Dummy HP: 100/100"
 horizontal_alignment = 1
 
+[node name="Dummy2" type="CharacterBody2D" parent="."]
+position = Vector2(650, 320)
+script = ExtResource("3_dummy")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Dummy2"]
+shape = SubResource("CircleShape2D_dummy_body")
+
+[node name="Health" type="Node" parent="Dummy2"]
+script = ExtResource("4_health")
+max_hp = 100
+
+[node name="Hurtbox" type="Area2D" parent="Dummy2"]
+script = ExtResource("5_hurtbox")
+team = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Dummy2/Hurtbox"]
+position = Vector2(0, -16)
+shape = SubResource("CircleShape2D_dummy_hurt")
+
+[node name="Hitbox" type="Area2D" parent="Dummy2"]
+script = ExtResource("6_hitbox")
+team = 1
+damage = 3
+knockback_force = 120.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Dummy2/Hitbox"]
+position = Vector2(0, -16)
+shape = SubResource("CircleShape2D_dummy_hit")
+
+[node name="Label" type="Label" parent="Dummy2"]
+offset_left = -60.0
+offset_top = -60.0
+offset_right = 60.0
+offset_bottom = -37.0
+text = "Dummy2 HP: 100/100"
+horizontal_alignment = 1
+
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 
 [node name="HUDLabel" type="Label" parent="CanvasLayer"]
 offset_left = 20.0
 offset_top = 20.0
-offset_right = 500.0
+offset_right = 600.0
 offset_bottom = 46.0
-text = "HP: 12/12  |  Stamina: 100/100  |  State: MOVE"
+text = "HP: 12/12  |  Stamina: 100/100  |  State: MOVE  |  Lock-on: None"
 
 [node name="HelpLabel" type="Label" parent="CanvasLayer"]
 offset_left = 20.0
 offset_top = 50.0
-offset_right = 800.0
-offset_bottom = 76.0
-text = "WASD: เดิน | เมาส์: เล็ง | คลิกซ้าย / J: ฟัน (3 เฟส) | Space / Shift: Dodge (i-frames 0.24s)"
+offset_right = 940.0
+offset_bottom = 100.0
+text = "WASD: เดิน | เมาส์: เล็ง | คลิกซ้าย / J: ฟัน (กดค้าง = ชาร์จ) | Space / Shift: Dodge (i-frames 0.24s)
+F / คลิกขวา: Parry (0.18s) | Tab / คลิกกลาง: Lock-on (กดซ้ำสลับเป้า) | T: สั่งหุ่นโจมตี"
+
+[node name="ParryLabel" type="Label" parent="CanvasLayer"]
+visible = false
+offset_left = 380.0
+offset_top = 180.0
+offset_right = 580.0
+offset_bottom = 210.0
+theme_override_colors/font_color = Color(0.3, 0.9, 1, 1)
+text = "★ PARRY SUCCESS! (+20 SP)"
+horizontal_alignment = 1
