@@ -1,0 +1,32 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://systems/dungeon/room/door.gd" id="1_door"]
+[ext_resource type="Texture2D" path="res://systems/dungeon/art/iso_tiles.png" id="2_tiles"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_exit"]
+radius = 14.0
+
+[node name="Door" type="Node2D"]
+y_sort_enabled = true
+script = ExtResource("1_door")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_tiles")
+offset = Vector2(0, -16)
+region_enabled = true
+region_rect = Rect2(256, 32, 64, 64)
+
+[node name="Blocker" type="StaticBody2D" parent="."]
+collision_mask = 0
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Blocker"]
+polygon = PackedVector2Array(0, -16, 32, 0, 0, 16, -32, 0)
+
+[node name="ExitTrigger" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+monitoring = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ExitTrigger"]
+shape = SubResource("CircleShape2D_exit")
+disabled = true

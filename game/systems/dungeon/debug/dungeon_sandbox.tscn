@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://systems/dungeon/debug/dungeon_sandbox.gd" id="1_sb"]
+[ext_resource type="PackedScene" path="res://systems/dungeon/dungeon.tscn" id="2_dungeon"]
+[ext_resource type="PackedScene" path="res://systems/player/player.tscn" id="3_player"]
+[ext_resource type="Script" path="res://systems/camera/game_camera.gd" id="4_camera"]
+
+[node name="DungeonSandbox" type="Node2D"]
+script = ExtResource("1_sb")
+
+[node name="Dungeon" parent="." instance=ExtResource("2_dungeon")]
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+
+[node name="GameCamera" type="Camera2D" parent="."]
+script = ExtResource("4_camera")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="HUD" type="VBoxContainer" parent="CanvasLayer"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 720.0
+offset_bottom = 120.0
+
+[node name="InfoLabel" type="Label" parent="CanvasLayer/HUD"]
+layout_mode = 2
+text = "Dungeon Isometric Sandbox — เดิน: WASD/ลูกศร | โจมตี: J/Z/คลิกซ้าย | หลบ: Space/K/Shift | รีเซ็ต: R | ข้ามห้อง: 1, 2, 3 | ฆ่าศัตรู: K"
+
+[node name="StatusLabel" type="Label" parent="CanvasLayer/HUD"]
+layout_mode = 2
+text = "สถานะห้อง: กำลังโหลด..."
