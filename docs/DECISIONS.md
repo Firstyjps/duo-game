@@ -2,6 +2,12 @@
 
 ใหม่สุดอยู่บน · 1 เรื่อง 3–5 บรรทัด · เปลี่ยนใจ = เพิ่มรายการใหม่อ้างอันเดิม (ไม่ลบของเก่า)
 
+## 2026-10-03 · contract ใหม่: parry/deflect · สั่นจอ · ห้องเริ่ม/เคลียร์ · ฟื้นผู้เล่น (#51)
+- ใครตัดสิน: Kron (user อนุมัติทั้ง 4) · Few: **รีวิวย้อนหลังใน #51**
+- `damage.md` v2: `Hurtbox.deflecting`/`deflected` + `Hitbox.deflected` + `EventBus.attack_deflected` — parry ไม่ทำให้ผู้ตีได้ `hit_landed` อีกต่อไป
+- `feedback.md`: `EventBus.screen_shake_requested(strength, position)` (บอสกระทืบ/ทุบ)
+- `dungeon-flow.md`: `room_started(room, room_rect)` · `room_cleared(room)` · `player_respawn_requested(position)` → Player `revive()`
+
 ## 2026-10-02 · มุมมองเปลี่ยนเป็น isometric + art/feel Kintsugi (#37) — แทนบางส่วนของ #8
 - ใครตัดสิน: Kron (user ตัดสินใจขั้นสุดท้าย) · Few: **ขอให้อ่านแล้ว comment ใน #37 ถ้าติดอะไร**
 - มุม: **isometric** แทน top-down 3/4 · TileSet `TILE_SHAPE_ISOMETRIC` + `DIAMOND_DOWN` tile **64×32** · y-sort · เดินแบบ screen-space · ฐานจอ 960×540 integer + nearest เหมือนเดิม

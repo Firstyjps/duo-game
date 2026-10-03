@@ -60,3 +60,26 @@ func test_dir_sprite_switches_animation_and_keeps_frame() -> bool:
 	var ok_fallback: bool = s.animation == &"idle_east"
 	s.free()
 	return ok_start and ok_turn and ok_fallback
+
+
+## Player จริงใช้ DirSprite: เดินไปทางไหนหันทางนั้น · หยุด = idle ทิศเดิม · dodge/hurt ใช้ท่าของตัวเอง
+func test_player_drives_dir_sprite() -> bool:
+	var player: Player = (load("res://systems/player/player.tscn") as PackedScene).instantiate()
+	player.setup()
+	var has: bool = player.dir_sprite != null and player.sprite == player.dir_sprite
+	player.state = Player.State.MOVE
+	player.velocity = Vector2(80, 0)
+	player._animate(0.016)
+	var walk_ok: bool = player.dir_sprite.animation == &"walk_east"
+	player.velocity = Vector2.ZERO
+	player._animate(0.016)
+	var idle_ok: bool = player.dir_sprite.animation == &"idle_east"
+	player.state = Player.State.DODGE
+	player.dodge_dir = Vector2(0, -1)
+	player._animate(0.016)
+	var dodge_ok: bool = player.dir_sprite.animation == &"dodge_north"
+	player.state = Player.State.HURT
+	player._animate(0.016)
+	var hurt_ok: bool = player.dir_sprite.animation == &"hurt_north"
+	player.free()
+	return has and walk_ok and idle_ok and dodge_ok and hurt_ok
