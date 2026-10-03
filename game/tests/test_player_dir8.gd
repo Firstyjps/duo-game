@@ -60,3 +60,54 @@ func test_dir_sprite_switches_animation_and_keeps_frame() -> bool:
 	var ok_fallback: bool = s.animation == &"idle_east"
 	s.free()
 	return ok_start and ok_turn and ok_fallback
+
+
+## Player จริงใช้ DirSprite: เดินไปทางไหนหันทางนั้น · หยุด = idle ทิศเดิม · dodge/hurt ใช้ท่าของตัวเอง
+func test_player_drives_dir_sprite() -> bool:
+	var player: Player = (load("res://systems/player/player.tscn") as PackedScene).instantiate()
+	player.setup()
+	var has: bool = player.dir_sprite != null and player.sprite == player.dir_sprite
+	player.state = Player.State.MOVE
+	player.velocity = Vector2(80, 0)
+	player._animate(0.016)
+	var walk_ok: bool = player.dir_sprite.animation == &"walk_east"
+	player.velocity = Vector2.ZERO
+	player._animate(0.016)
+	var idle_ok: bool = player.dir_sprite.animation == &"idle_east"
+	player.state = Player.State.DODGE
+	player.dodge_dir = Vector2(0, -1)
+	player._animate(0.016)
+	var dodge_ok: bool = player.dir_sprite.animation == &"dodge_north"
+	player.state = Player.State.HURT
+	player._animate(0.016)
+	var hurt_ok: bool = player.dir_sprite.animation == &"hurt_north"
+	player.free()
+	return has and walk_ok and idle_ok and dodge_ok and hurt_ok
+
+
+## ท่าฟัน: เฟรมตามเฟส (ง้าง 1–2 · ฟัน 3–4 · กลับ 5–6) · คอมโบสลับ attack1/attack2 · ชาร์จ = attack3
+func test_player_attack_frames_follow_phase() -> bool:
+	var player: Player = (load("res://systems/player/player.tscn") as PackedScene).instantiate()
+	player.setup()
+	player.stamina = 100.0
+	player.set_intent(Vector2.ZERO, Vector2.RIGHT, true, false)
+	player.tick(0.0)
+	player._animate(0.0)
+	var first_anim: StringName = player.dir_sprite.animation
+	var windup_ok: bool = player.dir_sprite.frame in [1, 2] and String(first_anim).begins_with("attack")
+	player.set_intent(Vector2.ZERO, Vector2.RIGHT, false, false)
+	player.tick(player.windup_time + 0.001)
+	player.tick(0.001)
+	player._animate(0.0)
+	var active_ok: bool = player.attack_phase == Player.AttackPhase.ACTIVE and player.dir_sprite.frame in [3, 4]
+	for i: int in 40:
+		player.tick(0.02)
+	player.tick(0.0)
+	player.set_intent(Vector2.ZERO, Vector2.RIGHT, true, false)
+	player.tick(0.0)
+	player._animate(0.0)
+	var second_anim: StringName = player.dir_sprite.animation
+	var alternates: bool = first_anim != second_anim and String(first_anim).ends_with("_east") \
+		and (String(first_anim).begins_with("attack1") or String(first_anim).begins_with("attack2"))
+	player.free()
+	return windup_ok and active_ok and alternates

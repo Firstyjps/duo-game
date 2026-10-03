@@ -4,6 +4,8 @@ extends Area2D
 ## โดน Hurtbox แต่ละตัวได้ 1 ครั้งต่อการ activate 1 รอบ
 
 signal hit_landed(hurtbox: Hurtbox, info: DamageInfo)
+## โดน parry — ผู้ตีตัดสินเองว่าเซไหม (นับเป็น 1 ครั้งของ activate นี้ ไม่โดนซ้ำ)
+signal deflected(hurtbox: Hurtbox, info: DamageInfo)
 
 @export var team: Combat.Team = Combat.Team.NEUTRAL
 @export var damage: int = 1
@@ -51,7 +53,12 @@ func try_hit(hurtbox: Hurtbox) -> bool:
 	if _hit_ids.has(id):
 		return false
 	var info: DamageInfo = make_damage_info(hurtbox)
-	if not hurtbox.receive(info):
+	var result: Hurtbox.Result = hurtbox.receive_result(info)
+	if result == Hurtbox.Result.DEFLECTED:
+		_hit_ids[id] = true
+		deflected.emit(hurtbox, info)
+		return false
+	if result != Hurtbox.Result.HIT:
 		return false
 	_hit_ids[id] = true
 	hit_landed.emit(hurtbox, info)

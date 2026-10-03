@@ -5,6 +5,7 @@
 | คำ (ในเกม/คุยกัน) | ชื่อในโค้ด | ความหมาย | ระบบ |
 |---|---|---|---|
 | _ตัวอย่าง:_ ห้อง | `Room` | พื้นที่ 1 จอ ปิดประตูจนกว่าศัตรูหมด | world |
+| ขวดชา | `flask` · `flask_heal` · `flask_max` · `Player.State.DRINK` · `flasks_changed` | ขวดชาฟื้นพลัง ดื่มเพื่อฟื้น HP มีจำนวนจำกัด เติมเต็มเมื่อเกิดใหม่/revive ขณะดื่มเดินช้าลงและเสี่ยงโดนตีขัด | player |
 | ข้อมูลดาเมจ | `DamageInfo` | ข้อมูลการโจมตี 1 ครั้ง (ดาเมจก่อนหัก defense, knockback, stagger) | core/combat |
 | จุดเกิดศัตรู | `Marker2D` (`spawn_points`) | ตำแหน่งในห้องที่ศัตรูจะถูก instance ลงมาเมื่อห้องเปลี่ยนเป็น LOCKED | dungeon |
 | ดันเจี้ยน | `Dungeon` | ระบบจัดการโครงสร้างห้องต่อเนื่อง (3 ห้อง), การสลับห้องเมื่อผ่านประตู, และการรีเซ็ตเมื่อผู้เล่นตาย | dungeon |
@@ -14,6 +15,8 @@
 | ฝั่ง / ทีม | `Combat.Team` | PLAYER / ENEMY / NEUTRAL — ฝั่งเดียวกันไม่โดนกัน | core/combat |
 | พลังชีวิต / HP | `Health` | HP ของผู้เล่น/ศัตรู/ของทำลายได้ | core/combat |
 | แพรี่ / ปัดป้อง | `Parry` · `Player.State.PARRY` · `parried` | การตั้งการ์ดปัดป้องในหน้าต่าง `parry_window` เพื่อไม่เสีย HP และได้ stamina คืน พลาดจะโดนตีเต็มช่วง recovery | player |
+| ถูกปัด / deflect | `Hurtbox.deflecting` · `Hitbox.deflected` · `EventBus.attack_deflected` | การโจมตีที่โดน parry: ผู้ป้องกันไม่เสียเลือด ผู้ตีได้ `deflected` แทน `hit_landed` | core/combat |
+| ฟื้น / respawn | `Player.revive()` · `EventBus.player_respawn_requested` | dungeon สั่งผู้เล่นกลับมาเต็มเลือดที่จุดเกิดหลังตาย | player/dungeon |
 | ล็อคเป้า | `Lock-on` · `lock_target` · `lock_target_changed` | การล็อคเป้าศัตรูในระยะ `lock_range` ให้ `aim` หันตามเป้าเสมอ สลับเป้าได้ และปลดเมื่อเป้าตายหรือหลุดระยะ | player |
 | สถานะห้อง | `Room.State` | `IDLE` (รอเริ่ม) -> `LOCKED` (ปิดประตูขัง+spawn ศัตรู) -> `CLEARED` (เคลียร์+เปิดประตู) | dungeon |
 | ห้องดันเจี้ยน | `Room` | ห้อง isometric 64×32 จัดการสถานะ IDLE/LOCKED/CLEARED, ประตู, spawn ศัตรู, และนับ kill | dungeon |
@@ -30,6 +33,7 @@
 | สไปรต์ 8 ทิศ | `DirSprite` | AnimatedSprite2D เล่นท่า `"<ท่า>_<ทิศ>"` · `set_facing()` + `play_action()` | player/iso |
 | ตัวเอก Kintsugi (ทดสอบ) | `kintsugi_hero` | สาวยักษ์ผมขาวม่วง ชุดน้ำเงินลายทอง 64 px 8 ทิศ (PixelLab อิง Merakintsugi — ยังไม่ใช่ตัวจริง) | player |
 | พุ่งหลบ | `dodge` | ท่าหลบแบบพุ่งต่ำ (ไม่กลิ้ง/ไม่หมุนตัว) | player |
+| เป้า lock-on | `lock_target` · `LockMarker` | เครื่องหมายบอกเป้าหมายที่กำลังล็อก แสดงเหนือตัวศัตรูตามตำแหน่งโลก | hud |
 
 ## คำที่ห้ามใช้ปนกัน
 <!-- เช่น "ด่าน" vs "ห้อง" — ตกลงว่าใช้คำไหน -->

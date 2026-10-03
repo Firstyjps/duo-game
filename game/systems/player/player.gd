@@ -7,8 +7,9 @@ signal stamina_changed(current: float, maximum: float)
 signal stamina_empty
 signal lock_target_changed(target: Node2D)
 signal parried(info: DamageInfo)
+signal flasks_changed(current: int, maximum: int)
 
-enum State { MOVE, DODGE, ATTACK, HURT, DEAD, PARRY }
+enum State { MOVE, DODGE, ATTACK, HURT, DEAD, PARRY, DRINK }
 enum AttackPhase { NONE, WINDUP, CHARGING, ACTIVE, RECOVER }
 
 @export_group("Stats")
@@ -62,6 +63,12 @@ enum AttackPhase { NONE, WINDUP, CHARGING, ACTIVE, RECOVER }
 @export var charge_rush_speed: float = 200.0
 @export var charge_recover_mult: float = 1.2
 
+@export_group("Flask")
+@export var flask_max: int = 3
+@export var flask_heal: int = 5
+@export var drink_time: float = 0.9
+@export var heal_at: float = 0.6
+
 @export_group("Hurt")
 @export var hurt_time: float = 0.2
 @export var body_y: float = -16.0
@@ -69,6 +76,7 @@ enum AttackPhase { NONE, WINDUP, CHARGING, ACTIVE, RECOVER }
 var state: State = State.MOVE
 var attack_phase: AttackPhase = AttackPhase.NONE
 var stamina: float = 100.0
+var flasks: int = 3
 var aim: Vector2 = Vector2.RIGHT
 var move_dir: Vector2 = Vector2.ZERO
 var dodge_dir: Vector2 = Vector2.RIGHT
@@ -87,6 +95,8 @@ var _intent_dodge: bool = false
 var _intent_parry: bool = false
 var _intent_lock_on: bool = false
 var _intent_attack_held: bool = false
+var _intent_heal: bool = false
+var _drink_healed: bool = false
 var _charge_t: float = 0.0
 var _is_heavy_attack: bool = false
 var _walk_t: float = 0.0
@@ -95,7 +105,9 @@ var _flash_color: Color = Color.WHITE
 var _ghost_t: float = 0.0
 var _combo_side: float = 1.0
 
-var sprite: Sprite2D
+## ภาพตัวละคร: `DirSprite` (8 ทิศ iso) หรือ Sprite2D (placeholder เดิม) — เอฟเฟกต์ scale/สีใช้ร่วมกัน
+var sprite: Node2D
+var dir_sprite: DirSprite
 var collision_shape: CollisionShape2D
 var health: Health
 var hurtbox: Hurtbox
@@ -110,17 +122,23 @@ func _ready() -> void:
 func _enter_tree() -> void:
 	if not EventBus.enemy_died.is_connected(_on_enemy_died):
 		EventBus.enemy_died.connect(_on_enemy_died)
+	if not EventBus.player_respawn_requested.is_connected(revive):
+		EventBus.player_respawn_requested.connect(revive)
 
 
 func _exit_tree() -> void:
 	if EventBus.enemy_died.is_connected(_on_enemy_died):
 		EventBus.enemy_died.disconnect(_on_enemy_died)
+	if EventBus.player_respawn_requested.is_connected(revive):
+		EventBus.player_respawn_requested.disconnect(revive)
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
 		if EventBus != null and EventBus.enemy_died.is_connected(_on_enemy_died):
 			EventBus.enemy_died.disconnect(_on_enemy_died)
+		if EventBus != null and EventBus.player_respawn_requested.is_connected(revive):
+			EventBus.player_respawn_requested.disconnect(revive)
 
 
 ## ผูก node ลูก + signal + input action — แยกจาก _ready ให้เทสต์เรียกได้โดยไม่ต้องอยู่ใน scene tree
@@ -132,9 +150,12 @@ func setup() -> void:
 	collision_layer = Combat.LAYER_PLAYER
 	collision_mask = Combat.LAYER_WORLD | Combat.LAYER_ENEMY
 
-	sprite = get_node_or_null("Sprite2D") as Sprite2D
+	dir_sprite = get_node_or_null("DirSprite") as DirSprite
+	sprite = dir_sprite
 	if sprite == null:
-		sprite = get_node_or_null("Sprite") as Sprite2D
+		sprite = get_node_or_null("Sprite2D") as Node2D
+	if sprite == null:
+		sprite = get_node_or_null("Sprite") as Node2D
 	collision_shape = get_node_or_null("CollisionShape2D") as CollisionShape2D
 	health = get_node_or_null("Health") as Health
 	hurtbox = get_node_or_null("Hurtbox") as Hurtbox
@@ -151,6 +172,7 @@ func setup() -> void:
 	stamina = stamina_max
 	_regen_wait = 0.0
 	stamina_changed.emit(stamina, stamina_max)
+	refill_flasks()
 
 	if hitbox != null:
 		hitbox.source = self
@@ -165,6 +187,8 @@ func setup() -> void:
 		hurtbox.invulnerable = false
 		if not hurtbox.hurt.is_connected(_on_hurt):
 			hurtbox.hurt.connect(_on_hurt)
+		if not hurtbox.deflected.is_connected(_on_deflected):
+			hurtbox.deflected.connect(_on_deflected)
 
 	if lock_area != null:
 		lock_area.collision_layer = 0
@@ -195,6 +219,7 @@ static func ensure_input_actions() -> void:
 	_register_action_if_missing(&"dodge", [_key(KEY_SPACE), _key(KEY_SHIFT)])
 	_register_action_if_missing(&"parry", [_key(KEY_F), _mouse(MOUSE_BUTTON_RIGHT)])
 	_register_action_if_missing(&"lock_on", [_key(KEY_TAB), _mouse(MOUSE_BUTTON_MIDDLE)])
+	_register_action_if_missing(&"heal", [_key(KEY_R), _joy(JOY_BUTTON_Y)])
 
 
 ## ใส่ปุ่ม default เฉพาะตอนสร้าง action ใหม่ — action ที่มีอยู่แล้ว (ผู้เล่นเปลี่ยนปุ่มไว้) ห้ามเติม default กลับ
@@ -210,6 +235,12 @@ static func _key(keycode: Key) -> InputEventKey:
 	var ev := InputEventKey.new()
 	ev.physical_keycode = keycode
 	ev.keycode = keycode
+	return ev
+
+
+static func _joy(button: JoyButton) -> InputEventJoypadButton:
+	var ev := InputEventJoypadButton.new()
+	ev.button_index = button
 	return ev
 
 
@@ -232,7 +263,8 @@ func set_intent(
 	dodge: bool,
 	parry: bool = false,
 	lock_on: bool = false,
-	attack_held: bool = false
+	attack_held: bool = false,
+	heal: bool = false
 ) -> void:
 	move_dir = move
 	if aim_dir.length_squared() > 0.0001:
@@ -242,6 +274,7 @@ func set_intent(
 	_intent_parry = parry
 	_intent_lock_on = lock_on
 	_intent_attack_held = attack_held
+	_intent_heal = heal
 
 
 func _physics_process(delta: float) -> void:
@@ -276,8 +309,12 @@ func tick(delta: float) -> void:
 			_state_hurt(delta)
 		State.PARRY:
 			_state_parry(delta)
+		State.DRINK:
+			_state_drink(delta)
 		State.DEAD:
 			velocity = Vector2.ZERO
+	if state != State.PARRY and hurtbox != null:
+		hurtbox.deflecting = false  # ออกจาก parry ทางไหนก็ตาม (dodge ยกเลิก/โดนตี) ต้องปิดหน้าต่างปัด
 
 	knock = knock.move_toward(Vector2.ZERO, knockback_friction * delta)
 	velocity += knock
@@ -289,9 +326,11 @@ func tick(delta: float) -> void:
 	_intent_dodge = false
 	_intent_parry = false
 	_intent_lock_on = false
+	_intent_heal = false
 
 
 func _is_busy_state(s: State) -> bool:
+	# DRINK ไม่นับเป็น busy → stamina ฟื้นระหว่างดื่ม (แบบ Souls)
 	return s == State.DODGE or s == State.ATTACK or s == State.DEAD or s == State.PARRY
 
 
@@ -314,7 +353,8 @@ func _read_input() -> void:
 	var ddg: bool = Input.is_action_just_pressed(&"dodge")
 	var pry: bool = Input.is_action_just_pressed(&"parry")
 	var lck: bool = Input.is_action_just_pressed(&"lock_on")
-	set_intent(move, aim_dir, atk, ddg, pry, lck, atk_held)
+	var hel: bool = Input.is_action_just_pressed(&"heal")
+	set_intent(move, aim_dir, atk, ddg, pry, lck, atk_held, hel)
 
 
 func _state_move() -> void:
@@ -324,6 +364,8 @@ func _state_move() -> void:
 		_start_dodge()
 	elif _intent_parry:
 		_start_parry()
+	elif _intent_heal and _start_drink():
+		pass
 	elif _intent_attack:
 		_start_attack()
 
@@ -377,13 +419,78 @@ func _start_parry() -> bool:
 	velocity = Vector2.ZERO
 	if hitbox != null:
 		hitbox.deactivate()
+	if hurtbox != null:
+		hurtbox.deflecting = true
 	return true
 
 
 func _state_parry(delta: float) -> void:
 	velocity = Vector2.ZERO
 	_state_t += delta
+	if hurtbox != null:
+		hurtbox.deflecting = _state_t <= parry_window
 	if _state_t >= (parry_window + parry_recover):
+		state = State.MOVE
+		_state_t = 0.0
+
+
+func can_drink() -> bool:
+	if state != State.MOVE:
+		return false
+	if flasks <= 0:
+		return false
+	if health != null and health.hp >= health.max_hp:
+		return false
+	return true
+
+
+func is_drinking() -> bool:
+	return state == State.DRINK
+
+
+func refill_flasks() -> void:
+	flasks = flask_max
+	flasks_changed.emit(flasks, flask_max)
+
+
+func start_drink() -> bool:
+	return _start_drink()
+
+
+func _start_drink() -> bool:
+	if not can_drink():
+		return false
+	flasks -= 1
+	flasks_changed.emit(flasks, flask_max)
+	state = State.DRINK
+	attack_phase = AttackPhase.NONE
+	_state_t = 0.0
+	_drink_healed = false
+	if hitbox != null:
+		hitbox.deactivate()
+	var dir: Vector2 = move_dir.normalized() if move_dir.length_squared() > 1.0 else move_dir
+	velocity = dir * speed * 0.3
+	return true
+
+
+func _state_drink(delta: float) -> void:
+	if _intent_dodge:
+		if _start_dodge():
+			return
+
+	var dir: Vector2 = move_dir.normalized() if move_dir.length_squared() > 1.0 else move_dir
+	velocity = dir * speed * 0.3
+
+	_state_t += delta
+
+	if not _drink_healed and _state_t >= (heal_at - 0.0001):
+		_drink_healed = true
+		if health != null:
+			health.heal(flask_heal)
+		_flash_t = 0.2
+		_flash_color = Color(0.7, 2.2, 0.9)
+
+	if _state_t >= (drink_time - 0.0001):
 		state = State.MOVE
 		_state_t = 0.0
 
@@ -524,16 +631,6 @@ func _regen(delta: float) -> void:
 func _on_hurt(info: DamageInfo) -> void:
 	if state == State.DEAD:
 		return
-	if state == State.PARRY and _state_t <= parry_window:
-		stamina = minf(stamina_max, stamina + parry_refund)
-		_regen_wait = 0.0
-		stamina_changed.emit(stamina, stamina_max)
-		parried.emit(info)
-		_flash_t = 0.15
-		_flash_color = Color(2.5, 2.3, 1.2)
-		state = State.MOVE
-		_state_t = 0.0
-		return
 
 	var final_amount: int = compute_damage(info.amount, defense)
 	var dealt: int = health.take_damage(final_amount)
@@ -550,6 +647,51 @@ func _on_hurt(info: DamageInfo) -> void:
 			hitbox.deactivate()
 
 
+## parry สำเร็จ (Hurtbox.deflected ระหว่างหน้าต่าง parry) — ไม่เสียเลือด · ผู้ตีได้ Hitbox.deflected
+func _on_deflected(info: DamageInfo) -> void:
+	if state != State.PARRY:
+		return
+	if hurtbox != null:
+		hurtbox.deflecting = false
+	stamina = minf(stamina_max, stamina + parry_refund)
+	_regen_wait = 0.0
+	stamina_changed.emit(stamina, stamina_max)
+	parried.emit(info)
+	EventBus.attack_deflected.emit(self, info)
+	_flash_t = 0.15
+	_flash_color = Color(2.5, 2.3, 1.2)
+	state = State.MOVE
+	_state_t = 0.0
+
+
+## ฟื้นเต็มที่ตำแหน่งที่ dungeon ส่งมา (EventBus.player_respawn_requested) — ใช้ได้ทั้งตอนตายและยังไม่ตาย
+func revive(at: Vector2) -> void:
+	global_position = at
+	if health != null:
+		health.reset()
+	stamina = stamina_max
+	stamina_changed.emit(stamina, stamina_max)
+	refill_flasks()
+	_died_emitted = false
+	state = State.MOVE
+	attack_phase = AttackPhase.NONE
+	_state_t = 0.0
+	velocity = Vector2.ZERO
+	knock = Vector2.ZERO
+	unlock()
+	if hurtbox != null:
+		hurtbox.invulnerable = false
+		hurtbox.deflecting = false
+	if hitbox != null:
+		hitbox.deactivate()
+	collision_layer = Combat.LAYER_PLAYER
+	collision_mask = Combat.LAYER_WORLD | Combat.LAYER_ENEMY
+	if sprite != null:
+		sprite.modulate = Color.WHITE
+	if dir_sprite != null:
+		dir_sprite.play_action(&"idle")
+
+
 func _on_died() -> void:
 	if _died_emitted:
 		return
@@ -562,7 +704,11 @@ func _on_died() -> void:
 		hitbox.deactivate()
 	set_deferred(&"collision_layer", 0)
 	EventBus.player_died.emit()
-	if sprite != null and is_inside_tree():
+	if dir_sprite != null:
+		dir_sprite.self_modulate = Color.WHITE
+		dir_sprite.scale = Vector2.ONE
+		dir_sprite.play_action(&"death")  # ค้างเฟรมสุดท้าย (ท่า death ไม่ loop)
+	elif sprite != null and is_inside_tree():
 		var tw: Tween = create_tween()
 		tw.tween_property(sprite, "modulate", Color(0.4, 0.2, 0.2, 0.0), 1.2)
 
@@ -709,6 +855,10 @@ func _draw() -> void:
 		var a0: float = aim.angle() - 1.0
 		draw_arc(Vector2(0.0, body_y), 22.0, a0, a0 + 2.0, 16, parry_col, arc_width)
 
+	# เอฟเฟกต์ฟื้นพลังขวดชา
+	if state == State.DRINK and _drink_healed:
+		draw_arc(Vector2(0.0, body_y), 18.0, 0.0, TAU, 16, Color(0.4, 1.0, 0.5, 0.6), 2.0)
+
 	# ล็อคเป้า
 	if is_locked_on():
 		var rel_pos: Vector2 = lock_target.global_position - global_position
@@ -728,11 +878,15 @@ func _draw() -> void:
 func _animate(delta: float) -> void:
 	if sprite == null or state == State.DEAD:
 		return
-	sprite.flip_h = aim.x < 0.0
 	var moving: bool = state == State.MOVE and velocity.length() > 10.0
+	if dir_sprite != null:
+		_animate_dir_sprite(moving)
+	elif sprite is Sprite2D:
+		(sprite as Sprite2D).flip_h = aim.x < 0.0
 	if moving:
 		_walk_t += delta * 14.0
-	var bob: float = absf(sin(_walk_t)) * 2.0 if moving else 0.0
+	# ภาพ 8 ทิศมีท่าเดินเองแล้ว → ไม่เด้งตัวด้วยโค้ด
+	var bob: float = absf(sin(_walk_t)) * 2.0 if moving and dir_sprite == null else 0.0
 	sprite.position = Vector2(0.0, -bob)
 	sprite.scale = Vector2.ONE
 	sprite.skew = 0.0
@@ -764,20 +918,84 @@ func _animate(delta: float) -> void:
 					sprite.self_modulate = Color(1.0 + prog, 1.0 + prog, 1.0)
 			else:
 				sprite.position += (aim * 2.0).round()
+		State.DRINK:
+			if _flash_t <= 0.0 and not _drink_healed:
+				sprite.scale = Vector2(0.97, 1.03)
 		_:
 			sprite.modulate.a = 1.0
 
 
+## ท่าของ DirSprite ตาม state · หันตามทิศเดิน (ตอนเดิน) หรือทิศเล็ง (โจมตี/parry/lock-on)
+func _animate_dir_sprite(moving: bool) -> void:
+	var face: Vector2 = aim
+	if state == State.MOVE and moving and not is_locked_on():
+		face = velocity
+	elif state == State.DODGE:
+		face = dodge_dir
+	elif state == State.HURT:
+		face = Vector2.ZERO  # โดนตีแล้วคงทิศเดิม
+	elif state == State.DRINK and not is_locked_on():
+		face = velocity if velocity.length() > 10.0 else Vector2.ZERO  # เดินช้า ๆ ตอนดื่ม = หันตามทางเดิน · ยืน = คงทิศ
+	dir_sprite.set_facing(face)
+	match state:
+		State.MOVE:
+			dir_sprite.play_action(&"walk" if moving else &"idle")
+		State.DODGE:
+			dir_sprite.play_action(&"dodge")
+		State.HURT:
+			dir_sprite.play_action(&"hurt")
+		State.ATTACK:
+			dir_sprite.show_frame(_attack_anim(), attack_frame_index())
+		State.DRINK:
+			dir_sprite.play_action(&"idle")
+		_:
+			dir_sprite.play_action(&"idle")  # PARRY ใช้ idle + เอฟเฟกต์
+
+
+## ท่าฟันตามคอมโบ: สลับ attack1/attack2 · ท่าหนัก (ชาร์จ) = attack3
+func _attack_anim() -> StringName:
+	if _is_heavy_attack or attack_phase == AttackPhase.CHARGING:
+		return &"attack3"
+	return &"attack1" if _combo_side > 0.0 else &"attack2"
+
+
+## เฟรมของท่าฟัน (7 เฟรม PixelLab: 0 ท่ายืน · 1–2 ง้าง · 3–4 ฟัน (แสงทอง) · 5–6 กลับท่า) ตามเฟสในโค้ด
+func attack_frame_index() -> int:
+	match attack_phase:
+		AttackPhase.WINDUP:
+			return 1 if _state_t < windup_time * 0.5 else 2
+		AttackPhase.CHARGING:
+			return 2
+		AttackPhase.ACTIVE:
+			return 3 if swing < 0.5 else 4
+		AttackPhase.RECOVER:
+			var rec_time: float = recover_time * (charge_recover_mult if _is_heavy_attack else 1.0)
+			return 5 if _state_t < rec_time * 0.5 else 6
+	return 0
+
+
 func _spawn_ghost() -> void:
-	if sprite == null or sprite.texture == null:
+	if sprite == null:
+		return
+	var tex: Texture2D = null
+	var off: Vector2 = Vector2.ZERO
+	var flip: bool = false
+	if dir_sprite != null and dir_sprite.sprite_frames != null:
+		tex = dir_sprite.sprite_frames.get_frame_texture(dir_sprite.animation, dir_sprite.frame)
+		off = dir_sprite.offset
+	elif sprite is Sprite2D:
+		tex = (sprite as Sprite2D).texture
+		off = (sprite as Sprite2D).offset
+		flip = (sprite as Sprite2D).flip_h
+	if tex == null:
 		return
 	var parent_node: Node = get_parent()
 	if parent_node == null:
 		return
 	var g := Sprite2D.new()
-	g.texture = sprite.texture
-	g.offset = sprite.offset
-	g.flip_h = sprite.flip_h
+	g.texture = tex
+	g.offset = off
+	g.flip_h = flip
 	g.global_position = global_position + sprite.position
 	g.modulate = Color(0.55, 0.8, 1.0, 0.5)
 	parent_node.add_child(g)
