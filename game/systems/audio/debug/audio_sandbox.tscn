@@ -1,0 +1,183 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://systems/audio/debug/audio_sandbox.gd" id="1_sandbox"]
+[ext_resource type="PackedScene" path="res://systems/audio/audio_director.tscn" id="2_director"]
+
+[node name="AudioSandbox" type="Node2D"]
+script = ExtResource("1_sandbox")
+
+[node name="AudioDirector" parent="." instance=ExtResource("2_director")]
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="Panel" type="Panel" parent="CanvasLayer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="CanvasLayer/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+
+[node name="VBox" type="VBoxContainer" parent="CanvasLayer/Panel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="CanvasLayer/Panel/MarginContainer/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "ระบบเสียง — Audio Sandbox (Issue #60)"
+
+[node name="StatusLabel" type="Label" parent="CanvasLayer/Panel/MarginContainer/VBox"]
+layout_mode = 2
+text = "สถานะ: พร้อมทดสอบ"
+
+[node name="HSeparator" type="HSeparator" parent="CanvasLayer/Panel/MarginContainer/VBox"]
+layout_mode = 2
+
+[node name="GridContainer" type="GridContainer" parent="CanvasLayer/Panel/MarginContainer/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+columns = 4
+
+[node name="BtnSlash" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[1] Slash"
+
+[node name="BtnHitFlesh" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[2] Hit Flesh"
+
+[node name="BtnHitPlayer" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[3] Hit Player"
+
+[node name="BtnParry" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[4] Parry"
+
+[node name="BtnDodge" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[5] Dodge"
+
+[node name="BtnEnemyDie" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[6] Enemy Die"
+
+[node name="BtnBossRoar" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[7] Boss Roar"
+
+[node name="BtnDoorOpen" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[8] Door Open"
+
+[node name="BtnDoorClose" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[9] Door Close"
+
+[node name="BtnHeal" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[0] Heal"
+
+[node name="BtnShard" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[Q] Shard Pickup"
+
+[node name="BtnUiMove" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[W] UI Move"
+
+[node name="BtnUiConfirm" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[E] UI Confirm"
+
+[node name="BtnThud" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[R] Thud"
+
+[node name="BtnMusicExplore" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[Z] Music Explore"
+
+[node name="BtnMusicCombat" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[X] Music Combat"
+
+[node name="BtnMusicStop" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[C] Stop Music"
+
+[node name="BtnEmitFlesh" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[A] Event: Dmg Flesh"
+
+[node name="BtnEmitPlayer" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[S] Event: Dmg Player"
+
+[node name="BtnEmitParry" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[D] Event: Deflect"
+
+[node name="BtnEmitEnemyDie" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[F] Event: Enemy Died"
+
+[node name="BtnEmitShake" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[G] Event: Shake 0.6"
+
+[node name="BtnEmitBoss" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[H] Event: Boss Engage"
+
+[node name="BtnEmitRoomStart" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[J] Event: Room Start"
+
+[node name="BtnEmitRoomClear" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[K] Event: Room Clear"
+
+[node name="BtnEmitPlayerDied" type="Button" parent="CanvasLayer/Panel/MarginContainer/VBox/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[L] Event: Player Died"

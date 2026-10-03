@@ -19,6 +19,7 @@
 | i-frames / อมตะชั่วคราว | `Hurtbox.invulnerable` | ช่วงที่โดนตีไม่เข้า เช่นระหว่าง dodge | core/combat |
 | ตัวรับดาเมจ | `Hurtbox` | พื้นที่บนตัวที่โดนตีได้ | core/combat |
 | ตัวทำดาเมจ | `Hitbox` | พื้นที่ของท่าโจมตีที่ทำดาเมจ | core/combat |
+| ตัวจัดการเสียง / ไดเรกเตอร์เสียง | `AudioDirector` | โหนดจัดการระบบเสียงและเพลงในฉากเกม ดูแล Audio Bus, pooling SFX, สุ่ม pitch, และ crossfade เพลงตาม EventBus | audio |
 | เซ / poise | `DamageInfo.stagger` | แรงขัดท่า — ผู้รับตัดสินเองว่าเซไหม | core/combat |
 | สไลม์ | `Slime` · `enemy_id = &"slime"` | ศัตรูตัวแรก: เด้งเข้าหา → ย่อตัว + กระพริบแดง (telegraph) → พุ่งทับ | enemy |
 | เงาตามตัว | after-image · `_spawn_afterimage()` | สำเนาสไปรต์จาง ๆ ที่ทิ้งไว้ระหว่างพุ่ง | enemy |
