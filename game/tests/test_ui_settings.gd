@@ -268,7 +268,7 @@ func test_title_screen_instantiation_and_defaults() -> bool:
 		and title.btn_quit != null \
 		and title.lbl_title != null \
 		and title.settings_menu != null \
-		and title.start_scene == "res://mockup/mockup.tscn" \
+		and title.start_scene == "res://systems/ui/run/game_run.tscn" \
 		and title.lbl_title.text == "Kintsugi" \
 		and not title.btn_play.focus_neighbor_bottom.is_empty() \
 		and not title.btn_settings.focus_neighbor_bottom.is_empty()

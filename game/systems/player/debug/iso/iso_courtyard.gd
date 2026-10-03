@@ -7,6 +7,8 @@ const TILES: Texture2D = preload("res://systems/player/debug/iso/iso_tiles.png")
 const FRAMES_PATH: String = "res://systems/player/art/kintsugi_hero/kintsugi_hero_frames.tres"
 const SIZE: int = 16
 
+## false = ใช้เป็นด่านให้ GameRun (ไม่สร้างตัวละคร/กล้อง/UI ทดสอบ · มีจุดเกิดในกลุ่ม "player_spawn")
+@export var spawn_test_hero: bool = true
 @export var walk_speed: float = 70.0
 @export var run_speed: float = 125.0
 @export var roll_speed: float = 190.0
@@ -25,8 +27,10 @@ var _demo: bool = false
 
 func _ready() -> void:
 	var ts := _make_tileset()
+	y_sort_enabled = true
 	var floor_layer := TileMapLayer.new()
 	floor_layer.tile_set = ts
+	floor_layer.z_index = -1  # พื้นอยู่ใต้ทุกอย่างเสมอ (ไม่เข้าร่วม y-sort)
 	add_child(floor_layer)
 	var world := Node2D.new()  # กำแพง + ตัวละคร เรียงลึกด้วย y_sort
 	world.y_sort_enabled = true
@@ -48,6 +52,9 @@ func _ready() -> void:
 				var r: float = rng.randf()
 				var kind: int = 1 if r < 0.08 else (2 if r < 0.2 else 0)
 				floor_layer.set_cell(Vector2i(x, y), 0, Vector2i(kind, 0))
+
+	if not spawn_test_hero:
+		return  # จุดเกิดอยู่ใน courtyard_level.tscn (Marker2D กลุ่ม player_spawn)
 
 	hero = CharacterBody2D.new()
 	hero.motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
