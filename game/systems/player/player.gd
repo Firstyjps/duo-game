@@ -284,7 +284,26 @@ func _physics_process(delta: float) -> void:
 	if not manual_control:
 		_read_input()
 	tick(delta)
+	var before: Vector2 = global_position
 	move_and_slide()
+	_hold_against_pushable(before)
+
+
+## เดินดันวัตถุกลุ่ม "pushable" (บล็อกปริศนา) → ยืนแนบผิว ไม่ไถลตามผิวเพชรหลุดมุม (บล็อกนับเวลาดันได้ครบ)
+## เฉพาะตอนเดินปกติ (MOVE) — dodge/knockback ไม่ถูกหยุด
+static func should_hold_against(move: Vector2, normal: Vector2) -> bool:
+	return move.length_squared() > 0.01 and move.normalized().dot(-normal) > 0.5
+
+
+func _hold_against_pushable(before: Vector2) -> void:
+	if state != State.MOVE or knock.length_squared() > 1.0:
+		return
+	for i: int in get_slide_collision_count():
+		var col: KinematicCollision2D = get_slide_collision(i)
+		var other: Object = col.get_collider()
+		if other is Node and (other as Node).is_in_group(&"pushable") and should_hold_against(move_dir, col.get_normal()):
+			global_position = before
+			return
 
 
 ## Logic 1 เฟรม (ไม่รวม move_and_slide) — เทสต์เรียกตรงได้

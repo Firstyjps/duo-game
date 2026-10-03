@@ -582,3 +582,12 @@ func test_lock_releases_when_hurtbox_unmonitorable() -> bool:
 	enemy.free()
 	player.free()
 	return locked and released
+
+
+
+## เดินเข้าหาผิว pushable (input สวนทาง normal) = ยืนแนบ · เดินเฉียดผิว = ไถลได้ตามปกติ
+func test_should_hold_against_pushable() -> bool:
+	var into: bool = Player.should_hold_against(Vector2(1, 0.2), Vector2(-1, 0))
+	var graze: bool = Player.should_hold_against(Vector2(0, 1), Vector2(-1, 0))
+	var idle: bool = Player.should_hold_against(Vector2.ZERO, Vector2(-1, 0))
+	return into and not graze and not idle

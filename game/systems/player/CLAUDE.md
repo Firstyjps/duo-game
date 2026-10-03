@@ -52,6 +52,8 @@
 
 - ภาพ: `sprite` = node ภาพ (DirSprite หรือ Sprite2D) ใช้ทำเอฟเฟกต์ scale/สี · `_animate_dir_sprite()` เลือกท่าตาม state (ATTACK = `show_frame()` ตามเฟส: ง้าง 1–2 · ฟัน 3–4 · กลับ 5–6 · คอมโบสลับ attack1/attack2 · ชาร์จ/ท่าหนัก = attack3 · PARRY ใช้ idle + เอฟเฟกต์ · DRINK = idle + กระพริบเขียวอ่อนตอน heal_at, หันตามทิศเดินช้า ๆ · stamina ฟื้นระหว่างดื่ม) · เดิน = หันตามทิศเดิน, โจมตี/lock-on = หันตาม aim, โดนตี = คงทิศ
 
+- วัตถุกลุ่ม `pushable` (บล็อกปริศนาของ dungeon): Player เดินดันเข้าผิว (MOVE, ไม่มี knockback) → ยืนแนบไม่ไถลตามผิวเพชร (`_hold_against_pushable`) — ระบบอื่นห้ามเขียนตำแหน่ง Player เอง
+
 ## เทสต์
 - `game/tests/test_player_combat.gd` (เทสต์พื้นฐานเดิม)
 - `game/tests/test_player_combat_ext.gd` (Lock-on, Parry, Charge Attack)
