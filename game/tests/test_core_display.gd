@@ -16,3 +16,7 @@ func test_stretch_viewport_expand_integer() -> bool:
 func test_pixel_crisp() -> bool:
 	return _setting("rendering/textures/canvas_textures/default_texture_filter") == 0 \
 		and _setting("rendering/2d/snap/snap_2d_transforms_to_pixel") == true
+
+func test_main_scene_is_title() -> bool:
+	var path: String = _setting("application/run/main_scene")
+	return path == "res://systems/ui/title/title_screen.tscn" and ResourceLoader.exists(path)
