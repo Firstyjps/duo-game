@@ -1,7 +1,7 @@
 # Contract: dungeon-flow — dungeon (B) ↔ ผู้เล่น/กล้อง/HUD (A)
 
-- เวอร์ชัน: 1.2 · อัปเดต: 2026-10-03 · ร่าง: Kron (#51, user อนุมัติ) · รีวิวย้อนหลัง: Few
-- ผู้ส่ง: dungeon (B, @kronkawin2549-create) · ผู้รับ: player / camera / hud (A, @Firstyjps)
+- เวอร์ชัน: 1.3 · อัปเดต: 2026-10-03 · ร่าง: Kron (#51, user อนุมัติ) · รีวิวย้อนหลัง: Few
+- ผู้ส่ง: dungeon (B, @kronkawin2549-create) · `player_respawn_requested` ส่งโดย GameRun (A) แทนเมื่อด่านไม่มี node กลุ่ม `respawn_handler` · ผู้รับ: player / camera / hud (A, @Firstyjps)
 
 ## Signals (ใน `EventBus`)
 | signal | args | emit เมื่อ | ผู้รับต้องทำ |
@@ -20,6 +20,7 @@
 - ศัตรูที่ถูก free โดยไม่ emit `enemy_died` ต้องไม่ทำให้ห้องค้าง (dungeon ฟัง `tree_exiting` เอง)
 
 ## Changelog
+- v1.3 — GameRun (A) ส่ง `player_respawn_requested` เองเมื่อด่านไม่มี `respawn_handler` (ฟื้นผ่าน signal ทางเดียว) · ไม่เปลี่ยน signal/args
 - v1.2 — `player_respawn_requested` ใช้ตอนพักศาลเจ้าได้ด้วย (#57) · ไม่เปลี่ยน signal/args
 - v1.1 — ระบุชัด: `room_started` ส่งทุกครั้งที่เข้าห้อง (กล้องใช้ตั้งขอบ) · กล้องฟังแล้ว (#41) · ไม่เปลี่ยน signal/args
 - v1 — สร้าง (#51)
