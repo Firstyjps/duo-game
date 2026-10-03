@@ -49,6 +49,8 @@ const FLASH_GOLD: Color = Color(2.5, 2.0, 0.6)
 @export var recover_time: float = 0.7
 @export var hurt_time: float = 0.25
 ## เวลาเซเมื่อถูกผู้เล่น parry (deflected) เปิดช่องให้สวนกลับ
+## สีแสงฟันที่วาดด้วยโค้ดตอน hitbox active
+@export var slash_arc_color: Color = Color(1.0, 0.85, 0.35, 0.9)
 @export var parried_stagger_time: float = 0.8
 ## เวลาเล่นท่า death (9 เฟรม @ 9 fps = 1.0s) ก่อนเริ่มละลาย
 @export var death_anim_time: float = 1.0
@@ -217,6 +219,11 @@ func _draw() -> void:
 		alpha *= (1.0 - dissolve_t)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.45))
 	draw_circle(Vector2.ZERO, 10.0, Color(0, 0, 0, alpha))
+	draw_set_transform(Vector2.ZERO)
+	# แสงฟันสีทอง: วาดเองตอน hitbox active — ภาพ PixelLab แต่ละทิศมีเฟรมแสงไม่ตรงกัน จึงไม่พึ่งภาพ
+	if state == State.SLASH and is_attack_active:
+		var a0: float = _attack_dir.angle() - 1.0
+		draw_arc(_attack_dir * slash_reach * 0.5 + Vector2(0, -18), slash_reach * 0.9, a0, a0 + 2.0, 12, slash_arc_color, 3.0)
 
 
 func _tick_wander(delta: float) -> void:
@@ -366,8 +373,13 @@ func _on_hurt(info: DamageInfo) -> void:
 		_poise_damage += info.stagger
 		if should_stagger(_poise_damage, poise):
 			_poise_damage = 0.0
-			_current_hurt_time = hurt_time
+			# กำลังเซอยู่ (เช่นหลังโดน parry) → ไม่ตัดช่วงเซที่เหลือให้สั้นลง
+			var remaining: float = _current_hurt_time - _state_t if state == State.HURT else 0.0
+			_current_hurt_time = maxf(remaining, hurt_time)
 			_enter(State.HURT)
+			if dir_sprite != null:
+				dir_sprite.stop()  # ให้ท่า hurt เล่นใหม่ทุกครั้งที่โดน
+				dir_sprite.play_action(&"hurt")
 
 
 func _on_hitbox_deflected(_defender_hurtbox: Hurtbox, _info: DamageInfo) -> void:
@@ -407,12 +419,12 @@ func _tick_death_dissolve() -> void:
 		return
 	if _state_t < death_anim_time:
 		dir_sprite.scale = Vector2.ONE
-		dir_sprite.self_modulate.a = 1.0
+		dir_sprite.self_modulate = Color.WHITE
 	else:
 		var t: float = clampf((_state_t - death_anim_time) / corpse_time, 0.0, 1.0)
 		dir_sprite.scale.y = lerpf(1.0, 0.2, t)
 		dir_sprite.scale.x = 1.0
-		dir_sprite.self_modulate.a = 1.0 - t
+		dir_sprite.self_modulate = Color(1.0, 1.0, 1.0, 1.0 - t)
 
 
 func _tick_flash(delta: float) -> void:

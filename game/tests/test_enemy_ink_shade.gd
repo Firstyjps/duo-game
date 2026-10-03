@@ -473,3 +473,30 @@ func test_sprite_frames_has_all_anims() -> bool:
 
 	shade.free()
 	return ok
+
+
+## ตายเพราะโดนตี → หลัง flash หมดสีต้องกลับปกติ (ไม่ค้างขาวจ้าทั้งศพ)
+func test_corpse_color_resets_after_hit_flash() -> bool:
+	var shade: InkShade = _spawn()
+	shade.hurtbox.receive(_hit(999))
+	shade._process(0.1)  # flash 0.08s หมด
+	shade.tick(0.2)
+	shade._process(0.016)
+	var c: Color = shade.dir_sprite.self_modulate
+	var ok: bool = is_equal_approx(c.r, 1.0) and is_equal_approx(c.g, 1.0) and is_equal_approx(c.b, 1.0)
+	shade.free()
+	return ok
+
+
+## โดน parry (เซ 0.8s) แล้วโดนสวนที่ 0.3s → ยังเซจนครบ 0.8s ไม่สั้นลง
+func test_counter_hit_keeps_parry_stagger() -> bool:
+	var shade: InkShade = _spawn()
+	shade._on_hitbox_deflected(null, _hit(0))
+	shade.tick(0.3)
+	shade.hurtbox.receive(_hit(1, 999.0))
+	shade.tick(0.45)  # รวม 0.75s
+	var still_hurt: bool = shade.state == InkShade.State.HURT
+	shade.tick(0.1)  # เกิน 0.8s แล้ว
+	var released: bool = shade.state != InkShade.State.HURT
+	shade.free()
+	return still_hurt and released
