@@ -31,6 +31,12 @@ func _ready() -> void:
 		camera.follow(player, true)
 
 	for arg: String in OS.get_cmdline_user_args():
+		if arg == "--room2":
+			_current_room_id = 2
+			if camera != null:
+				camera.slide_to(ROOM_2, 0.0)
+			if player != null:
+				player.position = Vector2(1440, 270)
 		if arg.begins_with("--shot="):
 			_shoot(arg.trim_prefix("--shot="))
 
@@ -78,30 +84,67 @@ func _setup_tilemaps() -> void:
 	else:
 		add_child(walls_layer)
 
-	# วางพื้นทั่วทั้งสองห้อง (x: 0..1920, y: 0..540)
-	for gy in range(-6, 32):
-		for gx in range(-6, 40):
-			var world_pos: Vector2 = floor_layer.map_to_local(Vector2i(gx, gy))
-			if world_pos.x >= -64.0 and world_pos.x <= 1984.0 and world_pos.y >= -32.0 and world_pos.y <= 580.0:
+	# คำนวณขอบเขต cell จาก rect ของทั้งสองห้อง (Room 1 + Room 2 = 0..1920, 0..540) ด้วย local_to_map
+	var full_rect := ROOM_1.merge(ROOM_2) # Rect2(0, 0, 1920, 540)
+	var corners: Array[Vector2] = [
+		full_rect.position,
+		Vector2(full_rect.end.x, full_rect.position.y),
+		Vector2(full_rect.position.x, full_rect.end.y),
+		full_rect.end
+	]
+	var c_cells: Array[Vector2i] = []
+	for c in corners:
+		c_cells.append(floor_layer.local_to_map(c))
+
+	var min_gx: int = c_cells[0].x
+	var max_gx: int = c_cells[0].x
+	var min_gy: int = c_cells[0].y
+	var max_gy: int = c_cells[0].y
+	for cell in c_cells:
+		min_gx = mini(min_gx, cell.x)
+		max_gx = maxi(max_gx, cell.x)
+		min_gy = mini(min_gy, cell.y)
+		max_gy = maxi(max_gy, cell.y)
+
+	# ขยายช่วง cell เพื่อให้คลุมขอบจอทั้งห้อง 1 และห้อง 2 อย่างสมบูรณ์
+	min_gx -= 3
+	max_gx += 3
+	min_gy -= 3
+	max_gy += 3
+
+	# วางพื้นทั่วทั้งสองห้อง (ห้อง 2 มีพื้นครบถ้วน)
+	for gy: int in range(min_gy, max_gy + 1):
+		for gx: int in range(min_gx, max_gx + 1):
+			var cell := Vector2i(gx, gy)
+			var world_pos: Vector2 = floor_layer.map_to_local(cell)
+			if world_pos.x >= -64.0 and world_pos.x <= 1984.0 and world_pos.y >= -32.0 and world_pos.y <= 572.0:
 				var kind: int = (abs(gx) + abs(gy)) % 3
-				floor_layer.set_cell(Vector2i(gx, gy), 0, Vector2i(kind, 1))
+				floor_layer.set_cell(cell, 0, Vector2i(kind, 1))
 
-	# วางกำแพง TileMapLayer เพื่อพิสูจน์การตรวจจับ occlusion ของ silhouette
-	var wall_coords_room1: Array[Vector2i] = [
-		Vector2i(6, 8), Vector2i(7, 8), Vector2i(8, 8),
-		Vector2i(12, 12), Vector2i(13, 12),
-		Vector2i(4, 14), Vector2i(10, 6)
+	# วางกำแพง TileMapLayer ด้วยพิกัดโลกในแต่ละห้องที่แปลงเป็น cell ผ่าน local_to_map
+	# และมั่นใจได้ว่า map_to_local อยู่ในห้องจริง
+	var room1_wall_world_positions: Array[Vector2] = [
+		Vector2(260, 200), Vector2(324, 200), Vector2(388, 200),
+		Vector2(580, 320), Vector2(644, 320),
+		Vector2(200, 360), Vector2(520, 180)
 	]
-	for c in wall_coords_room1:
-		walls_layer.set_cell(c, 0, Vector2i(3, 0))
+	for wpos in room1_wall_world_positions:
+		var cell: Vector2i = walls_layer.local_to_map(wpos)
+		walls_layer.set_cell(cell, 0, Vector2i(3, 0))
 
-	var wall_coords_room2: Array[Vector2i] = [
-		Vector2i(20, 8), Vector2i(21, 8), Vector2i(22, 8),
-		Vector2i(26, 12), Vector2i(27, 12),
-		Vector2i(18, 14), Vector2i(24, 6)
+	var room2_wall_world_positions: Array[Vector2] = [
+		Vector2(1220, 200), Vector2(1284, 200), Vector2(1348, 200),
+		Vector2(1540, 320), Vector2(1604, 320),
+		Vector2(1160, 360), Vector2(1480, 180)
 	]
-	for c in wall_coords_room2:
-		walls_layer.set_cell(c, 0, Vector2i(3, 0))
+	for wpos in room2_wall_world_positions:
+		var cell: Vector2i = walls_layer.local_to_map(wpos)
+		walls_layer.set_cell(cell, 0, Vector2i(3, 0))
+
+	# ผูก walls_layer เข้ากับ silhouette ของตัวละคร
+	if silhouette != null:
+		silhouette.occluder_layers = [walls_layer.get_path()]
+		silhouette.direct_occluder_layers = [walls_layer]
 
 
 func _make_tileset() -> TileSet:

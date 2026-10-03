@@ -3,11 +3,16 @@ extends Node2D
 ## Silhouette เมื่อตัวละครถูกวัตถุบัง (Occlusion)
 ## node ลูกใต้ตัวละคร ชี้ไปที่ CanvasItem สไปรต์ของตัวนั้น
 ## เมื่อมีวัตถุบัง (y มากกว่าเท้าตัวละคร และทับสไปรต์) จะวาดสำเนาสไปรต์เป็นสีเดียวม่วงอ่อนด้วย z_index สูงกว่ากำแพง
+## ตรวจจับวัตถุบัง 2 ทาง:
+## 1. TileMapLayer ทรงสูง (เช่น กำแพง) ผ่าน @export var occluder_layers: Array[NodePath] (คำนวณเรขาคณิตด้วย local_to_map / map_to_local ไม่พึ่ง physics)
+## 2. Area2D บน layer world สำหรับวัตถุ/พร็อพ/ศัตรูทั่วไป (นับทุก Area2D ที่ทับ detection_area)
 
 const DEFAULT_COLOR := Color(0.7843, 0.7216, 1.0, 0.55)
 const SHADER_RES_PATH := "res://systems/player/occlusion/occlusion_silhouette.gdshader"
 
 @export var sprite_path: NodePath = NodePath("")
+## รายชื่อ NodePath ของ TileMapLayer ที่เป็นวัตถุสูง เช่น กำแพง/เสา
+@export var occluder_layers: Array[NodePath] = []
 ## สีของ silhouette (ม่วงอ่อนโปร่งใส ~ #c8b8ff alpha 0.55)
 @export var color: Color = DEFAULT_COLOR
 ## z_index ที่สูงกว่ากำแพง เพื่อให้วาดทับสิ่งกีดขวาง
@@ -19,22 +24,20 @@ const SHADER_RES_PATH := "res://systems/player/occlusion/occlusion_silhouette.gd
 ## ตำแหน่งกึ่งกลางของพื้นที่ตรวจจับสัมพันธ์กับเท้าตัวละคร (origin อยู่ที่เท้า)
 @export var detection_offset: Vector2 = Vector2(0.0, -24.0)
 
+## รายการ TileMapLayer กำหนดเป็น instance โดยตรง (สำหรับ unit test หรือ dynamic assignment)
+var direct_occluder_layers: Array[TileMapLayer] = []
+
 var target_sprite: CanvasItem = null
 var silhouette_sprite: Sprite2D = null
 var detection_area: Area2D = null
 var detection_shape: CollisionShape2D = null
 var mock_occluders: Array = []
-var _overlapping_tiles: Dictionary = {} # RID -> { "layer": TileMapLayer, "coords": Vector2i }
 
 var _shader_mat: ShaderMaterial = null
 
 
 func _ready() -> void:
 	setup()
-
-
-func _exit_tree() -> void:
-	_overlapping_tiles.clear()
 
 
 ## กำหนดค่าเริ่มต้นและผูก node — แยกจาก _ready ให้เทสต์เรียกได้โดยไม่ต้องอยู่ใน scene tree
@@ -92,11 +95,6 @@ func _setup_detection_area() -> void:
 	detection_area.monitoring = true
 	detection_area.monitorable = false
 
-	if not detection_area.body_shape_entered.is_connected(_on_body_shape_entered):
-		detection_area.body_shape_entered.connect(_on_body_shape_entered)
-	if not detection_area.body_shape_exited.is_connected(_on_body_shape_exited):
-		detection_area.body_shape_exited.connect(_on_body_shape_exited)
-
 	if detection_shape == null:
 		detection_shape = detection_area.get_node_or_null("CollisionShape2D") as CollisionShape2D
 		if detection_shape == null:
@@ -112,19 +110,18 @@ func _setup_detection_area() -> void:
 	detection_shape.position = detection_offset
 
 
-func _on_body_shape_entered(body_rid: RID, body: Node, _body_shape_index: int, _local_shape_index: int) -> void:
-	if body is TileMapLayer:
-		var layer: TileMapLayer = body as TileMapLayer
-		var coords: Vector2i = layer.get_coords_for_body_rid(body_rid)
-		if coords != Vector2i(-1, -1):
-			_overlapping_tiles[body_rid] = {
-				"layer": layer,
-				"coords": coords
-			}
-
-
-func _on_body_shape_exited(body_rid: RID, _body: Node, _body_shape_index: int, _local_shape_index: int) -> void:
-	_overlapping_tiles.erase(body_rid)
+func _get_active_occluder_layers() -> Array[TileMapLayer]:
+	var result: Array[TileMapLayer] = []
+	for layer: TileMapLayer in direct_occluder_layers:
+		if is_instance_valid(layer) and not result.has(layer):
+			result.append(layer)
+	for path: NodePath in occluder_layers:
+		if path.is_empty():
+			continue
+		var node: Node = get_node_or_null(path)
+		if node is TileMapLayer and not result.has(node as TileMapLayer):
+			result.append(node as TileMapLayer)
+	return result
 
 
 ## อัปเดตข้อมูลภาพของ silhouette ให้ตรงกับ target sprite (Sprite2D หรือ AnimatedSprite2D)
@@ -133,7 +130,8 @@ func sync_with_sprite() -> void:
 	if target_sprite == null or silhouette_sprite == null:
 		return
 
-	silhouette_sprite.global_transform = target_sprite.global_transform
+	if target_sprite is Node2D:
+		silhouette_sprite.global_transform = get_node_effective_global_transform(target_sprite as Node2D)
 
 	if target_sprite is Sprite2D:
 		var s: Sprite2D = target_sprite as Sprite2D
@@ -165,6 +163,9 @@ func sync_with_sprite() -> void:
 ## ดึงตำแหน่ง bounding box ของสไปรต์ใน world coordinate
 func get_sprite_world_rect() -> Rect2:
 	var base_pos: Vector2 = global_position
+	if get_parent() != null and get_parent() is Node2D:
+		base_pos = get_node_effective_global_transform(get_parent() as Node2D).origin
+
 	if target_sprite is Sprite2D:
 		var s: Sprite2D = target_sprite as Sprite2D
 		var sz: Vector2 = detection_size
@@ -176,9 +177,10 @@ func get_sprite_world_rect() -> Rect2:
 				sz.x /= float(s.hframes)
 			if s.vframes > 1:
 				sz.y /= float(s.vframes)
-		var scale_factor: Vector2 = s.global_scale.abs()
+		var xform: Transform2D = get_node_effective_global_transform(s)
+		var scale_factor: Vector2 = xform.get_scale().abs()
 		sz = sz * scale_factor
-		var top_left: Vector2 = s.global_position + (s.offset * s.global_scale) - (sz * 0.5 if s.centered else Vector2.ZERO)
+		var top_left: Vector2 = xform.origin + (s.offset * scale_factor) - (sz * 0.5 if s.centered else Vector2.ZERO)
 		return Rect2(top_left, sz)
 	elif target_sprite is AnimatedSprite2D:
 		var a: AnimatedSprite2D = target_sprite as AnimatedSprite2D
@@ -188,19 +190,34 @@ func get_sprite_world_rect() -> Rect2:
 			var tex: Texture2D = frames.get_frame_texture(a.animation, a.frame)
 			if tex != null:
 				sz = tex.get_size()
-		var scale_factor: Vector2 = a.global_scale.abs()
+		var xform: Transform2D = get_node_effective_global_transform(a)
+		var scale_factor: Vector2 = xform.get_scale().abs()
 		sz = sz * scale_factor
-		var top_left: Vector2 = a.global_position + (a.offset * a.global_scale) - (sz * 0.5 if a.centered else Vector2.ZERO)
+		var top_left: Vector2 = xform.origin + (a.offset * scale_factor) - (sz * 0.5 if a.centered else Vector2.ZERO)
 		return Rect2(top_left, sz)
 
 	return Rect2(base_pos + detection_offset - detection_size * 0.5, detection_size)
+
+
+## คืนค่า global transform ของ node (รองรับทั้งเมื่ออยู่ใน scene tree และเมื่ออยู่นอก tree ใน unit test)
+static func get_node_effective_global_transform(node: Node2D) -> Transform2D:
+	if node == null:
+		return Transform2D.IDENTITY
+	if node.is_inside_tree():
+		return node.global_transform
+	var xform: Transform2D = node.transform
+	var cur: Node = node.get_parent()
+	while cur != null and cur is Node2D:
+		xform = (cur as Node2D).transform * xform
+		cur = cur.get_parent()
+	return xform
 
 
 ## ตัดสินว่าขณะนี้ตัวละครถูกวัตถุบังหรือไม่ โดยเรียก is_occluding() เสมอ
 func evaluate_occlusion() -> bool:
 	var feet_y: float = global_position.y
 	if get_parent() != null and get_parent() is Node2D:
-		feet_y = (get_parent() as Node2D).global_position.y
+		feet_y = get_node_effective_global_transform(get_parent() as Node2D).origin.y
 
 	var spr_rect: Rect2 = get_sprite_world_rect()
 
@@ -220,27 +237,14 @@ func evaluate_occlusion() -> bool:
 					return true
 		return false
 
-	# 2. โหมดรันจริง: TileMapLayer ที่ทับซ้อน (บันทึกจาก body_shape_entered/exited)
-	var invalid_rids: Array[RID] = []
-	for rid: RID in _overlapping_tiles:
-		var item: Dictionary = _overlapping_tiles[rid]
-		var layer: TileMapLayer = item.get("layer") as TileMapLayer
-		if not is_instance_valid(layer) or not layer.is_inside_tree():
-			invalid_rids.append(rid)
-			continue
-		var coords: Vector2i = item.get("coords", Vector2i(-1, -1))
-		if coords == Vector2i(-1, -1):
-			invalid_rids.append(rid)
-			continue
-		var occ_y: float = get_tile_occluder_y(layer, coords)
-		var occ_rect: Rect2 = get_tile_world_rect(layer, coords)
-		if is_occluding(feet_y, occ_y, spr_rect, occ_rect):
-			return true
+	# 2. โหมดรันจริง: TileMapLayer ที่กำหนดผ่าน occluder_layers (เรขาคณิต cell ผ่าน local_to_map ไม่พึ่ง physics)
+	var active_layers: Array[TileMapLayer] = _get_active_occluder_layers()
+	for layer: TileMapLayer in active_layers:
+		if is_instance_valid(layer) and layer.tile_set != null:
+			if is_tile_layer_occluding(layer, feet_y, spr_rect):
+				return true
 
-	for rid: RID in invalid_rids:
-		_overlapping_tiles.erase(rid)
-
-	# 3. โหมดรันจริง: Area2D และ Bodies อื่น ๆ
+	# 3. โหมดรันจริง: Area2D และ Bodies อื่น ๆ บน layer world
 	if detection_area != null:
 		var parent_node: Node = get_parent()
 
@@ -319,12 +323,50 @@ static func is_in_front(feet_y: float, occluder_y: float) -> bool:
 	return occluder_y > feet_y
 
 
+## ตรวจสอบว่าตัวละครถูก tile ใน TileMapLayer บังหรือไม่ โดยแปลง rect สไปรต์เป็น cell ด้วย local_to_map
+## และขยายช่วง cell ด้านล่าง (+2 แถว) เพื่อตรวจจับ tile ทรงสูงที่ยื่นขึ้นมา
+static func is_tile_layer_occluding(layer: TileMapLayer, feet_y: float, spr_rect: Rect2) -> bool:
+	if layer == null or layer.tile_set == null:
+		return false
+
+	var layer_xform: Transform2D = get_node_effective_global_transform(layer)
+	var inv_xform: Transform2D = layer_xform.affine_inverse()
+
+	var c1: Vector2 = spr_rect.position
+	var c2: Vector2 = Vector2(spr_rect.end.x, spr_rect.position.y)
+	var c3: Vector2 = Vector2(spr_rect.position.x, spr_rect.end.y)
+	var c4: Vector2 = spr_rect.end
+
+	var p1: Vector2i = layer.local_to_map(inv_xform * c1)
+	var p2: Vector2i = layer.local_to_map(inv_xform * c2)
+	var p3: Vector2i = layer.local_to_map(inv_xform * c3)
+	var p4: Vector2i = layer.local_to_map(inv_xform * c4)
+
+	var min_x: int = mini(mini(p1.x, p2.x), mini(p3.x, p4.x)) - 1
+	var max_x: int = maxi(maxi(p1.x, p2.x), maxi(p3.x, p4.x)) + 2
+	var min_y: int = mini(mini(p1.y, p2.y), mini(p3.y, p4.y)) - 1
+	var max_y: int = maxi(maxi(p1.y, p2.y), maxi(p3.y, p4.y)) + 2
+
+	for cx: int in range(min_x, max_x + 1):
+		for cy: int in range(min_y, max_y + 1):
+			var cell := Vector2i(cx, cy)
+			var source_id: int = layer.get_cell_source_id(cell)
+			if source_id == -1:
+				continue
+			var occ_y: float = get_tile_occluder_y(layer, cell)
+			var occ_rect: Rect2 = get_tile_world_rect(layer, cell)
+			if is_occluding(feet_y, occ_y, spr_rect, occ_rect):
+				return true
+	return false
+
+
 ## คำนวณค่า Y สำหรับ Y-sort occlusion ของ tile ใน TileMapLayer
 static func get_tile_occluder_y(layer: TileMapLayer, coords: Vector2i) -> float:
 	if layer == null:
 		return 0.0
 	var local_pos: Vector2 = layer.map_to_local(coords)
-	var world_pos: Vector2 = layer.to_global(local_pos)
+	var layer_xform: Transform2D = get_node_effective_global_transform(layer)
+	var world_pos: Vector2 = layer_xform * local_pos
 	var tile_data: TileData = layer.get_cell_tile_data(coords)
 	if tile_data != null and tile_data.has_meta(&"occluder_y"):
 		return float(tile_data.get_meta(&"occluder_y"))
@@ -336,7 +378,8 @@ static func get_tile_world_rect(layer: TileMapLayer, coords: Vector2i) -> Rect2:
 	if layer == null or layer.tile_set == null:
 		return Rect2()
 	var local_center: Vector2 = layer.map_to_local(coords)
-	var world_center: Vector2 = layer.to_global(local_center)
+	var layer_xform: Transform2D = get_node_effective_global_transform(layer)
+	var world_center: Vector2 = layer_xform * local_center
 	var source_id: int = layer.get_cell_source_id(coords)
 	if source_id == -1:
 		var sz: Vector2 = Vector2(layer.tile_set.tile_size)
@@ -353,9 +396,8 @@ static func get_tile_world_rect(layer: TileMapLayer, coords: Vector2i) -> Rect2:
 	var origin: Vector2 = Vector2.ZERO
 	if source is TileSetAtlasSource:
 		var atlas: TileSetAtlasSource = source as TileSetAtlasSource
-		var reg_size: Vector2i = atlas.get_tile_texture_region_size(atlas_coords)
-		if reg_size != Vector2i.ZERO:
-			tile_size = Vector2(reg_size)
+		var size_in_atlas: Vector2i = atlas.get_tile_size_in_atlas(atlas_coords)
+		tile_size = Vector2(atlas.texture_region_size.x * size_in_atlas.x, atlas.texture_region_size.y * size_in_atlas.y)
 		if tile_data != null:
 			origin = Vector2(tile_data.texture_origin)
 

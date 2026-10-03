@@ -486,3 +486,98 @@ func test_silhouette_animated_sprite_tracking() -> bool:
 	char_root.free()
 
 	return occluded and visible_ok and tex_matched and flip_matched
+
+
+func test_occlusion_real_tilemap_layer_diamond_down() -> bool:
+	var ts := TileSet.new()
+	ts.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
+	ts.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_DOWN
+	ts.tile_size = Vector2i(64, 32)
+
+	var src := TileSetAtlasSource.new()
+	src.texture = load("res://systems/player/debug/iso/iso_tiles.png")
+	src.texture_region_size = Vector2i(64, 32)
+	ts.add_source(src, 0)
+	src.create_tile(Vector2i(3, 0), Vector2i(1, 2))
+	var block: TileData = src.get_tile_data(Vector2i(3, 0), 0)
+	block.texture_origin = Vector2i(0, 16)
+
+	var walls_layer := TileMapLayer.new()
+	walls_layer.tile_set = ts
+	var wall_cell := Vector2i(2, 2)
+	walls_layer.set_cell(wall_cell, 0, Vector2i(3, 0))
+
+	var wall_center: Vector2 = walls_layer.map_to_local(wall_cell)
+	var wall_base_y: float = wall_center.y
+	var tile_rect: Rect2 = OcclusionSilhouette.get_tile_world_rect(walls_layer, wall_cell)
+
+	var tile_rect_ok: bool = tile_rect.size == Vector2(64, 64) and is_equal_approx(tile_rect.position.y, wall_base_y - 48.0)
+
+	var char_root := Node2D.new()
+	var spr := Sprite2D.new()
+	spr.name = "HeroSprite"
+	var img := Image.create(32, 48, false, Image.FORMAT_RGBA8)
+	spr.texture = ImageTexture.create_from_image(img)
+	spr.centered = true
+	spr.offset = Vector2(0, -24)
+	char_root.add_child(spr)
+
+	var sil := OcclusionSilhouette.new()
+	sil.sprite_path = NodePath("../HeroSprite")
+	sil.direct_occluder_layers = [walls_layer]
+	char_root.add_child(sil)
+	sil.setup()
+
+	# 1. เท้าอยู่หลังกำแพง (y น้อยกว่าฐาน) สไปรต์ทับภาพ -> บัง
+	char_root.position = Vector2(wall_center.x, wall_base_y - 8.0)
+	var occluded_behind: bool = sil.tick(0.0)
+	var visible_behind: bool = sil.silhouette_sprite != null and sil.silhouette_sprite.visible
+
+	# 2. อยู่หน้ากำแพง (y มากกว่าฐาน) -> ไม่บัง
+	char_root.position = Vector2(wall_center.x, wall_base_y + 8.0)
+	var occluded_in_front: bool = sil.tick(0.0)
+	var visible_in_front: bool = sil.silhouette_sprite != null and sil.silhouette_sprite.visible
+
+	# 3. ไกลกำแพง -> ไม่บัง
+	char_root.position = Vector2(wall_center.x + 200.0, wall_base_y - 8.0)
+	var occluded_far: bool = sil.tick(0.0)
+	var visible_far: bool = sil.silhouette_sprite != null and sil.silhouette_sprite.visible
+
+	char_root.free()
+	walls_layer.free()
+
+	return tile_rect_ok \
+		and occluded_behind and visible_behind \
+		and not occluded_in_front and not visible_in_front \
+		and not occluded_far and not visible_far
+
+
+func test_camera_screen_shake_requested() -> bool:
+	var cam := GameCamera.new()
+	cam._enter_tree()
+
+	var initial_trauma_zero: bool = cam.trauma == 0.0
+
+	# 1. ส่ง screen_shake_requested(0.6, pos) -> trauma เพิ่มขึ้น 0.6
+	EventBus.screen_shake_requested.emit(0.6, Vector2(100, 200))
+	var trauma_06: bool = is_equal_approx(cam.trauma, 0.6)
+
+	# 2. ส่งค่าเกิน 1.0 (0.8) -> trauma ต้องถูก clamp ไม่เกิน 1.0
+	EventBus.screen_shake_requested.emit(0.8, Vector2.ZERO)
+	var trauma_clamped_max: bool = is_equal_approx(cam.trauma, 1.0)
+
+	# 3. ส่งค่าติดลบ (-0.5) ขณะ trauma = 0.5 -> clampf(-0.5, 0, 1) = 0.0 -> trauma ยังคงเป็น 0.5 ไม่ลดลง
+	cam.trauma = 0.5
+	EventBus.screen_shake_requested.emit(-0.5, Vector2.ZERO)
+	var trauma_clamped_min: bool = is_equal_approx(cam.trauma, 0.5)
+
+	# 4. เมื่อออกจาก tree (_exit_tree) ต้อง disconnect สัญญาณ
+	cam._exit_tree()
+	EventBus.screen_shake_requested.emit(0.4, Vector2.ZERO)
+	var disconnected_ok: bool = is_equal_approx(cam.trauma, 0.5)
+
+	cam.free()
+
+	return initial_trauma_zero and trauma_06 and trauma_clamped_max and trauma_clamped_min and disconnected_ok
+
+

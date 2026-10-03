@@ -1,6 +1,6 @@
 # ระบบ: camera
 
-- เจ้าของ: @Firstyjps (Kron) · contract ที่เกี่ยว: `docs/contracts/damage.md` (v1)
+- เจ้าของ: @Firstyjps (Kron) · contract ที่เกี่ยว: `docs/contracts/damage.md` (v1), `docs/contracts/feedback.md` (v1)
 
 ## ทำอะไร
 - ผู้เล่น: กล้องติดตามตัวละครแบบนุ่มนวล ไม่หลุดนอกห้อง/ขอบฉาก สั่นสะเทือนตามความแรงเมื่อเกิดดาเมจ และมี hitstop ให้ความรู้สึกกระแทก
@@ -19,6 +19,7 @@
 
 ## ส่ง / รับ ข้ามระบบ
 - listen: `EventBus.damage_dealt(target, info, final_amount)` — สั่นกล้อง (target อยู่ใน group "player" สั่นแรงกว่า) และเรียก hitstop
+- listen: `EventBus.screen_shake_requested(strength, position)` — สั่นกล้องตามความแรง `add_trauma(clampf(strength, 0, 1))` (เชื่อมต่อใน `_enter_tree`, ตัดใน `_exit_tree`) ตาม contract feedback
 
 ## กติกาเฉพาะระบบ / กับดักที่เคยเจอ
 - ตำแหน่งสุดท้ายของกล้องและ offset ต้อง round เป็น integer pixel เสมอเพื่อคงความคมชัดของ pixel art
@@ -27,12 +28,12 @@
 - slide ช้าลงตาม hitstop (ตั้งใจ): การเลื่อนกล้องใช้ delta ใน process ตาม Engine.time_scale ทำให้ชะลอลงเมื่อติด hitstop ช่วยเพิ่มอิมแพ็กต์
 - `set_focus_target(node)`: คำนวณ offset จุดกึ่งกลางระหว่างผู้เล่นกับเป้าหมายด้วย `focus_weight` และ clamp ระยะห่างด้วย `max_focus_offset` หากเป้าหมายเป็น null หรือถูกทำลายจะกลับไปตามผู้เล่นตามปกติ
 - Contract ของ Occlusion Silhouette (`OcclusionSilhouette`):
-  - โหมดจริงทำงานโดย Area2D และจับคู่ตรรกะเดียวกับ unit test (`is_occluding`)
-  - รองรับ TileMapLayer: ตรวจจับผ่าน `body_shape_entered` / `body_shape_exited` ร่วมกับ `get_coords_for_body_rid()` และ `map_to_local()` เพื่อคำนวณตำแหน่ง Y ของ tile ก้อนนั้น
-  - สำหรับ occluder ชนิดอื่น: ใช้โหนดชื่อขึ้นต้นด้วย `OcclusionArea` หรือตั้ง metadata บนโหนด occluder: `occluder_y` (float) สำหรับจุดอ้างอิงฐาน และ `occluder_rect` (Rect2) สำหรับขอบเขตการบัง
+  - Silhouette กับ TileMapLayer: ไม่พึ่งพา physics engine โดยใช้ `@export var occluder_layers: Array[NodePath]` (และ `direct_occluder_layers`) คำนวณเชิงเรขาคณิตในทุกเฟรม แปลง rect สไปรต์ (world) เป็นช่วง cell ด้วย `local_to_map` ของมุมทั้ง 4 (ขยาย +2 แถวด้านล่างสำหรับ tile ทรงสูง)
+  - Tile rect และ depth: คำนวณจาก `map_to_local(cell)` + `texture_origin` + ขนาด `texture_region_size × size_in_atlas` จาก atlas source และเทียบ `occluder_y` (y ฐาน cell) ด้วย `is_occluding()`
+  - สำหรับ occluder อื่น ๆ: นับทุก Area2D และ Bodies บน layer world ที่ทับ `detection_area` (หรือวัตถุที่มี `OcclusionArea` / metadata `occluder_y`, `occluder_rect`)
   - เกณฑ์การตัดสิน (`is_occluding`): บังเมื่อ `occluder_y > feet_y` (วัตถุอยู่ด้านหน้าเท้าตัวละครในระบบ isometric Y-sort) และ `sprite_rect.intersects(occluder_rect)` (รูปทรงบังซ้อนทับสไปรต์ตัวละคร)
-  - ซิงค์ transform ตาม `target_sprite.global_transform` เสมอเพื่อรองรับการ flip / nesting และจะซ่อนอัตโนมัติหาก `not target_sprite.is_visible_in_tree()`
-- แยก static logic (decay_trauma, clamp_to_bounds, calculate_shake_offset, compute_follow_position, compute_slide_position, compute_focus_offset, compute_focus_point, is_occluding, is_in_front, get_occluder_y, get_occluder_rect, get_tile_occluder_y, get_tile_world_rect) เพื่อให้รัน unit test ได้โดยไม่ต้องพึ่ง scene tree
+  - ซิงค์ transform ตาม `target_sprite` เสมอ (ผ่าน `get_node_effective_global_transform`) เพื่อรองรับการ flip / nesting แม้ไม่ได้อยู่ใน scene tree และจะซ่อนอัตโนมัติหาก `not is_node_visible_in_hierarchy(target_sprite)`
+- แยก static logic (decay_trauma, clamp_to_bounds, calculate_shake_offset, compute_follow_position, compute_slide_position, compute_focus_offset, compute_focus_point, is_occluding, is_in_front, get_occluder_y, get_occluder_rect, get_tile_occluder_y, get_tile_world_rect, is_tile_layer_occluding, get_node_effective_global_transform) เพื่อให้รัน unit test ได้โดยไม่ต้องพึ่ง scene tree
 
 ## เทสต์
 - `game/tests/test_camera_system.gd`

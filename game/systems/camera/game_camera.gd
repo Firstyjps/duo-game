@@ -56,20 +56,32 @@ var _slide_elapsed: float = 0.0
 static var _hitstop_count: int = 0
 
 
+func _enter_tree() -> void:
+	if EventBus != null and is_instance_valid(EventBus):
+		if not EventBus.screen_shake_requested.is_connected(_on_screen_shake_requested):
+			EventBus.screen_shake_requested.connect(_on_screen_shake_requested)
+
+
 func _ready() -> void:
 	setup()
 
 
 func _exit_tree() -> void:
-	if EventBus != null and is_instance_valid(EventBus) and EventBus.damage_dealt.is_connected(_on_damage_dealt):
-		EventBus.damage_dealt.disconnect(_on_damage_dealt)
+	if EventBus != null and is_instance_valid(EventBus):
+		if EventBus.damage_dealt.is_connected(_on_damage_dealt):
+			EventBus.damage_dealt.disconnect(_on_damage_dealt)
+		if EventBus.screen_shake_requested.is_connected(_on_screen_shake_requested):
+			EventBus.screen_shake_requested.disconnect(_on_screen_shake_requested)
 	reset_hitstop()
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
-		if EventBus != null and is_instance_valid(EventBus) and EventBus.damage_dealt.is_connected(_on_damage_dealt):
-			EventBus.damage_dealt.disconnect(_on_damage_dealt)
+		if EventBus != null and is_instance_valid(EventBus):
+			if EventBus.damage_dealt.is_connected(_on_damage_dealt):
+				EventBus.damage_dealt.disconnect(_on_damage_dealt)
+			if EventBus.screen_shake_requested.is_connected(_on_screen_shake_requested):
+				EventBus.screen_shake_requested.disconnect(_on_screen_shake_requested)
 
 
 ## กำหนดค่าเริ่มต้นและผูก signal — แยกจาก _ready ให้เทสต์เรียกได้โดยไม่ต้องอยู่ใน scene tree
@@ -77,8 +89,11 @@ func setup() -> void:
 	_internal_pos = position
 	if bounds.size != Vector2.ZERO:
 		set_bounds(bounds)
-	if EventBus != null and is_instance_valid(EventBus) and not EventBus.damage_dealt.is_connected(_on_damage_dealt):
-		EventBus.damage_dealt.connect(_on_damage_dealt)
+	if EventBus != null and is_instance_valid(EventBus):
+		if not EventBus.damage_dealt.is_connected(_on_damage_dealt):
+			EventBus.damage_dealt.connect(_on_damage_dealt)
+		if not EventBus.screen_shake_requested.is_connected(_on_screen_shake_requested):
+			EventBus.screen_shake_requested.connect(_on_screen_shake_requested)
 
 
 ## กำหนดเป้าหมายที่กล้องจะติดตาม
@@ -344,3 +359,8 @@ func _on_damage_dealt(damaged_target: Node, _info: DamageInfo, _final_amount: in
 	if hitstop_enabled:
 		var duration: float = hitstop_player_hit_duration if is_player else hitstop_other_hit_duration
 		hitstop(duration, get_tree() if is_inside_tree() else null, hitstop_time_scale)
+
+
+func _on_screen_shake_requested(strength: float, _position: Vector2) -> void:
+	add_trauma(clampf(strength, 0.0, 1.0))
+
