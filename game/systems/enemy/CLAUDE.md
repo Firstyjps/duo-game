@@ -10,6 +10,9 @@
 | ไฟล์ | หน้าที่ |
 |---|---|
 | `slime/slime.tscn` + `slime.gd` | สไลม์: IDLE → CHASE (เด้ง) → WINDUP (ย่อตัว + กระพริบแดง) → LEAP (Hitbox เปิดถึงตกพื้นครั้งแรก แล้วเด้งต่อ 1 ครั้ง) → RECOVER · HURT · DEAD · ตอนลอยยืดเป็นวงรีชี้ไปทางที่พุ่งด้วยโค้ด (`leap_pose()`, กลุ่ม `Leap Shape`) ไม่หมุนตัว · เดินยืด/แบนทุกก้าว (`hop_pose()`) · โดนตีตาหยี + สั่นเยลลี่ตามทิศที่โดน (`hurt_pose()`) |
+| `ink_archer/ink_archer.tscn` + `ink_archer.gd` | นักธนูหมึก (เฟส 4): WANDER → (เห็นผู้เล่น) KEEP_DISTANCE (รักษาระยะ `preferred_range` ~160 ถอยหนีถ้าใกล้กว่า `flee_range` ~80) → AIM (telegraph เส้นเล็งจาง + ค้างง้าง shoot 4–6 ล็อคทิศ `aim_time` ~0.7s) → SHOOT (spawn `InkArrow` ที่เฟรม 7) → RECOVER (~0.6s) · HURT (poise) · DEAD (emit `enemy_died` ครั้งเดียว + จาง) · ใช้ `DirSprite` 8 ทิศ atlas 96×96 `offset.y = -32` |
+| `ink_archer/ink_arrow.tscn` + `ink_arrow.gd` | ลูกธนูหมึก: Area2D + Hitbox บินตรง `arrow_speed` ~260 ชนกำแพง (`world`) หรือ Hurtbox แล้วหาย · โดน parry (`Hitbox.deflected`) สะท้อนกลับเป็นทีม PLAYER บินกลับทิศเดิม (ไม่สะท้อนซ้ำ) · วาดด้วยโค้ด |
+| `ink_archer/debug/ink_archer_sandbox.tscn` | scene ลองนักธนูหมึก (F6): มีผู้เล่นจริง `player.tscn`, กำแพงชนได้, ลอง dodge และ parry สะท้อนลูกธนู |
 | `slime/slime_sheet.png` | sprite 18 เฟรม 32×32 (idle 0–7, กระพริบตา 8–9, windup 10–11, leap 12 (ยังไม่ใช้), land 13, death 14–16, hurt ตาหยี 17) — สร้างจาก `slime/tools/gen_slime_sheet.gd` (placeholder art, แก้สีแล้วรันใหม่) |
 | `slime/slime_vfx.gd` | `SlimeVfx` เอฟเฟกต์ท่าพุ่ง วาดเองแบบ pixel: ฝุ่นตอนกระโดด · คลื่นกระแทก + เมือกกระเด็นตอนตกพื้น (after-image อยู่ใน `slime.gd`) · ค่าจูนอยู่ใน `@export_group("VFX")` ของ Slime |
 | `slime/tools/slime_viewer.html` | ดู sprite + แอนิเมชัน + VFX ในเบราว์เซอร์ (idle · เดิน · โจมตี · โดนตี · ตาย) — ดูวิธีสร้างใหม่ที่ "sprite ที่วาดด้วยโค้ด + viewer" ด้านล่าง |

@@ -1,0 +1,51 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://systems/enemy/ink_archer/ink_archer.gd" id="1_archer"]
+[ext_resource type="SpriteFrames" path="res://systems/enemy/ink_archer/art/ink_archer_frames.tres" id="2_frames"]
+[ext_resource type="Script" path="res://systems/player/iso/dir_sprite.gd" id="3_dir_sprite"]
+[ext_resource type="Script" path="res://core/combat/health.gd" id="4_health"]
+[ext_resource type="Script" path="res://core/combat/hurtbox.gd" id="5_hurtbox"]
+
+[sub_resource type="CircleShape2D" id="Shape_body"]
+radius = 8.0
+
+[sub_resource type="CircleShape2D" id="Shape_hurt"]
+radius = 12.0
+
+[sub_resource type="CircleShape2D" id="Shape_detect"]
+radius = 280.0
+
+[node name="InkArcher" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 7
+motion_mode = 1
+script = ExtResource("1_archer")
+
+[node name="DirSprite" type="AnimatedSprite2D" parent="."]
+sprite_frames = ExtResource("2_frames")
+animation = &"idle_south"
+offset = Vector2(0, -32)
+script = ExtResource("3_dir_sprite")
+
+[node name="Body" type="CollisionShape2D" parent="."]
+position = Vector2(0, -6)
+shape = SubResource("Shape_body")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("4_health")
+max_hp = 10
+
+[node name="Hurtbox" type="Area2D" parent="."]
+script = ExtResource("5_hurtbox")
+team = 1
+
+[node name="Shape" type="CollisionShape2D" parent="Hurtbox"]
+position = Vector2(0, -16)
+shape = SubResource("Shape_hurt")
+
+[node name="Detect" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+
+[node name="Shape" type="CollisionShape2D" parent="Detect"]
+shape = SubResource("Shape_detect")

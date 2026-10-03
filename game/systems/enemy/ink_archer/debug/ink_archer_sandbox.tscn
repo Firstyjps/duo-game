@@ -1,0 +1,79 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://systems/enemy/ink_archer/debug/ink_archer_sandbox.gd" id="1_sb"]
+[ext_resource type="PackedScene" path="res://systems/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" path="res://systems/enemy/ink_archer/ink_archer.tscn" id="3_archer"]
+
+[sub_resource type="RectangleShape2D" id="Wall_H"]
+size = Vector2(960, 20)
+
+[sub_resource type="RectangleShape2D" id="Wall_V"]
+size = Vector2(20, 540)
+
+[sub_resource type="RectangleShape2D" id="Pillar"]
+size = Vector2(40, 40)
+
+[node name="InkArcherSandbox" type="Node2D"]
+y_sort_enabled = true
+script = ExtResource("1_sb")
+
+[node name="Floor" type="ColorRect" parent="."]
+z_index = -10
+offset_right = 960.0
+offset_bottom = 540.0
+color = Color(0.14, 0.15, 0.18, 1)
+
+[node name="Walls" type="StaticBody2D" parent="."]
+collision_layer = 1
+collision_mask = 0
+
+[node name="Top" type="CollisionShape2D" parent="Walls"]
+position = Vector2(480, 10)
+shape = SubResource("Wall_H")
+
+[node name="Bottom" type="CollisionShape2D" parent="Walls"]
+position = Vector2(480, 530)
+shape = SubResource("Wall_H")
+
+[node name="Left" type="CollisionShape2D" parent="Walls"]
+position = Vector2(10, 270)
+shape = SubResource("Wall_V")
+
+[node name="Right" type="CollisionShape2D" parent="Walls"]
+position = Vector2(950, 270)
+shape = SubResource("Wall_V")
+
+[node name="Pillar" type="CollisionShape2D" parent="Walls"]
+position = Vector2(480, 200)
+shape = SubResource("Pillar")
+
+[node name="PillarVisual" type="ColorRect" parent="Walls/Pillar"]
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+color = Color(0.28, 0.3, 0.35, 1)
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+position = Vector2(360, 320)
+
+[node name="InkArcher" parent="." instance=ExtResource("3_archer")]
+position = Vector2(560, 320)
+
+[node name="InkArcher2" parent="." instance=ExtResource("3_archer")]
+position = Vector2(680, 220)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(480, 270)
+zoom = Vector2(1.8, 1.8)
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Label" type="Label" parent="UI"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 500.0
+offset_bottom = 90.0
+text = "Ink Archer Sandbox (issue #61)
+WASD: เดิน · J / คลิกซ้าย: โจมตี · Space: หลบ
+F / คลิกขวา: Parry ปัดป้อง (สะท้อนลูกธนูกลับไปโดนศัตรูได้)"
