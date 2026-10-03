@@ -593,7 +593,7 @@ func test_room_started_sets_bounds_then_slides() -> bool:
 	var first_ok: bool = cam.bounds == r1
 	EventBus.room_started.emit(null, r2)
 	var sliding: bool = cam._is_sliding and cam._slide_target_rect == r2
-	EventBus.player_respawn_requested.emit(Vector2.ZERO)
+	EventBus.player_respawn_requested.emit(Vector2(-5000, -5000))  # นอกทุกห้อง → เลิกขอบ
 	var cleared: bool = cam.bounds.size == Vector2.ZERO
 	cam._disconnect_bus()
 	cam.free()
@@ -611,3 +611,18 @@ func test_reenter_tree_reconnects_damage() -> bool:
 	cam._disconnect_bus()
 	cam.free()
 	return off and on
+
+
+## ฟื้นในห้องเดิม (เช่นพักศาลเจ้า) → คงขอบ · ฟื้นนอกห้อง → เลิกขอบ
+func test_respawn_keeps_bounds_inside_room() -> bool:
+	var cam := GameCamera.new()
+	cam.setup()
+	var r := Rect2(0, 0, 960, 540)
+	cam.set_bounds(r)
+	EventBus.player_respawn_requested.emit(Vector2(100, 100))
+	var kept: bool = cam.bounds == r
+	EventBus.player_respawn_requested.emit(Vector2(5000, 100))
+	var cleared: bool = cam.bounds.size == Vector2.ZERO
+	cam._disconnect_bus()
+	cam.free()
+	return kept and cleared
