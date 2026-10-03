@@ -18,7 +18,7 @@ func _initialize() -> void:
 	var dungeon_script: GDScript = load("res://systems/dungeon/dungeon.gd")
 	
 	# 1. สร้าง room.tscn (Standalone base room)
-	var base_room: Node2D = _build_room("Room", &"base_room", 2, Vector2i(10, 5), ts, door_scene, room_script)
+	var base_room: Node2D = _build_room("Room", &"base_room", 2, Vector2i(10, 5), false, Vector2i(0, 5), false, ts, door_scene, room_script)
 	var packed_room: PackedScene = PackedScene.new()
 	var err: Error = packed_room.pack(base_room)
 	if err == OK:
@@ -28,7 +28,7 @@ func _initialize() -> void:
 		printerr("Failed to pack room.tscn: ", err)
 	base_room.free()
 	
-	# 2. สร้าง dungeon.tscn (3 ห้อง)
+	# 2. สร้าง dungeon.tscn (3 ห้องต่อกันจริงในโลก มีทางเดินเชื่อม)
 	var dungeon: Node2D = dungeon_script.new()
 	dungeon.name = "Dungeon"
 	dungeon.y_sort_enabled = true
@@ -40,18 +40,21 @@ func _initialize() -> void:
 	dungeon.add_child(modulate)
 	modulate.owner = dungeon
 	
-	var r1: Node2D = _build_room("Room1", &"room_1", 2, Vector2i(10, 5), ts, door_scene, room_script)
+	# Room 1: starting room (2 slimes), connects to Room 2 via corridor
+	var r1: Node2D = _build_room("Room1", &"room_1", 2, Vector2i(10, 5), false, Vector2i(0, 5), true, ts, door_scene, room_script)
 	r1.position = Vector2(0, 0)
 	dungeon.add_child(r1)
 	_set_owner_recursive(r1, dungeon)
 	
-	var r2: Node2D = _build_room("Room2", &"room_2", 4, Vector2i(10, 5), ts, door_scene, room_script)
-	r2.position = Vector2(1400, 0)
+	# Room 2: middle battle room (4 slimes), entrance from Room 1, exit to Room 3 via corridor
+	var r2: Node2D = _build_room("Room2", &"room_2", 4, Vector2i(10, 5), true, Vector2i(0, 5), true, ts, door_scene, room_script)
+	r2.position = Vector2(416, 208)
 	dungeon.add_child(r2)
 	_set_owner_recursive(r2, dungeon)
 	
-	var r3: Node2D = _build_room("Room3", &"room_3", 0, Vector2i(10, 5), ts, door_scene, room_script)
-	r3.position = Vector2(2800, 0)
+	# Room 3: final room (0 slimes), entrance from Room 2, exit door
+	var r3: Node2D = _build_room("Room3", &"room_3", 0, Vector2i(10, 5), true, Vector2i(0, 5), false, ts, door_scene, room_script)
+	r3.position = Vector2(832, 416)
 	dungeon.add_child(r3)
 	_set_owner_recursive(r3, dungeon)
 	
@@ -69,7 +72,18 @@ func _initialize() -> void:
 	quit(0)
 
 
-func _build_room(node_name: String, r_id: StringName, spawn_count: int, exit_door_pos: Vector2i, ts: TileSet, door_scene: PackedScene, room_script: GDScript) -> Node2D:
+func _build_room(
+	node_name: String,
+	r_id: StringName,
+	spawn_count: int,
+	exit_door_pos: Vector2i,
+	has_entrance: bool,
+	entrance_door_pos: Vector2i,
+	has_corridor: bool,
+	ts: TileSet,
+	door_scene: PackedScene,
+	room_script: GDScript
+) -> Node2D:
 	var room: Node2D = room_script.new()
 	room.name = node_name
 	room.set("room_id", r_id)
@@ -96,8 +110,15 @@ func _build_room(node_name: String, r_id: StringName, spawn_count: int, exit_doo
 				tile_coord = Vector2i(3, 0) # kintsugi crack 2
 			floor_layer.set_cell(Vector2i(x, y), 0, tile_coord)
 	
-	# Door threshold tile
+	# Door threshold tiles
 	floor_layer.set_cell(exit_door_pos, 0, Vector2i(6, 0))
+	if has_entrance:
+		floor_layer.set_cell(entrance_door_pos, 0, Vector2i(6, 0))
+	
+	# Corridor tiles extending along +X from exit doorway
+	if has_corridor:
+		floor_layer.set_cell(Vector2i(11, 5), 0, Vector2i(0, 0))
+		floor_layer.set_cell(Vector2i(12, 5), 0, Vector2i(0, 0))
 	
 	# WallLayer
 	var wall_layer: TileMapLayer = TileMapLayer.new()
@@ -115,6 +136,9 @@ func _build_room(node_name: String, r_id: StringName, spawn_count: int, exit_doo
 			# Skip exit doorway cell
 			if x == exit_door_pos.x and y == exit_door_pos.y:
 				continue
+			# Skip entrance doorway cell
+			if has_entrance and x == entrance_door_pos.x and y == entrance_door_pos.y:
+				continue
 			
 			var wall_tile := Vector2i(0, 1) # plain wall
 			if (x == 5 and y == 0) or (x == 0 and y == 5):
@@ -124,30 +148,45 @@ func _build_room(node_name: String, r_id: StringName, spawn_count: int, exit_doo
 			
 			wall_layer.set_cell(Vector2i(x, y), 0, wall_tile)
 	
-	# Doors Container & Door instance
+	# Corridor walls
+	if has_corridor:
+		wall_layer.set_cell(Vector2i(11, 4), 0, Vector2i(0, 1))
+		wall_layer.set_cell(Vector2i(12, 4), 0, Vector2i(0, 1))
+		wall_layer.set_cell(Vector2i(11, 6), 0, Vector2i(0, 1))
+		wall_layer.set_cell(Vector2i(12, 6), 0, Vector2i(0, 1))
+	
+	# Doors Container
 	var doors_container: Node2D = Node2D.new()
 	doors_container.name = "Doors"
 	doors_container.y_sort_enabled = true
 	room.add_child(doors_container)
 	
-	var door_inst: Node2D = door_scene.instantiate()
-	door_inst.name = "ExitDoor"
-	door_inst.position = floor_layer.map_to_local(exit_door_pos)
-	doors_container.add_child(door_inst)
+	var exit_door: Node2D = door_scene.instantiate()
+	exit_door.name = "ExitDoor"
+	exit_door.set("door_name", &"exit")
+	exit_door.position = floor_layer.map_to_local(exit_door_pos)
+	doors_container.add_child(exit_door)
+	
+	if has_entrance:
+		var entrance_door: Node2D = door_scene.instantiate()
+		entrance_door.name = "EntranceDoor"
+		entrance_door.set("door_name", &"entrance")
+		entrance_door.position = floor_layer.map_to_local(entrance_door_pos)
+		doors_container.add_child(entrance_door)
 	
 	# Player Detector Area2D
+	# Diamond shape covering inner room, set back from doorways so standing in doorway does not trigger room start
 	var detector: Area2D = Area2D.new()
 	detector.name = "PlayerDetector"
 	detector.collision_layer = 0
 	detector.collision_mask = Combat.LAYER_PLAYER
 	var det_shape: CollisionPolygon2D = CollisionPolygon2D.new()
 	det_shape.name = "CollisionPolygon2D"
-	# Diamond shape covering inner room
 	det_shape.polygon = PackedVector2Array([
 		Vector2(32, 64),
 		Vector2(256, 176),
 		Vector2(32, 288),
-		Vector2(-192, 176)
+		Vector2(-160, 176)
 	])
 	detector.add_child(det_shape)
 	room.add_child(detector)
@@ -184,7 +223,7 @@ func _build_room(node_name: String, r_id: StringName, spawn_count: int, exit_doo
 	enemy_cont.y_sort_enabled = true
 	room.add_child(enemy_cont)
 	
-	# Player Spawn Point
+	# Player Spawn Point (inside room at (2, 5))
 	var p_spawn: Marker2D = Marker2D.new()
 	p_spawn.name = "PlayerSpawnPoint"
 	p_spawn.position = floor_layer.map_to_local(Vector2i(2, 5))

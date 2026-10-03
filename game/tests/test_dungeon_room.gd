@@ -1,9 +1,10 @@
 extends RefCounted
-## ดันเจี้ยนและห้อง isometric — game/systems/dungeon/ · issue #39
+## ดันเจี้ยนและห้อง isometric — game/systems/dungeon/ · issue #39 & contract #52
 
 const ROOM_SCENE: PackedScene = preload("res://systems/dungeon/room/room.tscn")
 const DUNGEON_SCENE: PackedScene = preload("res://systems/dungeon/dungeon.tscn")
 const TILESET: TileSet = preload("res://systems/dungeon/dungeon_tileset.tres")
+const DOOR_SCENE: PackedScene = preload("res://systems/dungeon/room/door.tscn")
 
 
 func test_tileset_isometric_specs() -> bool:
@@ -20,9 +21,6 @@ func test_tileset_isometric_specs() -> bool:
 	ok = ok and td_wall != null and td_wall.texture_origin == Vector2i(0, 16)
 	ok = ok and td_wall.get_collision_polygons_count(0) > 0
 	return ok
-
-
-const DOOR_SCENE: PackedScene = preload("res://systems/dungeon/room/door.tscn")
 
 
 func test_door_collision_and_trigger_toggles() -> bool:
@@ -113,21 +111,31 @@ func test_room_with_no_enemies_clears_immediately() -> bool:
 	
 	room.setup()
 	
-	var cleared_events: Array[Room] = []
-	room.room_cleared.connect(func(r: Room) -> void:
-		cleared_events.append(r)
-	)
+	var bus_started: Array = []
+	var bus_cleared: Array = []
+	var on_started := func(r: Node, rect: Rect2) -> void:
+		bus_started.append([r, rect])
+	var on_cleared := func(r: Node) -> void:
+		bus_cleared.append(r)
+	
+	EventBus.room_started.connect(on_started)
+	EventBus.room_cleared.connect(on_cleared)
 	
 	room.start_room()
 	
-	var ok: bool = room.state == Room.State.CLEARED and cleared_events.size() == 1 and door.is_open
+	var both_emitted: bool = bus_started.size() == 1 and bus_cleared.size() == 1
+	var order_ok: bool = bus_started[0][0] == room and bus_cleared[0] == room
+	var state_ok: bool = room.state == Room.State.CLEARED and door.is_open
+	
+	EventBus.room_started.disconnect(on_started)
+	EventBus.room_cleared.disconnect(on_cleared)
+	
 	_safe_free(room)
-	return ok
+	return both_emitted and order_ok and state_ok
 
 
 func test_spawn_enemies_in_offset_room_matches_marker_position() -> bool:
 	var room: Room = ROOM_SCENE.instantiate()
-	# ตั้งห้องที่ตำแหน่งห่างจาก origin (เช่น 1400, 300)
 	room.position = Vector2(1400.0, 300.0)
 	room.setup()
 	
@@ -144,7 +152,6 @@ func test_spawn_enemies_in_offset_room_matches_marker_position() -> bool:
 			pos_ok = false
 			break
 	
-	# ทำความสะอาดศัตรูก่อน free ห้อง
 	for e: Node in room.spawned_enemies.duplicate():
 		if is_instance_valid(e):
 			e.free()
@@ -154,26 +161,27 @@ func test_spawn_enemies_in_offset_room_matches_marker_position() -> bool:
 
 
 func test_door_has_exact_children_count_no_duplicates() -> bool:
-	# ตรวจสอบว่า door standalone มี 3 ลูก: Sprite2D, Blocker, ExitTrigger
 	var door: Door = DOOR_SCENE.instantiate()
 	door.setup()
 	var standalone_ok: bool = door.get_child_count() == 3
 	_safe_free(door)
 	
-	# ตรวจสอบว่า door ใน room.tscn ไม่มีลูกซ้ำ
 	var room: Room = ROOM_SCENE.instantiate()
 	room.setup()
 	var room_door_ok: bool = room.doors.size() == 1 and room.doors[0].get_child_count() == 3
 	_safe_free(room)
 	
-	# ตรวจสอบว่า door ใน dungeon.tscn ไม่มีลูกซ้ำ
 	var dungeon: Dungeon = DUNGEON_SCENE.instantiate()
 	dungeon.setup()
 	var dungeon_door_ok: bool = true
 	for r: Room in dungeon.rooms:
-		if r.doors.is_empty() or r.doors[0].get_child_count() != 3:
+		if r.doors.is_empty():
 			dungeon_door_ok = false
 			break
+		for d: Door in r.doors:
+			if d.get_child_count() != 3:
+				dungeon_door_ok = false
+				break
 	_safe_free(dungeon)
 	
 	return standalone_ok and room_door_ok and dungeon_door_ok
@@ -204,14 +212,172 @@ func test_enemy_freed_without_signal_clears_from_waiting_list() -> bool:
 	dummy.tree_exiting.emit()
 	dummy.free()
 	
-	# tree_exiting ดักจับและลบออกจาก spawned_enemies -> ห้องเคลียร์
 	var cleared_ok: bool = room.get_remaining_enemies_count() == 0 and room.state == Room.State.CLEARED
 	
 	_safe_free(room)
 	return waiting_ok and cleared_ok
 
 
-func test_dungeon_room_sequence_via_door_entered() -> bool:
+func test_teardown_locked_room_does_not_emit_room_cleared() -> bool:
+	var room: Room = Room.new()
+	var enemy_cont: Node2D = Node2D.new()
+	enemy_cont.name = "EnemyContainer"
+	room.add_child(enemy_cont)
+	
+	var doors_cont: Node2D = Node2D.new()
+	doors_cont.name = "Doors"
+	var door: Door = Door.new()
+	doors_cont.add_child(door)
+	room.add_child(doors_cont)
+	
+	room.setup()
+	room.state = Room.State.LOCKED
+	
+	var dummy: Node = Node.new()
+	enemy_cont.add_child(dummy)
+	room.register_enemy(dummy)
+	
+	var cleared_emitted: Array[bool] = [false]
+	var on_cleared := func(_r: Variant = null) -> void:
+		cleared_emitted[0] = true
+	
+	room.room_cleared.connect(on_cleared)
+	EventBus.room_cleared.connect(on_cleared)
+	
+	# Free ห้องขณะ LOCKED มีศัตรูค้างอยู่
+	room.free()
+	if is_instance_valid(dummy):
+		dummy.free()
+	
+	EventBus.room_cleared.disconnect(on_cleared)
+	
+	# ต้องไม่มีการ emit room_cleared ปลอมตอน teardown
+	return cleared_emitted[0] == false
+
+
+func test_room_started_and_cleared_event_bus_rect() -> bool:
+	var room: Room = ROOM_SCENE.instantiate()
+	room.setup()
+	
+	var started_args: Array = []
+	var cleared_args: Array = []
+	
+	var on_started := func(r: Node, rect: Rect2) -> void:
+		started_args.append([r, rect])
+	var on_cleared := func(r: Node) -> void:
+		cleared_args.append(r)
+	
+	EventBus.room_started.connect(on_started)
+	EventBus.room_cleared.connect(on_cleared)
+	
+	room.start_room()
+	
+	var started_ok: bool = started_args.size() == 1 and started_args[0][0] == room
+	var rect: Rect2 = started_args[0][1] if started_ok else Rect2()
+	var rect_ok: bool = rect.size.x > 0.0 and rect.size.y > 0.0 and rect == room.get_room_rect()
+	
+	var enemies: Array[Node] = room.spawned_enemies.duplicate()
+	for e: Node in enemies:
+		EventBus.enemy_died.emit(e, &"slime", Vector2.ZERO)
+	
+	var cleared_ok: bool = cleared_args.size() == 1 and cleared_args[0] == room and room.state == Room.State.CLEARED
+	
+	EventBus.room_started.disconnect(on_started)
+	EventBus.room_cleared.disconnect(on_cleared)
+	
+	_safe_free(room)
+	return started_ok and rect_ok and cleared_ok
+
+
+func test_player_died_deferred_respawn_after_delay_and_reset() -> bool:
+	var dungeon: Dungeon = DUNGEON_SCENE.instantiate()
+	dungeon.setup()
+	
+	dungeon.rooms[0].state = Room.State.LOCKED
+	var dummy: Node = Node.new()
+	dungeon.rooms[0].register_enemy(dummy)
+	
+	var respawn_events: Array[Vector2] = []
+	var on_respawn := func(pos: Vector2) -> void:
+		respawn_events.append(pos)
+	EventBus.player_respawn_requested.connect(on_respawn)
+	
+	var reset_signal_fired: Array[bool] = [false]
+	dungeon.dungeon_reset.connect(func() -> void:
+		reset_signal_fired[0] = true
+	)
+	
+	# delay ~1.2s ตาม contract
+	dungeon.respawn_delay = 1.2
+	
+	# ผู้เล่นตาย
+	EventBus.player_died.emit()
+	
+	# ต้องไม่ยิง respawn ทันที (deferred timer กำลังนับ)
+	var deferred_ok: bool = respawn_events.is_empty() and dungeon.is_respawn_timer_running() and dungeon._respawn_timer.wait_time == 1.2
+	
+	# จำลอง timer หมดเวลา
+	dungeon._on_respawn_timer_timeout()
+	
+	var expected_spawn: Vector2 = dungeon.rooms[0].player_spawn_point.global_position
+	var respawn_ok: bool = respawn_events.size() == 1 and respawn_events[0] == expected_spawn
+	var reset_ok: bool = reset_signal_fired[0] and dungeon.current_room_index == 0
+	
+	var rooms_idle: bool = true
+	for r: Room in dungeon.rooms:
+		if r.state != Room.State.IDLE or not r.spawned_enemies.is_empty():
+			rooms_idle = false
+			break
+	
+	EventBus.player_respawn_requested.disconnect(on_respawn)
+	if is_instance_valid(dummy):
+		dummy.free()
+	_safe_free(dungeon)
+	return deferred_ok and respawn_ok and reset_ok and rooms_idle
+
+
+func test_door_entered_signal_chain_real_objects() -> bool:
+	var dungeon: Dungeon = DUNGEON_SCENE.instantiate()
+	dungeon.setup()
+	
+	var r0: Room = dungeon.rooms[0]
+	var r_last: Room = dungeon.rooms.back()
+	
+	var r0_door: Door = null
+	for d: Door in r0.doors:
+		if d.door_name == &"exit":
+			r0_door = d
+			break
+	var r_last_door: Door = null
+	for d: Door in r_last.doors:
+		if d.door_name == &"exit":
+			r_last_door = d
+			break
+	
+	var r0_door_entered_fired: Array[bool] = [false]
+	r0.door_entered.connect(func(_room: Room, _door: Door) -> void:
+		r0_door_entered_fired[0] = true
+	)
+	
+	var dungeon_completed_fired: Array[bool] = [false]
+	dungeon.dungeon_completed.connect(func() -> void:
+		dungeon_completed_fired[0] = true
+	)
+	
+	# ยิงผ่าน Door.entered จริง ไม่ emit signal ภายในตรงๆ
+	r0_door.open_door()
+	r0_door.entered.emit(r0_door)
+	var r0_chain_ok: bool = r0_door_entered_fired[0]
+	
+	r_last_door.open_door()
+	r_last_door.entered.emit(r_last_door)
+	var completed_ok: bool = dungeon_completed_fired[0]
+	
+	_safe_free(dungeon)
+	return r0_chain_ok and completed_ok
+
+
+func test_dungeon_room_sequence_via_detectors_and_doors() -> bool:
 	var dungeon: Dungeon = DUNGEON_SCENE.instantiate()
 	dungeon.setup()
 	
@@ -220,78 +386,134 @@ func test_dungeon_room_sequence_via_door_entered() -> bool:
 	ok = ok and dungeon.rooms[1].room_id == &"room_2"
 	ok = ok and dungeon.rooms[2].room_id == &"room_3"
 	
-	# ห้อง 1 มี 2 ตัว, ห้อง 2 มี 4 ตัว, ห้อง 3 ว่างไว้สำหรับบอส (0 ตัว)
 	ok = ok and dungeon.rooms[0].get_spawn_points().size() == 2
 	ok = ok and dungeon.rooms[1].get_spawn_points().size() == 4
 	ok = ok and dungeon.rooms[2].get_spawn_points().size() == 0
 	ok = ok and dungeon.current_room_index == 0
 	
-	var completed_called: Array[bool] = [false]
-	dungeon.dungeon_completed.connect(func() -> void:
-		completed_called[0] = true
+	var room_changed_events: Array = []
+	dungeon.room_changed.connect(func(from_idx: int, to_idx: int, r: Room) -> void:
+		room_changed_events.append([from_idx, to_idx, r])
 	)
 	
-	# ห้อง 0 เข้าประตู -> ย้ายไปห้อง 1 ผ่าน signal door_entered
-	var r0: Room = dungeon.rooms[0]
-	r0.door_entered.emit(r0, r0.doors[0])
+	# ห้อง 1 เริ่มทำงาน
+	dungeon.rooms[0].start_room()
+	ok = ok and dungeon.rooms[0].state == Room.State.LOCKED
+	
+	# เคลียร์ห้อง 1
+	for e: Node in dungeon.rooms[0].spawned_enemies.duplicate():
+		EventBus.enemy_died.emit(e, &"slime", Vector2.ZERO)
+	ok = ok and dungeon.rooms[0].state == Room.State.CLEARED
+	
+	# ผู้เล่นเดินไปห้อง 2 -> ห้อง 2 เริ่มทำงาน
+	dungeon.rooms[1].start_room()
+	ok = ok and dungeon.rooms[1].state == Room.State.LOCKED
 	ok = ok and dungeon.current_room_index == 1 and dungeon.get_current_room() == dungeon.rooms[1]
 	
-	# ห้อง 1 เข้าประตู -> ย้ายไปห้อง 2
-	var r1: Room = dungeon.rooms[1]
-	r1.door_entered.emit(r1, r1.doors[0])
+	# เคลียร์ห้อง 2
+	for e: Node in dungeon.rooms[1].spawned_enemies.duplicate():
+		EventBus.enemy_died.emit(e, &"slime", Vector2.ZERO)
+	ok = ok and dungeon.rooms[1].state == Room.State.CLEARED
+	
+	# ผู้เล่นเดินไปห้อง 3 (บอส 0 ศัตรู) -> เริ่มและเคลียร์ทันที
+	dungeon.rooms[2].start_room()
+	ok = ok and dungeon.rooms[2].state == Room.State.CLEARED
 	ok = ok and dungeon.current_room_index == 2 and dungeon.get_current_room() == dungeon.rooms[2]
 	
-	# ประตูจากห้องอื่นที่ไม่ใช่ current_room ต้องถูกเพิกเฉย
-	r0.door_entered.emit(r0, r0.doors[0])
-	ok = ok and dungeon.current_room_index == 2
-	
-	# ห้อง 2 (ห้องสุดท้าย) เข้าประตู -> dungeon_completed
-	var r2: Room = dungeon.rooms[2]
-	r2.door_entered.emit(r2, r2.doors[0])
-	ok = ok and completed_called[0]
+	ok = ok and room_changed_events.size() == 2
+	ok = ok and room_changed_events[0][0] == 0 and room_changed_events[0][1] == 1
+	ok = ok and room_changed_events[1][0] == 1 and room_changed_events[1][1] == 2
 	
 	_safe_free(dungeon)
 	return ok
 
 
-func test_player_died_resets_dungeon_and_rooms_to_idle() -> bool:
+func test_dungeon_connected_rooms_layout() -> bool:
 	var dungeon: Dungeon = DUNGEON_SCENE.instantiate()
 	dungeon.setup()
 	
-	# ย้ายไปห้อง 2 และจำลองให้ห้อง 1 อยู่ในสถานะ LOCKED มีศัตรู
-	dungeon.rooms[0].state = Room.State.LOCKED
-	var dummy: Node = Node.new()
-	dungeon.rooms[0].register_enemy(dummy)
+	var ok: bool = dungeon.rooms.size() == 3
+	var r1: Room = dungeon.rooms[0]
+	var r2: Room = dungeon.rooms[1]
+	var r3: Room = dungeon.rooms[2]
 	
-	dungeon.transition_to_room(1)
-	dungeon.rooms[1].state = Room.State.LOCKED
+	# ห้องต่อกันจริงในโลก
+	ok = ok and r1.position == Vector2(0, 0)
+	ok = ok and r2.position == Vector2(416, 208)
+	ok = ok and r3.position == Vector2(832, 416)
 	
-	var reset_signal_fired: Array[bool] = [false]
-	var run_reset_requested_fired: Array[bool] = [false]
-	dungeon.dungeon_reset.connect(func() -> void:
-		reset_signal_fired[0] = true
-	)
-	dungeon.run_reset_requested.connect(func() -> void:
-		run_reset_requested_fired[0] = true
-	)
-	
-	# ผู้เล่นตาย
-	EventBus.player_died.emit()
-	
-	var reset_idx: bool = dungeon.current_room_index == 0 and dungeon.get_current_room() == dungeon.rooms[0]
-	var signals_ok: bool = reset_signal_fired[0] and run_reset_requested_fired[0]
-	
-	# ทุกห้องต้องกลับเป็น IDLE และศัตรูถูกลบ
-	var rooms_idle: bool = true
-	for r: Room in dungeon.rooms:
-		if r.state != Room.State.IDLE or not r.spawned_enemies.is_empty():
-			rooms_idle = false
+	var r2_has_entrance: bool = false
+	for d: Door in r2.doors:
+		if d.door_name == &"entrance":
+			r2_has_entrance = true
+			break
+	var r3_has_entrance: bool = false
+	for d: Door in r3.doors:
+		if d.door_name == &"entrance":
+			r3_has_entrance = true
 			break
 	
-	if is_instance_valid(dummy):
-		dummy.free()
+	ok = ok and r2_has_entrance and r3_has_entrance
+	
 	_safe_free(dungeon)
-	return reset_idx and signals_ok and rooms_idle
+	return ok
+
+
+func test_respawn_detects_player_in_detector_and_starts_room() -> bool:
+	var dungeon: Dungeon = DUNGEON_SCENE.instantiate()
+	dungeon.setup()
+	
+	var dummy_player: CharacterBody2D = CharacterBody2D.new()
+	dummy_player.name = "Player"
+	dummy_player.add_to_group(&"player")
+	dummy_player.collision_layer = Combat.LAYER_PLAYER
+	dungeon.add_child(dummy_player)
+	dummy_player.global_position = dungeon.rooms[0].player_spawn_point.global_position
+	
+	# ตรวจจับผู้เล่นที่อยู่ใน detector
+	dungeon.rooms[0].check_player_inside(dummy_player)
+	
+	var started_ok: bool = dungeon.rooms[0].state == Room.State.LOCKED
+	
+	for e: Node in dungeon.rooms[0].spawned_enemies.duplicate():
+		if is_instance_valid(e):
+			e.free()
+	dungeon.rooms[0].spawned_enemies.clear()
+	dummy_player.free()
+	_safe_free(dungeon)
+	return started_ok
+
+
+func test_cleared_room_reentry_emits_started_and_cleared_without_locking() -> bool:
+	var room: Room = ROOM_SCENE.instantiate()
+	room.setup()
+	room.state = Room.State.CLEARED
+	
+	var started_events: Array[Rect2] = []
+	var cleared_events: Array[Node] = []
+	
+	var on_started := func(r: Node, rect: Rect2) -> void:
+		if r == room:
+			started_events.append(rect)
+	var on_cleared := func(r: Node) -> void:
+		if r == room:
+			cleared_events.append(r)
+	
+	EventBus.room_started.connect(on_started)
+	EventBus.room_cleared.connect(on_cleared)
+	
+	# ผู้เล่นเดินเข้าห้องที่เคลียร์แล้ว (contract v1.1: ส่ง room_started แล้ว room_cleared ทันที ไม่ปิดประตู)
+	room.start_room()
+	
+	var ok: bool = started_events.size() == 1 and cleared_events.size() == 1
+	ok = ok and room.state == Room.State.CLEARED
+	for d: Door in room.doors:
+		ok = ok and d.is_open
+	
+	EventBus.room_started.disconnect(on_started)
+	EventBus.room_cleared.disconnect(on_cleared)
+	_safe_free(room)
+	return ok
 
 
 static func _safe_free(node: Node) -> void:

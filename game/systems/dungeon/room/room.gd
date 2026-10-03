@@ -28,22 +28,40 @@ var enemy_container: Node2D
 var player_spawn_point: Marker2D
 
 
+var _is_teardown: bool = false
+var _was_in_tree: bool = false
+
+
+func _enter_tree() -> void:
+	_was_in_tree = true
+
+
 func _ready() -> void:
 	setup()
 
 
 func _exit_tree() -> void:
+	_is_teardown = true
 	_cleanup_event_bus()
+	_disconnect_enemies()
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
+		_is_teardown = true
 		_cleanup_event_bus()
+		_disconnect_enemies()
 
 
 func _cleanup_event_bus() -> void:
 	if EventBus != null and is_instance_valid(EventBus) and EventBus.enemy_died.is_connected(_on_enemy_died):
 		EventBus.enemy_died.disconnect(_on_enemy_died)
+
+
+func _disconnect_enemies() -> void:
+	for enemy: Node in spawned_enemies:
+		if is_instance_valid(enemy) and enemy.tree_exiting.is_connected(_on_enemy_tree_exiting):
+			enemy.tree_exiting.disconnect(_on_enemy_tree_exiting)
 
 
 func setup() -> void:
@@ -96,13 +114,74 @@ func get_spawn_points() -> Array[Marker2D]:
 	return result
 
 
+func get_room_rect() -> Rect2:
+	if floor_layer == null:
+		return Rect2(global_position, Vector2.ZERO)
+	var used_rect: Rect2i = floor_layer.get_used_rect()
+	if used_rect.size == Vector2i.ZERO:
+		return Rect2(global_position, Vector2.ZERO)
+	
+	var half_w: float = 32.0
+	var half_h: float = 16.0
+	if floor_layer.tile_set != null:
+		half_w = floor_layer.tile_set.tile_size.x * 0.5
+		half_h = floor_layer.tile_set.tile_size.y * 0.5
+	
+	var min_cell := used_rect.position
+	var max_cell := used_rect.position + used_rect.size - Vector2i(1, 1)
+	
+	var corner_cells: Array[Vector2i] = [
+		Vector2i(min_cell.x, min_cell.y),
+		Vector2i(max_cell.x, min_cell.y),
+		Vector2i(min_cell.x, max_cell.y),
+		Vector2i(max_cell.x, max_cell.y),
+	]
+	
+	var min_x: float = INF
+	var max_x: float = -INF
+	var min_y: float = INF
+	var max_y: float = -INF
+	
+	for cell: Vector2i in corner_cells:
+		var local_center: Vector2 = floor_layer.map_to_local(cell)
+		var vertices: Array[Vector2] = [
+			local_center + Vector2(0.0, -half_h),
+			local_center + Vector2(half_w, 0.0),
+			local_center + Vector2(0.0, half_h),
+			local_center + Vector2(-half_w, 0.0),
+		]
+		for v: Vector2 in vertices:
+			var g: Vector2 = floor_layer.to_global(v)
+			min_x = minf(min_x, g.x)
+			max_x = maxf(max_x, g.x)
+			min_y = minf(min_y, g.y)
+			max_y = maxf(max_y, g.y)
+	
+	return Rect2(min_x, min_y, max_x - min_x, max_y - min_y)
+
+
 func start_room() -> void:
-	if state != State.IDLE:
+	if state == State.LOCKED:
+		return
+	
+	var rect: Rect2 = get_room_rect()
+	
+	# ห้องที่เคลียร์แล้ว: ส่ง room_started แล้ว room_cleared ทันที ไม่ปิดประตู (ตาม contract v1.1)
+	if state == State.CLEARED:
+		room_started.emit(self)
+		if EventBus != null and is_instance_valid(EventBus):
+			EventBus.room_started.emit(self, rect)
+			EventBus.room_cleared.emit(self)
+		room_cleared.emit(self)
 		return
 	
 	var spawns: Array[Marker2D] = get_spawn_points()
 	if spawns.is_empty() and spawned_enemies.is_empty():
-		# ห้องที่ไม่มีศัตรู clear ทันที
+		# ห้องที่ไม่มีศัตรู = เริ่มแล้ว clear ทันที (emit ทั้งคู่ ไม่ปิดประตู)
+		state = State.LOCKED
+		room_started.emit(self)
+		if EventBus != null and is_instance_valid(EventBus):
+			EventBus.room_started.emit(self, rect)
 		clear_room()
 		return
 	
@@ -114,6 +193,8 @@ func start_room() -> void:
 		total_enemies = spawned_enemies.size()
 		enemies_killed = 0
 	room_started.emit(self)
+	if EventBus != null and is_instance_valid(EventBus):
+		EventBus.room_started.emit(self, rect)
 
 
 func spawn_enemies() -> void:
@@ -149,6 +230,8 @@ func register_enemy(enemy: Node) -> void:
 
 
 func _on_enemy_tree_exiting(enemy: Node) -> void:
+	if _is_teardown or is_queued_for_deletion() or (_was_in_tree and not is_inside_tree()):
+		return
 	if enemy in spawned_enemies:
 		spawned_enemies.erase(enemy)
 		if state == State.LOCKED and spawned_enemies.is_empty():
@@ -168,9 +251,13 @@ func _on_enemy_died(enemy: Node, _enemy_id: StringName, _pos: Vector2) -> void:
 
 
 func clear_room() -> void:
+	if state == State.CLEARED:
+		return
 	state = State.CLEARED
 	open_all_doors()
 	room_cleared.emit(self)
+	if EventBus != null and is_instance_valid(EventBus):
+		EventBus.room_cleared.emit(self)
 
 
 func reset_room() -> void:
@@ -219,9 +306,39 @@ func tick(_delta: float) -> void:
 func _on_player_detector_body_entered(body: Node2D) -> void:
 	if not auto_start_on_player_enter:
 		return
-	if state == State.IDLE and (body.is_in_group(&"player") or (body.collision_layer & Combat.LAYER_PLAYER) != 0):
-		start_room.call_deferred()
+	if (body.is_in_group(&"player") or (body.collision_layer & Combat.LAYER_PLAYER) != 0):
+		if state == State.IDLE or state == State.CLEARED:
+			start_room.call_deferred()
 
 
 func _on_door_entered(door: Door) -> void:
 	door_entered.emit(self, door)
+
+
+func is_point_inside_detector(world_point: Vector2) -> bool:
+	if player_detector == null:
+		return false
+	var col_poly: CollisionPolygon2D = player_detector.get_node_or_null("CollisionPolygon2D") as CollisionPolygon2D
+	if col_poly == null:
+		return false
+	var local_pos: Vector2 = col_poly.to_local(world_point)
+	return Geometry2D.is_point_in_polygon(local_pos, col_poly.polygon)
+
+
+func check_player_inside(target: Node2D = null) -> void:
+	if not auto_start_on_player_enter or (state != State.IDLE and state != State.CLEARED):
+		return
+	if player_detector != null:
+		for body: Node2D in player_detector.get_overlapping_bodies():
+			if body.is_in_group(&"player") or (body.collision_layer & Combat.LAYER_PLAYER) != 0:
+				start_room()
+				return
+	if target != null and is_instance_valid(target):
+		if (target.is_in_group(&"player") or (target.collision_layer & Combat.LAYER_PLAYER) != 0) and is_point_inside_detector(target.global_position):
+			start_room()
+			return
+	if is_inside_tree():
+		for p: Node in get_tree().get_nodes_in_group(&"player"):
+			if p is Node2D and is_point_inside_detector((p as Node2D).global_position):
+				start_room()
+				return

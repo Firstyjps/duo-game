@@ -1,6 +1,6 @@
 extends Node2D
 ## ฉากทดสอบระบบดันเจี้ยน isometric (ห้อง 1 -> ห้อง 2 -> ห้อง 3)
-## ต่อกับ Player จริง และ GameCamera
+## ต่อกับ Player จริง และ GameCamera ผ่าน EventBus (contract #52)
 
 @onready var dungeon: Dungeon = $Dungeon
 @onready var player: Player = $Player
@@ -12,23 +12,46 @@ extends Node2D
 func _ready() -> void:
 	Player.ensure_input_actions()
 	
-	if dungeon != null and player != null:
-		dungeon.player = player
-		dungeon.camera = camera
-		if camera != null:
-			camera.target = player
+	if dungeon != null:
 		dungeon.setup()
-		
 		dungeon.room_changed.connect(_on_room_changed)
 		dungeon.dungeon_reset.connect(_on_dungeon_reset)
 		dungeon.dungeon_completed.connect(_on_dungeon_completed)
-		dungeon.run_reset_requested.connect(_on_run_reset_requested)
 		
 		for r: Room in dungeon.rooms:
 			r.room_started.connect(_on_room_state_changed)
 			r.room_cleared.connect(_on_room_state_changed)
 	
+	if player != null and dungeon != null and not dungeon.rooms.is_empty():
+		var sp: Marker2D = dungeon.rooms[0].player_spawn_point
+		if sp != null:
+			player.global_position = sp.global_position
+	
+	if camera != null and player != null:
+		camera.target = player
+		if dungeon != null and not dungeon.rooms.is_empty():
+			camera.set_bounds(dungeon.rooms[0].get_room_rect())
+			camera.snap_to_target()
+	
+	if EventBus != null and is_instance_valid(EventBus):
+		EventBus.room_started.connect(_on_event_bus_room_started)
+	
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("--shot="):
+			_shoot(arg.trim_prefix("--shot="))
+	
 	_update_hud()
+
+
+func _exit_tree() -> void:
+	if EventBus != null and is_instance_valid(EventBus) and EventBus.room_started.is_connected(_on_event_bus_room_started):
+		EventBus.room_started.disconnect(_on_event_bus_room_started)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		if EventBus != null and is_instance_valid(EventBus) and EventBus.room_started.is_connected(_on_event_bus_room_started):
+			EventBus.room_started.disconnect(_on_event_bus_room_started)
 
 
 func _process(_delta: float) -> void:
@@ -42,18 +65,22 @@ func _unhandled_input(event: InputEvent) -> void:
 	var key_event: InputEventKey = event as InputEventKey
 	match key_event.keycode:
 		KEY_R:
-			get_tree().reload_current_scene.call_deferred()
-		KEY_1:
 			if dungeon != null:
-				dungeon.transition_to_room(0)
+				dungeon.reset_dungeon()
+				if player != null and not dungeon.rooms.is_empty():
+					player.revive(dungeon.rooms[0].player_spawn_point.global_position)
+				_update_hud()
+		KEY_1:
+			if player != null and dungeon != null and dungeon.rooms.size() > 0:
+				player.global_position = dungeon.rooms[0].player_spawn_point.global_position
 				_update_hud()
 		KEY_2:
-			if dungeon != null:
-				dungeon.transition_to_room(1)
+			if player != null and dungeon != null and dungeon.rooms.size() > 1:
+				player.global_position = dungeon.rooms[1].player_spawn_point.global_position
 				_update_hud()
 		KEY_3:
-			if dungeon != null:
-				dungeon.transition_to_room(2)
+			if player != null and dungeon != null and dungeon.rooms.size() > 2:
+				player.global_position = dungeon.rooms[2].player_spawn_point.global_position
 				_update_hud()
 		KEY_K:
 			# Debug: กำจัดศัตรูในห้องปัจจุบันทันทีเพื่อทดสอบประตูเปิด (ทำดาเมจอย่างเดียว ไม่ emit เอง)
@@ -97,6 +124,12 @@ func _update_hud() -> void:
 	]
 
 
+func _on_event_bus_room_started(_room: Node, room_rect: Rect2) -> void:
+	if camera != null:
+		camera.set_bounds(room_rect)
+	_update_hud()
+
+
 func _on_room_changed(prev_idx: int, new_idx: int, new_room: Room) -> void:
 	print("Room changed from %d to %d (%s)" % [prev_idx, new_idx, new_room.room_id])
 	_update_hud()
@@ -116,6 +149,17 @@ func _on_dungeon_completed() -> void:
 	_update_hud()
 
 
-func _on_run_reset_requested() -> void:
-	print("Run reset requested (player died) -> reloading scene")
-	get_tree().reload_current_scene.call_deferred()
+func _shoot(path: String) -> void:
+	if path.contains("overview") or path.contains("wide"):
+		if camera != null:
+			camera.bounds = Rect2()
+			camera.position = Vector2(480, 360)
+			camera.zoom = Vector2(0.48, 0.48)
+	await get_tree().create_timer(1.0).timeout
+	var tex: ViewportTexture = get_viewport().get_texture()
+	if tex != null:
+		var img: Image = tex.get_image()
+		if img != null:
+			img.save_png(path)
+			print("Saved screenshot to ", path)
+	get_tree().quit()

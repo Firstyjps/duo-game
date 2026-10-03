@@ -12,6 +12,7 @@ script = ExtResource("1_sb")
 [node name="Dungeon" parent="." instance=ExtResource("2_dungeon")]
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
+position = Vector2(-64, 128)
 
 [node name="GameCamera" type="Camera2D" parent="."]
 script = ExtResource("4_camera")
