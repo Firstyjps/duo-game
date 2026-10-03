@@ -52,7 +52,9 @@ func test_self_respawn_revives_at_spawn() -> bool:
 	run.player.position = Vector2(5, 5)
 	run.player.hurtbox.receive(hit)
 	var dead: bool = run.player.is_dead()
+	run.player._enter_tree()  # ต่อ EventBus แบบตอนอยู่ใน tree (เทสต์รันนอก tree)
 	run._respawn_here()
+	run.player._exit_tree()
 	var ok: bool = dead and not run.player.is_dead() and run.player.global_position == GameRun.find_spawn(run.level)
 	run.free()
 	return ok
