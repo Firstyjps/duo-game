@@ -7,8 +7,9 @@ signal stamina_changed(current: float, maximum: float)
 signal stamina_empty
 signal lock_target_changed(target: Node2D)
 signal parried(info: DamageInfo)
+signal flasks_changed(current: int, maximum: int)
 
-enum State { MOVE, DODGE, ATTACK, HURT, DEAD, PARRY }
+enum State { MOVE, DODGE, ATTACK, HURT, DEAD, PARRY, DRINK }
 enum AttackPhase { NONE, WINDUP, CHARGING, ACTIVE, RECOVER }
 
 @export_group("Stats")
@@ -62,6 +63,12 @@ enum AttackPhase { NONE, WINDUP, CHARGING, ACTIVE, RECOVER }
 @export var charge_rush_speed: float = 200.0
 @export var charge_recover_mult: float = 1.2
 
+@export_group("Flask")
+@export var flask_max: int = 3
+@export var flask_heal: int = 5
+@export var drink_time: float = 0.9
+@export var heal_at: float = 0.6
+
 @export_group("Hurt")
 @export var hurt_time: float = 0.2
 @export var body_y: float = -16.0
@@ -69,6 +76,7 @@ enum AttackPhase { NONE, WINDUP, CHARGING, ACTIVE, RECOVER }
 var state: State = State.MOVE
 var attack_phase: AttackPhase = AttackPhase.NONE
 var stamina: float = 100.0
+var flasks: int = 3
 var aim: Vector2 = Vector2.RIGHT
 var move_dir: Vector2 = Vector2.ZERO
 var dodge_dir: Vector2 = Vector2.RIGHT
@@ -87,6 +95,8 @@ var _intent_dodge: bool = false
 var _intent_parry: bool = false
 var _intent_lock_on: bool = false
 var _intent_attack_held: bool = false
+var _intent_heal: bool = false
+var _drink_healed: bool = false
 var _charge_t: float = 0.0
 var _is_heavy_attack: bool = false
 var _walk_t: float = 0.0
@@ -162,6 +172,7 @@ func setup() -> void:
 	stamina = stamina_max
 	_regen_wait = 0.0
 	stamina_changed.emit(stamina, stamina_max)
+	refill_flasks()
 
 	if hitbox != null:
 		hitbox.source = self
@@ -208,6 +219,7 @@ static func ensure_input_actions() -> void:
 	_register_action_if_missing(&"dodge", [_key(KEY_SPACE), _key(KEY_SHIFT)])
 	_register_action_if_missing(&"parry", [_key(KEY_F), _mouse(MOUSE_BUTTON_RIGHT)])
 	_register_action_if_missing(&"lock_on", [_key(KEY_TAB), _mouse(MOUSE_BUTTON_MIDDLE)])
+	_register_action_if_missing(&"heal", [_key(KEY_R), _joy(JOY_BUTTON_Y)])
 
 
 ## ใส่ปุ่ม default เฉพาะตอนสร้าง action ใหม่ — action ที่มีอยู่แล้ว (ผู้เล่นเปลี่ยนปุ่มไว้) ห้ามเติม default กลับ
@@ -223,6 +235,12 @@ static func _key(keycode: Key) -> InputEventKey:
 	var ev := InputEventKey.new()
 	ev.physical_keycode = keycode
 	ev.keycode = keycode
+	return ev
+
+
+static func _joy(button: JoyButton) -> InputEventJoypadButton:
+	var ev := InputEventJoypadButton.new()
+	ev.button_index = button
 	return ev
 
 
@@ -245,7 +263,8 @@ func set_intent(
 	dodge: bool,
 	parry: bool = false,
 	lock_on: bool = false,
-	attack_held: bool = false
+	attack_held: bool = false,
+	heal: bool = false
 ) -> void:
 	move_dir = move
 	if aim_dir.length_squared() > 0.0001:
@@ -255,6 +274,7 @@ func set_intent(
 	_intent_parry = parry
 	_intent_lock_on = lock_on
 	_intent_attack_held = attack_held
+	_intent_heal = heal
 
 
 func _physics_process(delta: float) -> void:
@@ -289,6 +309,8 @@ func tick(delta: float) -> void:
 			_state_hurt(delta)
 		State.PARRY:
 			_state_parry(delta)
+		State.DRINK:
+			_state_drink(delta)
 		State.DEAD:
 			velocity = Vector2.ZERO
 	if state != State.PARRY and hurtbox != null:
@@ -304,9 +326,11 @@ func tick(delta: float) -> void:
 	_intent_dodge = false
 	_intent_parry = false
 	_intent_lock_on = false
+	_intent_heal = false
 
 
 func _is_busy_state(s: State) -> bool:
+	# DRINK ไม่นับเป็น busy → stamina ฟื้นระหว่างดื่ม (แบบ Souls)
 	return s == State.DODGE or s == State.ATTACK or s == State.DEAD or s == State.PARRY
 
 
@@ -329,7 +353,8 @@ func _read_input() -> void:
 	var ddg: bool = Input.is_action_just_pressed(&"dodge")
 	var pry: bool = Input.is_action_just_pressed(&"parry")
 	var lck: bool = Input.is_action_just_pressed(&"lock_on")
-	set_intent(move, aim_dir, atk, ddg, pry, lck, atk_held)
+	var hel: bool = Input.is_action_just_pressed(&"heal")
+	set_intent(move, aim_dir, atk, ddg, pry, lck, atk_held, hel)
 
 
 func _state_move() -> void:
@@ -339,6 +364,8 @@ func _state_move() -> void:
 		_start_dodge()
 	elif _intent_parry:
 		_start_parry()
+	elif _intent_heal and _start_drink():
+		pass
 	elif _intent_attack:
 		_start_attack()
 
@@ -403,6 +430,67 @@ func _state_parry(delta: float) -> void:
 	if hurtbox != null:
 		hurtbox.deflecting = _state_t <= parry_window
 	if _state_t >= (parry_window + parry_recover):
+		state = State.MOVE
+		_state_t = 0.0
+
+
+func can_drink() -> bool:
+	if state != State.MOVE:
+		return false
+	if flasks <= 0:
+		return false
+	if health != null and health.hp >= health.max_hp:
+		return false
+	return true
+
+
+func is_drinking() -> bool:
+	return state == State.DRINK
+
+
+func refill_flasks() -> void:
+	flasks = flask_max
+	flasks_changed.emit(flasks, flask_max)
+
+
+func start_drink() -> bool:
+	return _start_drink()
+
+
+func _start_drink() -> bool:
+	if not can_drink():
+		return false
+	flasks -= 1
+	flasks_changed.emit(flasks, flask_max)
+	state = State.DRINK
+	attack_phase = AttackPhase.NONE
+	_state_t = 0.0
+	_drink_healed = false
+	if hitbox != null:
+		hitbox.deactivate()
+	var dir: Vector2 = move_dir.normalized() if move_dir.length_squared() > 1.0 else move_dir
+	velocity = dir * speed * 0.3
+	return true
+
+
+func _state_drink(delta: float) -> void:
+	if _intent_dodge:
+		if _start_dodge():
+			return
+
+	var dir: Vector2 = move_dir.normalized() if move_dir.length_squared() > 1.0 else move_dir
+	velocity = dir * speed * 0.3
+
+	_state_t += delta
+
+	if not _drink_healed and _state_t >= (heal_at - 0.0001):
+		_drink_healed = true
+		if health != null:
+			health.heal(flask_heal)
+		_flash_t = 0.2
+		_flash_color = Color(0.7, 2.2, 0.9)
+
+	if _state_t >= (drink_time - 0.0001):
 		state = State.MOVE
 		_state_t = 0.0
 
@@ -583,6 +671,7 @@ func revive(at: Vector2) -> void:
 		health.reset()
 	stamina = stamina_max
 	stamina_changed.emit(stamina, stamina_max)
+	refill_flasks()
 	_died_emitted = false
 	state = State.MOVE
 	attack_phase = AttackPhase.NONE
@@ -766,6 +855,10 @@ func _draw() -> void:
 		var a0: float = aim.angle() - 1.0
 		draw_arc(Vector2(0.0, body_y), 22.0, a0, a0 + 2.0, 16, parry_col, arc_width)
 
+	# เอฟเฟกต์ฟื้นพลังขวดชา
+	if state == State.DRINK and _drink_healed:
+		draw_arc(Vector2(0.0, body_y), 18.0, 0.0, TAU, 16, Color(0.4, 1.0, 0.5, 0.6), 2.0)
+
 	# ล็อคเป้า
 	if is_locked_on():
 		var rel_pos: Vector2 = lock_target.global_position - global_position
@@ -825,6 +918,9 @@ func _animate(delta: float) -> void:
 					sprite.self_modulate = Color(1.0 + prog, 1.0 + prog, 1.0)
 			else:
 				sprite.position += (aim * 2.0).round()
+		State.DRINK:
+			if _flash_t <= 0.0 and not _drink_healed:
+				sprite.scale = Vector2(0.97, 1.03)
 		_:
 			sprite.modulate.a = 1.0
 
@@ -838,6 +934,8 @@ func _animate_dir_sprite(moving: bool) -> void:
 		face = dodge_dir
 	elif state == State.HURT:
 		face = Vector2.ZERO  # โดนตีแล้วคงทิศเดิม
+	elif state == State.DRINK and not is_locked_on():
+		face = velocity if velocity.length() > 10.0 else Vector2.ZERO  # เดินช้า ๆ ตอนดื่ม = หันตามทางเดิน · ยืน = คงทิศ
 	dir_sprite.set_facing(face)
 	match state:
 		State.MOVE:
@@ -846,8 +944,34 @@ func _animate_dir_sprite(moving: bool) -> void:
 			dir_sprite.play_action(&"dodge")
 		State.HURT:
 			dir_sprite.play_action(&"hurt")
+		State.ATTACK:
+			dir_sprite.show_frame(_attack_anim(), attack_frame_index())
+		State.DRINK:
+			dir_sprite.play_action(&"idle")
 		_:
-			dir_sprite.play_action(&"idle")  # ATTACK/PARRY ใช้ idle + เอฟเฟกต์จนกว่าจะมีท่าฟัน
+			dir_sprite.play_action(&"idle")  # PARRY ใช้ idle + เอฟเฟกต์
+
+
+## ท่าฟันตามคอมโบ: สลับ attack1/attack2 · ท่าหนัก (ชาร์จ) = attack3
+func _attack_anim() -> StringName:
+	if _is_heavy_attack or attack_phase == AttackPhase.CHARGING:
+		return &"attack3"
+	return &"attack1" if _combo_side > 0.0 else &"attack2"
+
+
+## เฟรมของท่าฟัน (7 เฟรม PixelLab: 0 ท่ายืน · 1–2 ง้าง · 3–4 ฟัน (แสงทอง) · 5–6 กลับท่า) ตามเฟสในโค้ด
+func attack_frame_index() -> int:
+	match attack_phase:
+		AttackPhase.WINDUP:
+			return 1 if _state_t < windup_time * 0.5 else 2
+		AttackPhase.CHARGING:
+			return 2
+		AttackPhase.ACTIVE:
+			return 3 if swing < 0.5 else 4
+		AttackPhase.RECOVER:
+			var rec_time: float = recover_time * (charge_recover_mult if _is_heavy_attack else 1.0)
+			return 5 if _state_t < rec_time * 0.5 else 6
+	return 0
 
 
 func _spawn_ghost() -> void:
