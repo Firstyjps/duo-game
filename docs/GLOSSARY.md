@@ -7,14 +7,19 @@
 | _ตัวอย่าง:_ ห้อง | `Room` | พื้นที่ 1 จอ ปิดประตูจนกว่าศัตรูหมด | world |
 | ขวดชา | `flask` · `flask_heal` · `flask_max` · `Player.State.DRINK` · `flasks_changed` | ขวดชาฟื้นพลัง ดื่มเพื่อฟื้น HP มีจำนวนจำกัด เติมเต็มเมื่อเกิดใหม่/revive ขณะดื่มเดินช้าลงและเสี่ยงโดนตีขัด | player |
 | ข้อมูลดาเมจ | `DamageInfo` | ข้อมูลการโจมตี 1 ครั้ง (ดาเมจก่อนหัก defense, knockback, stagger) | core/combat |
+| จุดเกิดศัตรู | `Marker2D` (`spawn_points`) | ตำแหน่งในห้องที่ศัตรูจะถูก instance ลงมาเมื่อห้องเปลี่ยนเป็น LOCKED | dungeon |
+| ดันเจี้ยน | `Dungeon` | ระบบจัดการโครงสร้างห้องต่อเนื่อง (3 ห้อง), การสลับห้องเมื่อผ่านประตู, และการรีเซ็ตเมื่อผู้เล่นตาย | dungeon |
 | ท่าชาร์จ | `Charge Attack` · `charge_time` · `charge_mult` | ท่าโจมตีหนักด้วยการกดค้าง ≥ `charge_time` แล้วปล่อย คูณดาเมจ/knockback/stagger และใช้ stamina เพิ่ม | player |
 | ท่าเตรียม | telegraph · `TelegraphMarker` (วงเตือนบนพื้น) | ท่า/VFX บอกล่วงหน้าก่อนศัตรูโจมตี (บังคับทุกท่า) | enemy |
+| ประตูห้อง | `Door` | ประตูทางออกห้อง มี blocker กั้นทางเดินเมื่อปิด และเปิด ExitTrigger เมื่อห้องเคลียร์ | dungeon |
 | ฝั่ง / ทีม | `Combat.Team` | PLAYER / ENEMY / NEUTRAL — ฝั่งเดียวกันไม่โดนกัน | core/combat |
 | พลังชีวิต / HP | `Health` | HP ของผู้เล่น/ศัตรู/ของทำลายได้ | core/combat |
 | แพรี่ / ปัดป้อง | `Parry` · `Player.State.PARRY` · `parried` | การตั้งการ์ดปัดป้องในหน้าต่าง `parry_window` เพื่อไม่เสีย HP และได้ stamina คืน พลาดจะโดนตีเต็มช่วง recovery | player |
 | ถูกปัด / deflect | `Hurtbox.deflecting` · `Hitbox.deflected` · `EventBus.attack_deflected` | การโจมตีที่โดน parry: ผู้ป้องกันไม่เสียเลือด ผู้ตีได้ `deflected` แทน `hit_landed` | core/combat |
 | ฟื้น / respawn | `Player.revive()` · `EventBus.player_respawn_requested` | dungeon สั่งผู้เล่นกลับมาเต็มเลือดที่จุดเกิดหลังตาย | player/dungeon |
 | ล็อคเป้า | `Lock-on` · `lock_target` · `lock_target_changed` | การล็อคเป้าศัตรูในระยะ `lock_range` ให้ `aim` หันตามเป้าเสมอ สลับเป้าได้ และปลดเมื่อเป้าตายหรือหลุดระยะ | player |
+| สถานะห้อง | `Room.State` | `IDLE` (รอเริ่ม) -> `LOCKED` (ปิดประตูขัง+spawn ศัตรู) -> `CLEARED` (เคลียร์+เปิดประตู) | dungeon |
+| ห้องดันเจี้ยน | `Room` | ห้อง isometric 64×32 จัดการสถานะ IDLE/LOCKED/CLEARED, ประตู, spawn ศัตรู, และนับ kill | dungeon |
 | ช่วง active | — | ช่วงเฟรมที่ Hitbox ของท่าเปิดอยู่ (`activate()` → `deactivate()`) | core/combat |
 | i-frames / อมตะชั่วคราว | `Hurtbox.invulnerable` | ช่วงที่โดนตีไม่เข้า เช่นระหว่าง dodge | core/combat |
 | ตัวรับดาเมจ | `Hurtbox` | พื้นที่บนตัวที่โดนตีได้ | core/combat |
