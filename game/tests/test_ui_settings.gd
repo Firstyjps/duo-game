@@ -6,6 +6,20 @@ const TEST_SETTINGS_PATH: String = "user://test_settings_roundtrip.cfg"
 const TEST_INPUT_PATH: String = "user://test_input_roundtrip.cfg"
 
 
+var _orig_locale: String = ""
+var _orig_input_map: Dictionary = {}
+
+
+func _init() -> void:
+	_orig_locale = TranslationServer.get_locale()
+	_orig_input_map.clear()
+	for action: StringName in InputMap.get_actions():
+		var list: Array[InputEvent] = []
+		for ev: InputEvent in InputMap.action_get_events(action):
+			list.append(ev.duplicate() as InputEvent)
+		_orig_input_map[action] = list
+
+
 func _clean_file(path: String) -> void:
 	var global_path: String = ProjectSettings.globalize_path(path)
 	if FileAccess.file_exists(global_path) or FileAccess.file_exists(path):
@@ -15,9 +29,17 @@ func _clean_file(path: String) -> void:
 func _restore_defaults() -> void:
 	_clean_file(TEST_SETTINGS_PATH)
 	_clean_file(TEST_INPUT_PATH)
-	InputConfig.reset_to_defaults()
+	# คืนค่า InputMap เดิมจริง
+	for action: StringName in InputMap.get_actions():
+		InputMap.erase_action(action)
+	for action: StringName in _orig_input_map.keys():
+		InputMap.add_action(action)
+		for ev: InputEvent in _orig_input_map[action]:
+			InputMap.action_add_event(action, ev.duplicate() as InputEvent)
+	# คืนค่า locale เดิมจริง
+	if not _orig_locale.is_empty():
+		TranslationServer.set_locale(_orig_locale)
 	SettingsConfig.reset_to_defaults()
-	TranslationServer.set_locale("en")
 
 
 func test_settings_save_and_load_round_trip() -> bool:
@@ -547,9 +569,10 @@ func test_key_rebind_cancel_listening() -> bool:
 	return listening_started and esc_cancelled and joy_back_cancelled
 
 
-## 6. เทสต์: คลิกบน btn_cancel_listen แล้วยกเลิก (ไม่จับเป็นปุ่ม LMB)
+## 6. เทสต์: คลิกบน btn_cancel_listen แล้วยกเลิก (คำนวณ rect จริงใน tree และ assert ว่า attack ไม่ถูกเปลี่ยน)
 func test_key_rebind_cancel_button_click_cancels() -> bool:
 	_clean_file(TEST_INPUT_PATH)
+	InputConfig.reset_to_defaults()
 	var scene: PackedScene = load("res://systems/ui/settings/key_rebind.tscn")
 	if scene == null:
 		_restore_defaults()
@@ -558,31 +581,63 @@ func test_key_rebind_cancel_button_click_cancels() -> bool:
 	if rebind_ctrl == null:
 		_restore_defaults()
 		return false
+
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	var root: Window = tree.root if tree != null else null
+	if root != null:
+		root.add_child(rebind_ctrl)
+
 	rebind_ctrl.setup(TEST_INPUT_PATH)
+	rebind_ctrl.custom_minimum_size = Vector2(800, 600)
 
-	rebind_ctrl.start_listening(&"attack", "keyboard_mouse", 0, null, null)
+	# บันทึก events เดิมของ attack ทั้งหมดก่อนเริ่มเทสต์
+	var attack_events_before: Array[InputEvent] = []
+	for ev: InputEvent in InputMap.action_get_events(&"attack"):
+		attack_events_before.append(ev.duplicate() as InputEvent)
 
-	# สร้างคลิกเมาส์ที่ตำแหน่งของ btn_cancel_listen
+	# เริ่มฟังที่ช่อง keyboard_mouse ของ attack
+	var cur_ev: InputEvent = InputConfig.get_action_event_at(&"attack", "keyboard_mouse", 0)
+	rebind_ctrl.start_listening(&"attack", "keyboard_mouse", 0, cur_ev, null)
+
+	var listening_started: bool = (rebind_ctrl._listening_action == &"attack")
+
+	# คำนวณ rect จริงของ btn_cancel_listen
+	var cancel_btn: Button = rebind_ctrl.btn_cancel_listen
+	if cancel_btn == null:
+		if rebind_ctrl.get_parent() != null:
+			rebind_ctrl.get_parent().remove_child(rebind_ctrl)
+		rebind_ctrl.free()
+		_restore_defaults()
+		return false
+
+	cancel_btn.custom_minimum_size = Vector2(100, 40)
+	cancel_btn.size = Vector2(100, 40)
+	cancel_btn.position = Vector2(350, 400)
+	var cancel_rect: Rect2 = cancel_btn.get_global_rect()
+
 	var click_ev := InputEventMouseButton.new()
 	click_ev.button_index = MOUSE_BUTTON_LEFT
 	click_ev.pressed = true
-	if rebind_ctrl.btn_cancel_listen != null:
-		click_ev.global_position = rebind_ctrl.btn_cancel_listen.get_global_rect().get_center()
+	click_ev.global_position = cancel_rect.get_center()
 
 	rebind_ctrl._input(click_ev)
 
 	var cancelled: bool = rebind_ctrl._listening_action.is_empty()
 
-	# ยืนยันว่า attack ไม่ถูกเซ็ตเป็น LMB
-	var attack_has_lmb := false
-	var lmb_ev: InputEventMouseButton = InputConfig.make_mouse_event(MOUSE_BUTTON_LEFT)
-	for ev: InputEvent in InputMap.action_get_events(&"attack"):
-		if InputConfig.events_match(ev, lmb_ev):
-			attack_has_lmb = true
+	# Assert ว่า attack ไม่ถูกเปลี่ยน (events ทุกตัวยังคงเดิมตาม attack_events_before)
+	var attack_events_after: Array[InputEvent] = InputMap.action_get_events(&"attack")
+	var attack_unchanged: bool = attack_events_before.size() == attack_events_after.size()
+	if attack_unchanged:
+		for i: int in range(attack_events_before.size()):
+			if not InputConfig.events_match(attack_events_before[i], attack_events_after[i]):
+				attack_unchanged = false
+				break
 
+	if rebind_ctrl.get_parent() != null:
+		rebind_ctrl.get_parent().remove_child(rebind_ctrl)
 	rebind_ctrl.free()
 	_restore_defaults()
-	return cancelled
+	return listening_started and cancelled and attack_unchanged
 
 
 ## 7. เทสต์: event ที่สร้างมี device = -1
@@ -649,3 +704,197 @@ func test_pause_menu_saves_on_settings_closed_with_esc() -> bool:
 	pause.free()
 	_restore_defaults()
 	return settings_hidden and is_saved
+
+
+# ========================================================
+# เทสต์เพิ่มเติมตามรีวิวรอบ 2 FIX2_WORKER.md
+# ========================================================
+
+## 10. เทสต์: ห้ามเอา Space ออกจาก ui_accept (Space ยังคงอยู่ใน ui_accept หลัง ensure/reset)
+func test_space_remains_in_ui_accept() -> bool:
+	InputConfig.reset_to_defaults()
+	InputConfig.ensure_input_actions()
+
+	var has_space := false
+	for ev: InputEvent in InputMap.action_get_events(&"ui_accept"):
+		if ev is InputEventKey and (ev.physical_keycode == KEY_SPACE or ev.keycode == KEY_SPACE):
+			has_space = true
+			break
+
+	var space_ev: InputEventKey = InputConfig.make_key_event(KEY_SPACE)
+	var dodge_rebind_space: bool = InputConfig.rebind(&"dodge", space_ev)
+
+	_restore_defaults()
+	return has_space and dodge_rebind_space
+
+
+## 11. เทสต์: ระหว่างรอปุ่ม ข้าม event ที่ชนิดไม่ตรงกับช่อง
+func test_key_rebind_skips_mismatched_event_types() -> bool:
+	_clean_file(TEST_INPUT_PATH)
+	InputConfig.reset_to_defaults()
+	var scene: PackedScene = load("res://systems/ui/settings/key_rebind.tscn")
+	if scene == null:
+		_restore_defaults()
+		return false
+	var rebind_ctrl: KeyRebind = scene.instantiate() as KeyRebind
+	if rebind_ctrl == null:
+		_restore_defaults()
+		return false
+	rebind_ctrl.setup(TEST_INPUT_PATH)
+
+	# 1. ฟังช่อง keyboard_mouse ของ attack -> ส่ง JoypadButton และ JoypadMotion -> ต้องถูกข้าม
+	var kb_ev: InputEvent = InputConfig.get_action_event_at(&"attack", "keyboard_mouse", 0)
+	rebind_ctrl.start_listening(&"attack", "keyboard_mouse", 0, kb_ev, null)
+
+	var joy_btn := InputEventJoypadButton.new()
+	joy_btn.button_index = JOY_BUTTON_Y
+	joy_btn.pressed = true
+	rebind_ctrl._input(joy_btn)
+
+	var still_listening_kb: bool = (rebind_ctrl._listening_action == &"attack")
+
+	var joy_motion := InputEventJoypadMotion.new()
+	joy_motion.axis = JOY_AXIS_LEFT_X
+	joy_motion.axis_value = 1.0
+	rebind_ctrl._input(joy_motion)
+
+	still_listening_kb = still_listening_kb and (rebind_ctrl._listening_action == &"attack")
+
+	# ส่ง InputEventKey ที่ถูกต้อง -> ต้องยอมรับและจบ listening
+	var key_k: InputEventKey = InputConfig.make_key_event(KEY_K)
+	key_k.pressed = true
+	rebind_ctrl._input(key_k)
+
+	var kb_accepted: bool = rebind_ctrl._listening_action.is_empty()
+
+	# 2. ฟังช่อง joypad ของ attack -> ส่ง Key และ MouseButton -> ต้องถูกข้าม
+	var joy_ev: InputEvent = InputConfig.get_action_event_at(&"attack", "joypad", 0)
+	rebind_ctrl.start_listening(&"attack", "joypad", 0, joy_ev, null)
+
+	var key_z: InputEventKey = InputConfig.make_key_event(KEY_Z)
+	key_z.pressed = true
+	rebind_ctrl._input(key_z)
+
+	var still_listening_joy: bool = (rebind_ctrl._listening_action == &"attack")
+
+	var mouse_btn: InputEventMouseButton = InputConfig.make_mouse_event(MOUSE_BUTTON_RIGHT)
+	mouse_btn.pressed = true
+	rebind_ctrl._input(mouse_btn)
+
+	still_listening_joy = still_listening_joy and (rebind_ctrl._listening_action == &"attack")
+
+	# ส่ง InputEventJoypadButton ที่ถูกต้อง -> ต้องยอมรับและจบ listening
+	var joy_a := InputEventJoypadButton.new()
+	joy_a.button_index = JOY_BUTTON_A
+	joy_a.pressed = true
+	rebind_ctrl._input(joy_a)
+
+	var joy_accepted: bool = rebind_ctrl._listening_action.is_empty()
+
+	rebind_ctrl.free()
+	_restore_defaults()
+	return still_listening_kb and kb_accepted and still_listening_joy and joy_accepted
+
+
+## 12. เทสต์: rebind() หา index ภายในชนิดเดียวกันเท่านั้น และสลับเฉพาะภายในชนิดเดียวกัน
+func test_rebind_scoped_to_same_category_and_swaps_only_within_same_category() -> bool:
+	InputConfig.reset_to_defaults()
+
+	# attack มี [Mouse LMB, Key J, Joy X]
+	var lmb_ev: InputEvent = InputConfig.get_action_event_at(&"attack", "keyboard_mouse", 0)
+	var j_ev: InputEvent = InputConfig.get_action_event_at(&"attack", "keyboard_mouse", 1)
+	var joy_x_before: InputEvent = InputConfig.get_action_event_at(&"attack", "joypad", 0)
+
+	# 1. สลับภายใน category เดียวกัน (rebind slot 0 ให้เป็น Key J)
+	var ok_swap: bool = InputConfig.rebind(&"attack", j_ev, lmb_ev)
+	if not ok_swap:
+		_restore_defaults()
+		return false
+
+	var slot_0_after: InputEvent = InputConfig.get_action_event_at(&"attack", "keyboard_mouse", 0)
+	var slot_1_after: InputEvent = InputConfig.get_action_event_at(&"attack", "keyboard_mouse", 1)
+	var joy_x_after: InputEvent = InputConfig.get_action_event_at(&"attack", "joypad", 0)
+
+	var swapped_kb: bool = InputConfig.events_match(slot_0_after, j_ev) \
+		and InputConfig.events_match(slot_1_after, lmb_ev)
+	var joy_untouched: bool = InputConfig.events_match(joy_x_before, joy_x_after)
+
+	# 2. ส่ง old_event ที่เป็น joypad แต่ new_event เป็น keyboard
+	# rebind() ต้องหา index และแทนที่เฉพาะภายใน keyboard_mouse เท่านั้น Joypad X ต้องไม่ถูกแตะต้อง
+	var new_key_k: InputEventKey = InputConfig.make_key_event(KEY_K)
+	var ok_rebind_cross: bool = InputConfig.rebind(&"attack", new_key_k, joy_x_after)
+	if not ok_rebind_cross:
+		_restore_defaults()
+		return false
+
+	var joy_x_still_present: bool = false
+	for ev: InputEvent in InputMap.action_get_events(&"attack"):
+		if InputConfig.events_match(ev, joy_x_before):
+			joy_x_still_present = true
+			break
+
+	var key_k_in_attack: bool = false
+	for ev: InputEvent in InputMap.action_get_events(&"attack"):
+		if InputConfig.events_match(ev, new_key_k):
+			key_k_in_attack = true
+			break
+
+	_restore_defaults()
+	return swapped_kb and joy_untouched and joy_x_still_present and key_k_in_attack
+
+
+## 13. เทสต์: rebind attack -> F ถูกปฏิเสธเพราะ parry ใช้อยู่ + label TH/EN ครบ
+func test_rebind_attack_to_f_rejected_due_to_parry_and_labels() -> bool:
+	InputConfig.reset_to_defaults()
+	Player.ensure_input_actions()
+
+	# ยืนยันว่า parry มี KEY_F
+	var parry_has_f := false
+	var key_f: InputEventKey = InputConfig.make_key_event(KEY_F)
+	for ev: InputEvent in InputMap.action_get_events(&"parry"):
+		if InputConfig.events_match(ev, key_f):
+			parry_has_f = true
+			break
+	if not parry_has_f:
+		_restore_defaults()
+		return false
+
+	# พยายาม rebind attack เป็น KEY_F -> ต้องถูกปฏิเสธ (false) เพราะ parry ใช้อยู่
+	var success: bool = InputConfig.rebind(&"attack", key_f)
+	if success:
+		_restore_defaults()
+		return false
+
+	# ตรวจสอบว่า find_action_with_event คืนชื่อ action &"parry"
+	var conflict_action: StringName = InputConfig.find_action_with_event(key_f, &"attack")
+	if conflict_action != &"parry":
+		_restore_defaults()
+		return false
+
+	# ตรวจสอบว่า attack ไม่มี KEY_F
+	for ev: InputEvent in InputMap.action_get_events(&"attack"):
+		if InputConfig.events_match(ev, key_f):
+			_restore_defaults()
+			return false
+
+	# ตรวจสอบ label ภาษา TH และ EN ของ parry และ lock_on
+	var scene: PackedScene = load("res://systems/ui/settings/key_rebind.tscn")
+	var rebind_ctrl: KeyRebind = scene.instantiate() as KeyRebind
+	rebind_ctrl.setup(TEST_INPUT_PATH)
+
+	SettingsConfig.set_language("en")
+	var parry_lbl_en: String = rebind_ctrl._get_action_label(&"parry")
+	var lock_on_lbl_en: String = rebind_ctrl._get_action_label(&"lock_on")
+
+	SettingsConfig.set_language("th")
+	var parry_lbl_th: String = rebind_ctrl._get_action_label(&"parry")
+	var lock_on_lbl_th: String = rebind_ctrl._get_action_label(&"lock_on")
+
+	rebind_ctrl.free()
+	_restore_defaults()
+
+	var ok_labels: bool = (parry_lbl_en == "Parry" and parry_lbl_th == "ปัดป้อง" \
+		and lock_on_lbl_en == "Lock-on" and lock_on_lbl_th == "ล็อคเป้า")
+
+	return (not success) and (conflict_action == &"parry") and ok_labels
+

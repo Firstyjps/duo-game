@@ -13,6 +13,8 @@ const ACTIONS: Array[StringName] = [
 	&"move_right",
 	&"attack",
 	&"dodge",
+	&"parry",
+	&"lock_on",
 	&"ui_pause",
 ]
 
@@ -21,6 +23,25 @@ const UI_PROTECTED_ACTIONS: Array[StringName] = [
 	&"ui_cancel",
 	&"ui_pause",
 ]
+
+
+## อ่านรายชื่อ action จาก ACTIONS ร่วมกับ Player.ensure_input_actions() จริง
+static func get_actions() -> Array[StringName]:
+	Player.ensure_input_actions()
+	var list: Array[StringName] = []
+	for act: StringName in ACTIONS:
+		if not list.has(act):
+			list.append(act)
+	for act: StringName in InputMap.get_actions():
+		if act.begins_with("ui_"):
+			continue
+		if not list.has(act):
+			var pause_idx: int = list.find(&"ui_pause")
+			if pause_idx != -1:
+				list.insert(pause_idx, act)
+			else:
+				list.append(act)
+	return list
 
 
 static func make_key_event(keycode: Key) -> InputEventKey:
@@ -81,6 +102,14 @@ static func get_default_events(action: StringName) -> Array[InputEvent]:
 			list.append(make_key_event(KEY_SPACE))
 			list.append(make_key_event(KEY_SHIFT))
 			list.append(make_joy_button_event(JOY_BUTTON_B))
+		&"parry":
+			list.append(make_key_event(KEY_F))
+			list.append(make_mouse_event(MOUSE_BUTTON_RIGHT))
+			list.append(make_joy_button_event(JOY_BUTTON_LEFT_SHOULDER))
+		&"lock_on":
+			list.append(make_key_event(KEY_TAB))
+			list.append(make_mouse_event(MOUSE_BUTTON_MIDDLE))
+			list.append(make_joy_button_event(JOY_BUTTON_RIGHT_SHOULDER))
 		&"ui_pause":
 			list.append(make_key_event(KEY_ESCAPE))
 			list.append(make_joy_button_event(JOY_BUTTON_START))
@@ -88,21 +117,18 @@ static func get_default_events(action: StringName) -> Array[InputEvent]:
 
 
 ## ลงทะเบียน input actions ตอน runtime ถ้ายังไม่มีใน InputMap
-## ใส่ default เฉพาะตอนสร้าง action ใหม่เท่านั้น
+## ห้ามเอา Space ออกจาก ui_accept
 static func ensure_input_actions() -> void:
-	# นำ Space ออกจาก ui_accept เพื่อให้ Space ใช้กับ dodge ได้โดยไม่ชน
-	if InputMap.has_action(&"ui_accept"):
-		for ev: InputEvent in InputMap.action_get_events(&"ui_accept"):
-			if ev is InputEventKey and (ev.physical_keycode == KEY_SPACE or ev.keycode == KEY_SPACE):
-				InputMap.action_erase_event(&"ui_accept", ev)
+	Player.ensure_input_actions()
 
-	for action: StringName in ACTIONS:
-		if InputMap.has_action(action):
-			continue
-		InputMap.add_action(action)
+	for action: StringName in get_actions():
+		if not InputMap.has_action(action):
+			InputMap.add_action(action)
 		var defaults: Array[InputEvent] = get_default_events(action)
 		for ev: InputEvent in defaults:
-			InputMap.action_add_event(action, ev)
+			var cat: String = get_event_category(ev)
+			if get_action_event_at(action, cat, 0) == null:
+				InputMap.action_add_event(action, ev)
 
 
 static func events_match(a: InputEvent, b: InputEvent) -> bool:
@@ -152,7 +178,7 @@ static func get_action_event_at(action: StringName, category: String, index: int
 ## ตรวจสอบทั้ง ACTIONS และ UI actions (ui_accept, ui_cancel, ui_pause)
 ## คืนชื่อ action ที่พบ หรือ StringName(&"") ถ้ายังไม่ถูกผูก
 static func find_action_with_event(event: InputEvent, exclude_action: StringName = &"") -> StringName:
-	for action: StringName in ACTIONS:
+	for action: StringName in get_actions():
 		if action == exclude_action:
 			continue
 		if not InputMap.has_action(action):
@@ -167,18 +193,26 @@ static func find_action_with_event(event: InputEvent, exclude_action: StringName
 		if not InputMap.has_action(action):
 			continue
 		for cur: InputEvent in InputMap.action_get_events(action):
+			# Spacebar ใช้ร่วมกับ dodge เป็น default — ไม่ถือว่าชนกับ ui_accept สำหรับ dodge
+			if exclude_action == &"dodge" and cur is InputEventKey and (cur.physical_keycode == KEY_SPACE or cur.keycode == KEY_SPACE):
+				continue
 			if events_match(cur, event):
 				return action
 
 	return &""
 
 
-## Rebind action: แทนที่ event ที่ index เดิม (ไม่ต่อท้าย)
+## Rebind action: แทนที่ event ที่ index เดิมภายในชนิดเดียวกัน (ไม่ต่อท้าย)
 ## ถ้า new_event ชนกับ action อื่น จะคืน false (กันปุ่มซ้ำ)
-## ถ้าเปลี่ยนเป็นปุ่มที่ action เดียวกันมีอยู่แล้ว จะสลับตำแหน่ง (swap) ไม่ลบเงียบ
+## ถ้าเปลี่ยนเป็นปุ่มที่ action เดียวกันมีอยู่แล้ว จะสลับตำแหน่งเฉพาะภายในชนิดเดียวกัน
 static func rebind(action: StringName, new_event: InputEvent, old_event: InputEvent = null) -> bool:
-	if new_event != null:
-		new_event.device = -1
+	if new_event == null:
+		return false
+	new_event.device = -1
+
+	var cat: String = get_event_category(new_event)
+	if cat == "unknown":
+		return false
 
 	if not InputMap.has_action(action):
 		InputMap.add_action(action)
@@ -191,37 +225,37 @@ static func rebind(action: StringName, new_event: InputEvent, old_event: InputEv
 	var current_events: Array[InputEvent] = InputMap.action_get_events(action)
 	var new_events: Array[InputEvent] = current_events.duplicate()
 
-	# 2. ตรวจสอบว่า new_event มีอยู่ใน action นี้อยู่แล้วหรือไม่ (เพื่อสลับตำแหน่ง)
+	# 2. ตรวจสอบว่า new_event มีอยู่ใน action นี้ในชนิดเดียวกัน (cat) หรือไม่ (เพื่อสลับตำแหน่ง)
 	var existing_idx: int = -1
 	for i: int in range(new_events.size()):
-		if events_match(new_events[i], new_event):
+		if get_event_category(new_events[i]) == cat and events_match(new_events[i], new_event):
 			existing_idx = i
 			break
 
-	# 3. หาตำแหน่งของ old_event ใน current_events
+	# 3. หาตำแหน่งของ old_event ใน current_events ภายในชนิดเดียวกัน (cat) เท่านั้น
 	var old_idx: int = -1
-	if old_event != null:
+	if old_event != null and get_event_category(old_event) == cat:
 		for i: int in range(new_events.size()):
-			if events_match(new_events[i], old_event):
+			if get_event_category(new_events[i]) == cat and events_match(new_events[i], old_event):
 				old_idx = i
 				break
 
 	if old_idx == -1:
-		var cat: String = get_event_category(new_event)
 		for i: int in range(new_events.size()):
 			if get_event_category(new_events[i]) == cat:
 				old_idx = i
 				break
 
+	# 4. สลับเฉพาะภายในชนิดเดียวกัน หรือแทนที่
 	if existing_idx != -1:
-		# มี new_event ใน action เดียวกันอยู่แล้ว -> สลับตำแหน่ง (swap)
-		if old_idx != -1 and old_idx != existing_idx:
+		# มี new_event ในชนิดเดียวกันอยู่แล้ว -> สลับตำแหน่ง (swap) ภายในชนิดเดียวกัน
+		if old_idx != -1 and old_idx != existing_idx and get_event_category(new_events[old_idx]) == cat:
 			var temp: InputEvent = new_events[old_idx]
 			new_events[old_idx] = new_events[existing_idx]
 			new_events[existing_idx] = temp
 	else:
-		# แทนที่ที่ตำแหน่ง index เดิม (ไม่ต่อท้าย)
-		if old_idx != -1:
+		# แทนที่ที่ตำแหน่ง index เดิมภายในชนิดเดียวกัน (ไม่ข้ามชนิดและไม่ต่อท้าย)
+		if old_idx != -1 and get_event_category(new_events[old_idx]) == cat:
 			new_events[old_idx] = new_event
 		else:
 			new_events.append(new_event)
@@ -239,14 +273,9 @@ static func rebind_event(action: StringName, old_event: InputEvent, new_event: I
 	return rebind(action, new_event, old_event)
 
 
-## คืนค่าเริ่มต้นทุก action
+## คืนค่าเริ่มต้นทุก action (ห้ามเอา Space ออกจาก ui_accept)
 static func reset_to_defaults() -> void:
-	if InputMap.has_action(&"ui_accept"):
-		for ev: InputEvent in InputMap.action_get_events(&"ui_accept"):
-			if ev is InputEventKey and (ev.physical_keycode == KEY_SPACE or ev.keycode == KEY_SPACE):
-				InputMap.action_erase_event(&"ui_accept", ev)
-
-	for action: StringName in ACTIONS:
+	for action: StringName in get_actions():
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
 		else:
@@ -324,7 +353,7 @@ static func get_event_text(ev: InputEvent) -> String:
 static func save_to_file(path: String = "") -> Error:
 	var target_path: String = path if not path.is_empty() else config_path
 	var cfg := ConfigFile.new()
-	for action: StringName in ACTIONS:
+	for action: StringName in get_actions():
 		var list: Array = []
 		if InputMap.has_action(action):
 			for ev: InputEvent in InputMap.action_get_events(action):
@@ -341,7 +370,7 @@ static func load_from_file(path: String = "") -> Error:
 	var err: Error = cfg.load(target_path)
 	if err != OK:
 		return err
-	for action: StringName in ACTIONS:
+	for action: StringName in get_actions():
 		if not cfg.has_section_key("input", String(action)):
 			continue
 		var list: Array = cfg.get_value("input", String(action), [])

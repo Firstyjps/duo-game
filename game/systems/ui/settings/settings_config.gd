@@ -42,6 +42,9 @@ const TRANSLATION_DATA: Dictionary = {
 	"UI_MOVE_RIGHT": {"en": "Move Right", "th": "เดินขวา"},
 	"UI_ATTACK": {"en": "Attack", "th": "โจมตี"},
 	"UI_DODGE": {"en": "Dodge", "th": "หลบ"},
+	"UI_PARRY": {"en": "Parry", "th": "ปัดป้อง"},
+	"UI_LOCK_ON": {"en": "Lock-on", "th": "ล็อคเป้า"},
+	"UI_HEAL": {"en": "Heal", "th": "รักษา"},
 	"UI_PAUSE": {"en": "Pause", "th": "หยุดเกม"},
 }
 

@@ -62,7 +62,7 @@ func build_rows() -> void:
 
 	var previous_row_btn: Button = null
 
-	for action: StringName in InputConfig.ACTIONS:
+	for action: StringName in InputConfig.get_actions():
 		var row := HBoxContainer.new()
 		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_theme_constant_override("separation", 12)
@@ -132,11 +132,12 @@ func refresh_rows() -> void:
 	if container_actions == null:
 		return
 	var rows: Array[Node] = container_actions.get_children()
-	for i: int in range(mini(rows.size(), InputConfig.ACTIONS.size())):
+	var all_actions: Array[StringName] = InputConfig.get_actions()
+	for i: int in range(mini(rows.size(), all_actions.size())):
 		var row := rows[i] as HBoxContainer
 		if row == null:
 			continue
-		var action: StringName = InputConfig.ACTIONS[i]
+		var action: StringName = all_actions[i]
 		var lbl_name := row.get_child(0) as Label
 		var btn_kb := row.get_child(1) as Button
 		var btn_joy := row.get_child(2) as Button
@@ -171,6 +172,9 @@ func _get_action_label(action: StringName) -> String:
 		&"move_right": return tr("UI_MOVE_RIGHT")
 		&"attack": return tr("UI_ATTACK")
 		&"dodge": return tr("UI_DODGE")
+		&"parry": return tr("UI_PARRY")
+		&"lock_on": return tr("UI_LOCK_ON")
+		&"heal": return tr("UI_HEAL")
 		&"ui_pause": return tr("UI_PAUSE")
 		&"ui_accept": return "UI Accept"
 		&"ui_cancel": return "UI Cancel"
@@ -244,7 +248,19 @@ func _input(event: InputEvent) -> void:
 			cancel_listening()
 			return
 
-	# 3. ตรวจสอบว่าอินพุตถูกต้องหรือไม่
+	# 3. ข้าม event ที่ชนิดไม่ตรงกับช่อง:
+	# ช่องคีย์บอร์ดรับเฉพาะ InputEventKey / InputEventMouseButton
+	# ช่องจอยรับเฉพาะ InputEventJoypadButton / InputEventJoypadMotion
+	if _listening_category == "keyboard_mouse":
+		if not (event is InputEventKey or event is InputEventMouseButton):
+			return
+	elif _listening_category == "joypad":
+		if not (event is InputEventJoypadButton or event is InputEventJoypadMotion):
+			return
+	else:
+		return
+
+	# 4. ตรวจสอบว่าอินพุตถูกต้องหรือไม่
 	var is_valid_input: bool = false
 	if event is InputEventKey and event.is_pressed() and not event.is_echo():
 		is_valid_input = true
