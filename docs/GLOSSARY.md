@@ -11,6 +11,8 @@
 | ฝั่ง / ทีม | `Combat.Team` | PLAYER / ENEMY / NEUTRAL — ฝั่งเดียวกันไม่โดนกัน | core/combat |
 | พลังชีวิต / HP | `Health` | HP ของผู้เล่น/ศัตรู/ของทำลายได้ | core/combat |
 | แพรี่ / ปัดป้อง | `Parry` · `Player.State.PARRY` · `parried` | การตั้งการ์ดปัดป้องในหน้าต่าง `parry_window` เพื่อไม่เสีย HP และได้ stamina คืน พลาดจะโดนตีเต็มช่วง recovery | player |
+| ถูกปัด / deflect | `Hurtbox.deflecting` · `Hitbox.deflected` · `EventBus.attack_deflected` | การโจมตีที่โดน parry: ผู้ป้องกันไม่เสียเลือด ผู้ตีได้ `deflected` แทน `hit_landed` | core/combat |
+| ฟื้น / respawn | `Player.revive()` · `EventBus.player_respawn_requested` | dungeon สั่งผู้เล่นกลับมาเต็มเลือดที่จุดเกิดหลังตาย | player/dungeon |
 | ล็อคเป้า | `Lock-on` · `lock_target` · `lock_target_changed` | การล็อคเป้าศัตรูในระยะ `lock_range` ให้ `aim` หันตามเป้าเสมอ สลับเป้าได้ และปลดเมื่อเป้าตายหรือหลุดระยะ | player |
 | ช่วง active | — | ช่วงเฟรมที่ Hitbox ของท่าเปิดอยู่ (`activate()` → `deactivate()`) | core/combat |
 | i-frames / อมตะชั่วคราว | `Hurtbox.invulnerable` | ช่วงที่โดนตีไม่เข้า เช่นระหว่าง dodge | core/combat |
