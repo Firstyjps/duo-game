@@ -15,13 +15,18 @@ var collision_shape: CollisionShape2D
 
 var _time_alive: float = 0.0
 var _is_reflected: bool = false
+var _configured: bool = false
 
 
 func _ready() -> void:
 	setup()
 
 
+## เรียกได้หลายครั้ง (ก่อน add_child และใน _ready) — ค่าที่ผู้ยิงตั้ง (damage/source) ต้องไม่ถูกรีเซ็ต
 func setup() -> void:
+	if _configured:
+		return
+	_configured = true
 	collision_shape = $CollisionShape2D if has_node("CollisionShape2D") else null
 	hitbox = $Hitbox if has_node("Hitbox") else null
 	collision_layer = 0
@@ -33,7 +38,8 @@ func setup() -> void:
 		hitbox.damage = damage
 		hitbox.knockback_force = knockback_force
 		hitbox.stagger = stagger
-		hitbox.source = self
+		if hitbox.source == null:
+			hitbox.source = self
 		if not hitbox.hit_landed.is_connected(_on_hit_landed):
 			hitbox.hit_landed.connect(_on_hit_landed)
 		if not hitbox.deflected.is_connected(_on_deflected):

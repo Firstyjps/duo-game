@@ -309,7 +309,7 @@ func _spawn_arrow() -> void:
 	_arrows_shot += 1
 	var arrow: InkArrow = ARROW_SCENE.instantiate() as InkArrow
 	arrow.setup()
-	arrow.global_position = global_position + Vector2(0, -16) + _aim_direction * 12.0
+	var spawn_pos: Vector2 = global_position + Vector2(0, -16) + _aim_direction * 12.0
 	arrow.set_direction(_aim_direction)
 	arrow.speed = arrow_speed
 	arrow.damage = arrow_damage
@@ -318,9 +318,11 @@ func _spawn_arrow() -> void:
 		arrow.hitbox.source = self
 	_last_spawned_arrow = arrow
 
+	# add_child ก่อนแล้วค่อยตั้ง global_position (ตั้งก่อนเข้า tree = ค่ากลายเป็น local → ผิดที่เมื่อ parent มี offset)
 	var p: Node = get_parent()
 	if p != null:
 		p.add_child(arrow)
+	arrow.global_position = spawn_pos
 
 
 func _on_hurt(info: DamageInfo) -> void:

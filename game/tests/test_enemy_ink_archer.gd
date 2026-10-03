@@ -257,3 +257,40 @@ func test_poise_interruption_during_aim() -> bool:
 	archer.free()
 	dummy.free()
 	return in_aim and still_aim and in_hurt
+
+
+
+## parent มี offset → ลูกธนูเกิดที่ตัวนักธนู (เดิมบวก offset ซ้ำ) · source = นักธนู ไม่ถูก setup() ซ้ำเขียนทับ
+func test_arrow_spawn_world_position_and_source() -> bool:
+	var room := Node2D.new()
+	room.position = Vector2(1000, 500)
+	var archer: InkArcher = ARCHER_SCENE.instantiate()
+	room.add_child(archer)
+	archer.setup()
+	archer.position = Vector2(12, -16)
+	archer._aim_direction = Vector2.RIGHT
+	archer._spawn_arrow()
+	var arrow: InkArrow = archer._last_spawned_arrow
+	arrow.setup()  # จำลอง _ready ที่เรียก setup ซ้ำ
+	var expected: Vector2 = archer.global_position + Vector2(0, -16) + Vector2.RIGHT * 12.0
+	var ok: bool = arrow.global_position.is_equal_approx(expected) and arrow.hitbox.source == archer
+	room.free()
+	return ok
+
+
+## ลูกที่สะท้อนแล้ว (ทีม PLAYER) ไปเจอ Hurtbox ฝั่ง ENEMY ที่ deflecting → ไม่สะท้อนซ้ำ
+func test_reflected_arrow_not_reflected_again() -> bool:
+	var arrow: InkArrow = ARROW_SCENE.instantiate()
+	arrow.setup()
+	arrow.set_direction(Vector2.RIGHT)
+	arrow._on_deflected(null, null)
+	var dir_after_first: Vector2 = arrow.direction
+	var enemy_hb := Hurtbox.new()
+	enemy_hb.team = Combat.Team.ENEMY
+	enemy_hb.deflecting = true
+	arrow.hitbox.activate()
+	arrow.hitbox.try_hit(enemy_hb)
+	var ok: bool = arrow.is_reflected() and arrow.direction.is_equal_approx(dir_after_first)
+	arrow.free()
+	enemy_hb.free()
+	return ok
