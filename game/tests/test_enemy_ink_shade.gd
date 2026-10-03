@@ -1,6 +1,7 @@
 extends RefCounted
 ## เทสต์ศัตรูเงาหมึก (Ink Shade) — game/systems/enemy/ink_shade/
 ## ลำดับ state ถูก · ไม่มี Hitbox active ก่อน windup ครบ · ตายแล้ว emit ครั้งเดียว · ทิศ 8 ทิศจากเวกเตอร์ถูก
+## PixelLab art 8 ทิศ + contract damage v2
 
 const INK_SHADE_SCENE: PackedScene = preload("res://systems/enemy/ink_shade/ink_shade.tscn")
 
@@ -19,25 +20,25 @@ func _hit(amount: int, stagger: float = 0.0) -> DamageInfo:
 	return info
 
 
-## 1. ทิศ 8 ทิศจากเวกเตอร์ถูกต้อง (screen-space)
+## 1. ทิศ 8 ทิศจากเวกเตอร์ถูกต้อง (screen-space) ด้วย Dir8
 func test_8_directions_from_vector() -> bool:
 	var ok: bool = true
 	# ทิศหลักและทิศทแยง
-	ok = ok and InkShade.vector_to_dir(Vector2(0, 1)) == InkShade.Dir.SOUTH # (0)
-	ok = ok and InkShade.vector_to_dir(Vector2(1, 1)) == InkShade.Dir.SOUTH_EAST # (1)
-	ok = ok and InkShade.vector_to_dir(Vector2(1, 0)) == InkShade.Dir.EAST # (2)
-	ok = ok and InkShade.vector_to_dir(Vector2(1, -1)) == InkShade.Dir.NORTH_EAST # (3)
-	ok = ok and InkShade.vector_to_dir(Vector2(0, -1)) == InkShade.Dir.NORTH # (4)
-	ok = ok and InkShade.vector_to_dir(Vector2(-1, -1)) == InkShade.Dir.NORTH_WEST # (5)
-	ok = ok and InkShade.vector_to_dir(Vector2(-1, 0)) == InkShade.Dir.WEST # (6)
-	ok = ok and InkShade.vector_to_dir(Vector2(-1, 1)) == InkShade.Dir.SOUTH_WEST # (7)
+	ok = ok and Dir8.from_vector(Vector2(0, 1)) == Dir8.SOUTH # (0)
+	ok = ok and Dir8.from_vector(Vector2(1, 1)) == Dir8.SOUTH_EAST # (1)
+	ok = ok and Dir8.from_vector(Vector2(1, 0)) == Dir8.EAST # (2)
+	ok = ok and Dir8.from_vector(Vector2(1, -1)) == Dir8.NORTH_EAST # (3)
+	ok = ok and Dir8.from_vector(Vector2(0, -1)) == Dir8.NORTH # (4)
+	ok = ok and Dir8.from_vector(Vector2(-1, -1)) == Dir8.NORTH_WEST # (5)
+	ok = ok and Dir8.from_vector(Vector2(-1, 0)) == Dir8.WEST # (6)
+	ok = ok and Dir8.from_vector(Vector2(-1, 1)) == Dir8.SOUTH_WEST # (7)
 
 	# เวกเตอร์ใกล้เคียงมุมเฉียง (tolerance ภายใน sector 45 องศา)
-	ok = ok and InkShade.vector_to_dir(Vector2(0.2, 1.0)) == InkShade.Dir.SOUTH
-	ok = ok and InkShade.vector_to_dir(Vector2(1.0, 0.1)) == InkShade.Dir.EAST
-	ok = ok and InkShade.vector_to_dir(Vector2(-0.1, -1.0)) == InkShade.Dir.NORTH
-	ok = ok and InkShade.vector_to_dir(Vector2(-1.0, -0.2)) == InkShade.Dir.WEST
-	ok = ok and InkShade.vector_to_dir(Vector2.ZERO) == InkShade.Dir.SOUTH
+	ok = ok and Dir8.from_vector(Vector2(0.2, 1.0)) == Dir8.SOUTH
+	ok = ok and Dir8.from_vector(Vector2(1.0, 0.1)) == Dir8.EAST
+	ok = ok and Dir8.from_vector(Vector2(-0.1, -1.0)) == Dir8.NORTH
+	ok = ok and Dir8.from_vector(Vector2(-1.0, -0.2)) == Dir8.WEST
+	ok = ok and Dir8.from_vector(Vector2.ZERO) == Dir8.SOUTH
 	return ok
 
 
@@ -49,7 +50,8 @@ func test_initial_state_and_teams() -> bool:
 		and shade.hitbox.team == Combat.Team.ENEMY \
 		and not shade.hitbox.monitoring \
 		and shade.detect.collision_mask == Combat.LAYER_PLAYER \
-		and shade.enemy_id == &"ink_shade"
+		and shade.enemy_id == &"ink_shade" \
+		and shade.dir_sprite != null
 	shade.free()
 	return ok
 
@@ -112,7 +114,7 @@ func test_state_sequence_wander_to_chase_to_windup_to_slash_to_recover() -> bool
 	return is_wander and is_chase and is_windup and still_windup and is_slash and is_recover and back_to_chase
 
 
-## 4. ไม่มี Hitbox/attack active ก่อน windup ครบ และ active เมื่อเข้า SLASH
+## 4. ไม่มี Hitbox/attack active ก่อน windup ครบ และ active ช่วงเฟรม 5 ของ SLASH
 func test_no_hitbox_active_before_windup_complete() -> bool:
 	var shade: InkShade = _spawn()
 	var dummy := Node2D.new()
@@ -134,13 +136,20 @@ func test_no_hitbox_active_before_windup_complete() -> bool:
 		ok = ok and (shade.state == InkShade.State.WINDUP)
 		ok = ok and not shade.is_attack_active and not shade.hitbox.monitoring
 
-	# เมื่อเข้าสู่ SLASH: is_attack_active ต้องเป็น true
+	# เมื่อเข้าสู่ SLASH: เริ่มที่เฟรม 4 (ยังไม่ active)
 	shade.tick(shade.windup_time * 0.2)
 	ok = ok and (shade.state == InkShade.State.SLASH)
+	ok = ok and shade.dir_sprite.frame == 4
+	ok = ok and not shade.is_attack_active and not shade.hitbox.monitoring
+
+	# เมื่อเล่นถึงเฟรม 5: is_attack_active ต้องเป็น true
+	shade.tick(shade.slash_time * 0.4)
+	ok = ok and (shade.state == InkShade.State.SLASH)
+	ok = ok and shade.dir_sprite.frame == 5
 	ok = ok and shade.is_attack_active
 
 	# เมื่อเข้าสู่ RECOVER: is_attack_active ต้องถูกเคลียร์เป็น false
-	shade.tick(shade.slash_time)
+	shade.tick(shade.slash_time * 0.7)
 	ok = ok and (shade.state == InkShade.State.RECOVER)
 	ok = ok and not shade.is_attack_active
 
@@ -149,7 +158,103 @@ func test_no_hitbox_active_before_windup_complete() -> bool:
 	return ok
 
 
-## โดนตีกลาง SLASH -> is_attack_active กลายเป็น false
+## 5. WINDUP แสดงเฟรม telegraph (attack ค้างเฟรม 3 ยกดาบสูง)
+func test_windup_shows_telegraph_frame() -> bool:
+	var shade: InkShade = _spawn()
+	var dummy := Node2D.new()
+	dummy.position = Vector2(shade.attack_range * 0.5, 0)
+	shade.set_target(dummy)
+
+	# เข้า WINDUP
+	shade.tick(0.0)
+	var ok: bool = shade.state == InkShade.State.WINDUP
+	ok = ok and shade.dir_sprite.frame == 3
+	ok = ok and shade.dir_sprite.action == &"attack"
+	ok = ok and not shade.is_attack_active
+
+	# ค้างเฟรม 3 ตลอดช่วง windup_time
+	shade.tick(shade.windup_time * 0.5)
+	ok = ok and (shade.state == InkShade.State.WINDUP)
+	ok = ok and shade.dir_sprite.frame == 3
+	ok = ok and not shade.is_attack_active
+
+	shade.free()
+	dummy.free()
+	return ok
+
+
+## 6. SLASH active ตรงเฟรม 5 (4=startup, 5=active แสงทองฟันลง, 6=followthrough, 7–8=RECOVER)
+func test_slash_active_on_frame_5() -> bool:
+	var shade: InkShade = _spawn()
+	var dummy := Node2D.new()
+	dummy.position = Vector2(shade.attack_range * 0.5, 0)
+	shade.set_target(dummy)
+
+	# เข้า WINDUP แล้วครบ windup_time → เข้า SLASH
+	shade.tick(0.0)
+	shade.tick(shade.windup_time)
+	var in_slash: bool = shade.state == InkShade.State.SLASH
+
+	# เฟรม 4 (จุดเริ่มต้นของการฟัน): ยังไม่ active
+	var frame_4_ok: bool = shade.dir_sprite.frame == 4 and not shade.is_attack_active
+
+	# เฟรม 5 (แสงทองฟันลง): active!
+	shade.tick(shade.slash_time * 0.4)
+	var frame_5_ok: bool = shade.dir_sprite.frame == 5 and shade.is_attack_active
+
+	# เฟรม 6 (จังหวะปลายดาบ): deactive แล้ว
+	shade.tick(shade.slash_time * 0.35)
+	var frame_6_ok: bool = shade.dir_sprite.frame == 6 and not shade.is_attack_active
+
+	# จบ slash_time → RECOVER เฟรม 7–8
+	shade.tick(shade.slash_time * 0.35)
+	var recover_ok: bool = shade.state == InkShade.State.RECOVER and (shade.dir_sprite.frame in [7, 8])
+
+	shade.free()
+	dummy.free()
+	return in_slash and frame_4_ok and frame_5_ok and frame_6_ok and recover_ok
+
+
+## 7. Contract damage v2: โดน parry (deflected) เซนาน parried_stagger_time (~0.8s)
+func test_hitbox_deflected_triggers_parried_stagger() -> bool:
+	var shade: InkShade = _spawn()
+	var defender := Hurtbox.new()
+	defender.team = Combat.Team.PLAYER
+	defender.deflecting = true
+
+	var dummy := Node2D.new()
+	dummy.position = Vector2(shade.attack_range * 0.5, 0)
+	shade.set_target(dummy)
+
+	# เดินหน้าจนถึงเฟรม 5 ของ SLASH (Hitbox active)
+	shade.tick(0.0)
+	shade.tick(shade.windup_time)
+	shade.tick(shade.slash_time * 0.4)
+	var is_active: bool = shade.is_attack_active and shade.dir_sprite.frame == 5
+
+	# จำลองการโดนปัด (parry)
+	var hit_success: bool = shade.hitbox.try_hit(defender)
+	# deflecting = true ทำให้ try_hit คืน false และส่ง deflected signal
+	var defl_handled: bool = not hit_success \
+		and shade.state == InkShade.State.HURT \
+		and not shade.is_attack_active \
+		and not shade.hitbox.monitoring
+
+	# เซนานเท่า parried_stagger_time (0.8s) — ผ่านไป 0.4s ต้องยังเซอยู่ (ไม่เหมือน hurt ปกติ 0.25s)
+	shade.tick(shade.parried_stagger_time * 0.5)
+	var still_staggered: bool = shade.state == InkShade.State.HURT
+
+	# ผ่านจนครบ parried_stagger_time แล้วต้องออกจาก HURT
+	shade.tick(shade.parried_stagger_time * 0.6)
+	var recovered: bool = shade.state != InkShade.State.HURT
+
+	shade.free()
+	dummy.free()
+	defender.free()
+	return is_active and defl_handled and still_staggered and recovered
+
+
+## 8. โดนตีกลาง SLASH -> is_attack_active กลายเป็น false
 func test_hit_during_slash_clears_attack_active() -> bool:
 	var shade: InkShade = _spawn()
 	var dummy := Node2D.new()
@@ -158,6 +263,7 @@ func test_hit_during_slash_clears_attack_active() -> bool:
 
 	shade.tick(0.0)
 	shade.tick(shade.windup_time)
+	shade.tick(shade.slash_time * 0.4)
 	var in_slash: bool = shade.state == InkShade.State.SLASH and shade.is_attack_active
 
 	# โดนตีด้วย stagger กลาง SLASH -> เข้า HURT และ is_attack_active ต้องเป็น false
@@ -169,7 +275,7 @@ func test_hit_during_slash_clears_attack_active() -> bool:
 	return in_slash and hurt_ok
 
 
-## ตายกลาง SLASH -> is_attack_active กลายเป็น false
+## 9. ตายกลาง SLASH -> is_attack_active กลายเป็น false
 func test_death_during_slash_clears_attack_active() -> bool:
 	var shade: InkShade = _spawn()
 	var dummy := Node2D.new()
@@ -178,6 +284,7 @@ func test_death_during_slash_clears_attack_active() -> bool:
 
 	shade.tick(0.0)
 	shade.tick(shade.windup_time)
+	shade.tick(shade.slash_time * 0.4)
 	var in_slash: bool = shade.state == InkShade.State.SLASH and shade.is_attack_active
 
 	# โดนตีตายกลาง SLASH -> เข้า DEAD และ is_attack_active ต้องเป็น false
@@ -189,7 +296,7 @@ func test_death_during_slash_clears_attack_active() -> bool:
 	return in_slash and dead_ok
 
 
-## damage_dealt ยิงหลังหัก HP (เช็ค health.hp ใน callback)
+## 10. damage_dealt ยิงหลังหัก HP (เช็ค health.hp ใน callback)
 func test_damage_dealt_emitted_after_hp_deducted() -> bool:
 	var shade: InkShade = _spawn()
 	var initial_hp: int = shade.health.hp
@@ -212,7 +319,7 @@ func test_damage_dealt_emitted_after_hp_deducted() -> bool:
 	return ok
 
 
-## 5. ตายแล้ว emit EventBus.enemy_died ครั้งเดียว และเปลี่ยน state เป็น DEAD
+## 11. ตายแล้ว emit EventBus.enemy_died ครั้งเดียว และเปลี่ยน state เป็น DEAD
 func test_dies_once_and_emits_enemy_died_once() -> bool:
 	var shade: InkShade = _spawn()
 	var deaths: Array[StringName] = []
@@ -231,7 +338,7 @@ func test_dies_once_and_emits_enemy_died_once() -> bool:
 	return ok
 
 
-## 6. ดาเมจและการเซตาม stagger เทียบ poise
+## 12. ดาเมจและการเซตาม stagger เทียบ poise
 func test_damage_and_poise_stagger() -> bool:
 	var shade: InkShade = _spawn()
 	var dealt_list: Array[int] = []
@@ -260,7 +367,7 @@ func test_damage_and_poise_stagger() -> bool:
 	return hurt_ok and not_staggered and staggered_now
 
 
-## 7. ทิศทางสไปรต์เปลี่ยนตามทิศเป้าหมาย
+## 13. ทิศทางสไปรต์เปลี่ยนตามทิศเป้าหมาย (DirSprite.facing / animation)
 func test_facing_direction_follows_target() -> bool:
 	var shade: InkShade = _spawn()
 	var dummy := Node2D.new()
@@ -270,26 +377,26 @@ func test_facing_direction_follows_target() -> bool:
 	dummy.position = Vector2(80, 0)
 	shade.set_target(dummy)
 	shade.tick(0.0)
-	var east_ok: bool = shade.facing_dir == InkShade.Dir.EAST and shade.sprite.frame_coords.y == InkShade.Dir.EAST
+	var east_ok: bool = shade.dir_sprite.facing == Dir8.EAST and shade.dir_sprite.animation == &"walk_east"
 
 	# เป้าหมายอยู่บนขวา -> หัน NORTH_EAST (3)
 	dummy.global_position = Vector2(80, -80)
 	dummy.position = Vector2(80, -80)
 	shade.tick(0.0)
-	var ne_ok: bool = shade.facing_dir == InkShade.Dir.NORTH_EAST and shade.sprite.frame_coords.y == InkShade.Dir.NORTH_EAST
+	var ne_ok: bool = shade.dir_sprite.facing == Dir8.NORTH_EAST and shade.dir_sprite.animation == &"walk_north-east"
 
 	# เป้าหมายอยู่ซ้ายล่าง -> หัน SOUTH_WEST (7)
 	dummy.global_position = Vector2(-80, 80)
 	dummy.position = Vector2(-80, 80)
 	shade.tick(0.0)
-	var sw_ok: bool = shade.facing_dir == InkShade.Dir.SOUTH_WEST and shade.sprite.frame_coords.y == InkShade.Dir.SOUTH_WEST
+	var sw_ok: bool = shade.dir_sprite.facing == Dir8.SOUTH_WEST and shade.dir_sprite.animation == &"walk_south-west"
 
 	shade.free()
 	dummy.free()
 	return east_ok and ne_ok and sw_ok
 
 
-## 8. WANDER ถ้าไม่คืบหน้าระยะไม่ลดเกิน wander_stuck_time (~1.2s) ให้สุ่มจุดใหม่
+## 14. WANDER ถ้าไม่คืบหน้าระยะไม่ลดเกิน wander_stuck_time (~1.2s) ให้สุ่มจุดใหม่
 func test_wander_stuck_repicks_target() -> bool:
 	var shade: InkShade = _spawn()
 	shade.global_position = Vector2(100, 100)
@@ -313,32 +420,56 @@ func test_wander_stuck_repicks_target() -> bool:
 	return still_same_target and stuck_triggered
 
 
-## 9. เฟรมและแอนิเมชันทุกท่าอยู่ใน sprite sheet และเฟรมสุดท้ายของท่าตายไม่ว่างเปล่า
-func test_anim_frames_within_sheet() -> bool:
+## 15. DEAD = death แล้วละลายด้วยโค้ด (scale.y -> 0.2, alpha -> 0.0 ตาม corpse_time)
+func test_death_melts_via_code() -> bool:
 	var shade: InkShade = _spawn()
-	var tex: Texture2D = shade.sprite.texture
-	var total_w: int = shade.sprite.hframes * 64
-	var total_h: int = shade.sprite.vframes * 64
-	var dim_ok: bool = tex.get_width() == total_w and tex.get_height() == total_h
+	shade.hurtbox.receive(_hit(999))
+	var dead_ok: bool = shade.state == InkShade.State.DEAD
+	var init_scale: bool = is_equal_approx(shade.dir_sprite.scale.y, 1.0)
+	var init_alpha: bool = is_equal_approx(shade.dir_sprite.self_modulate.a, 1.0)
 
-	var frames_ok: bool = true
-	for anim_name: StringName in InkShade.ANIMS:
-		var frames: Array = InkShade.ANIMS[anim_name]["frames"]
-		for f: int in frames:
-			frames_ok = frames_ok and (f >= 0 and f < shade.sprite.hframes)
+	# ช่วงเล่นท่า death (death_anim_time = 1.0s): ยังไม่ละลาย
+	shade.tick(shade.death_anim_time * 0.8)
+	var before_melt: bool = is_equal_approx(shade.dir_sprite.scale.y, 1.0) and is_equal_approx(shade.dir_sprite.self_modulate.a, 1.0)
 
-	# ตรวจสอบว่าเฟรมสุดท้ายของท่าตาย (คอลัมน์ 23) มีภาพจาง ๆ ไม่ว่างเปล่า
-	var img: Image = tex.get_image()
-	var col23_rect := Rect2i(23 * 64, 0, 64, 64)
-	var col23_img: Image = img.get_region(col23_rect)
-	var has_col23_pixels: bool = false
-	for y: int in 64:
-		for x: int in 64:
-			if col23_img.get_pixel(x, y).a > 0.01:
-				has_col23_pixels = true
-				break
-		if has_col23_pixels:
-			break
+	# จบท่า death เริ่มละลาย: scale.y ยุบลงเรื่อย ๆ และ alpha จางลง
+	shade.tick(shade.death_anim_time * 0.2 + shade.corpse_time * 0.5)
+	var mid_melt: bool = shade.dir_sprite.scale.y < 0.8 and shade.dir_sprite.scale.y > 0.2 \
+		and shade.dir_sprite.self_modulate.a < 0.8 and shade.dir_sprite.self_modulate.a > 0.2
+
+	# ครบ corpse_time ละลายสุด scale.y -> 0.2, alpha -> 0.0
+	shade.tick(shade.corpse_time * 0.5)
+	var final_melt: bool = is_equal_approx(shade.dir_sprite.scale.y, 0.2) \
+		and is_equal_approx(shade.dir_sprite.self_modulate.a, 0.0)
 
 	shade.free()
-	return dim_ok and frames_ok and has_col23_pixels
+	return dead_ok and init_scale and init_alpha and before_melt and mid_melt and final_melt
+
+
+## 16. SpriteFrames มีครบทุกท่า (idle, walk, attack, hurt, death) ทั้ง 8 ทิศ
+func test_sprite_frames_has_all_anims() -> bool:
+	var shade: InkShade = _spawn()
+	var sf: SpriteFrames = shade.dir_sprite.sprite_frames
+	var ok: bool = sf != null
+
+	var expected_anims := {
+		&"idle": 4,
+		&"walk": 6,
+		&"attack": 9,
+		&"hurt": 6,
+		&"death": 9,
+	}
+
+	for act: StringName in expected_anims:
+		var expected_f: int = expected_anims[act]
+		for d: int in Dir8.COUNT:
+			var anim_name: StringName = DirSprite.anim_name(act, d)
+			if not sf.has_animation(anim_name):
+				ok = false
+				break
+			if sf.get_frame_count(anim_name) != expected_f:
+				ok = false
+				break
+
+	shade.free()
+	return ok

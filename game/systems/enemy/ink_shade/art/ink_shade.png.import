@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://chpo6ia5crnh7"
-path="res://.godot/imported/ink_shade_sheet.png-d4c5f7baf53434b07a794762f10d8af2.ctex"
+uid="uid://4j7kfp6hb5b8"
+path="res://.godot/imported/ink_shade.png-eb54f2048bdb53c8a672b5151b00dc20.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://systems/enemy/ink_shade/ink_shade_sheet.png"
-dest_files=["res://.godot/imported/ink_shade_sheet.png-d4c5f7baf53434b07a794762f10d8af2.ctex"]
+source_file="res://systems/enemy/ink_shade/art/ink_shade.png"
+dest_files=["res://.godot/imported/ink_shade.png-eb54f2048bdb53c8a672b5151b00dc20.ctex"]
 
 [params]
 

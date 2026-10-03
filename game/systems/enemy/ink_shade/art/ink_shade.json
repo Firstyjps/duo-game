@@ -1,0 +1,55 @@
+{
+ "cell": 96,
+ "dirs": [
+  "south",
+  "south-east",
+  "east",
+  "north-east",
+  "north",
+  "north-west",
+  "west",
+  "south-west"
+ ],
+ "anims": [
+  {
+   "name": "idle",
+   "src": "idle",
+   "fps": 6.0,
+   "loop": true,
+   "row": 0,
+   "frames": 4
+  },
+  {
+   "name": "walk",
+   "src": "walk",
+   "fps": 9.0,
+   "loop": true,
+   "row": 8,
+   "frames": 6
+  },
+  {
+   "name": "attack",
+   "src": "attack_chop",
+   "fps": 12.0,
+   "loop": false,
+   "row": 16,
+   "frames": 9
+  },
+  {
+   "name": "hurt",
+   "src": "hurt",
+   "fps": 12.0,
+   "loop": false,
+   "row": 24,
+   "frames": 6
+  },
+  {
+   "name": "death",
+   "src": "death",
+   "fps": 9.0,
+   "loop": false,
+   "row": 32,
+   "frames": 9
+  }
+ ]
+}
