@@ -70,6 +70,7 @@ var _fade_duration: float = 1.5
 var _fade_start_active_linear: float = 0.0
 
 var _active_combat_rooms: Dictionary = {}
+var _pending_rooms: Dictionary = {}
 var _current_frame: int = 0
 
 
@@ -765,38 +766,28 @@ func _on_boss_engaged(boss: Node, _health: Health, _display_name: String) -> voi
 	play_music(select_music_for_boss_engaged())
 
 
-func _is_room_combat_candidate(room: Node) -> bool:
-	if room == null:
-		return true
-	if room.get("state") != null and int(room.get("state")) == 2:
-		return false
-	if room.get("total_enemies") != null and int(room.get("total_enemies")) == 0:
-		var spawned = room.get("spawned_enemies")
-		if spawned == null or (spawned is Array and (spawned as Array).is_empty()):
-			return false
-	if room.get("is_cleared") != null and bool(room.get("is_cleared")):
-		return false
-	if room.has_method("is_cleared") and room.call("is_cleared"):
-		return false
-	return true
-
-
+## ตาม contract dungeon-flow: ห้องเคลียร์แล้ว/ไม่มีศัตรูส่ง room_cleared ตามมาใน frame เดียวกัน
+## → ตัดสินโหมดสู้แบบ deferred: ถ้ายังไม่ได้ room_cleared ของห้องนั้นภายใน frame นี้ = สู้จริง (ไม่อ่าน property ของห้อง)
 func _on_room_started(room: Node, _room_rect: Rect2) -> void:
 	var room_key: int = room.get_instance_id() if (room != null and is_instance_valid(room)) else 0
-	if _is_room_combat_candidate(room):
-		_active_combat_rooms[room_key] = _current_frame
-		play_music(select_music_for_room_started())
+	_pending_rooms[room_key] = true
+	_confirm_combat.call_deferred(room_key)
+
+
+func _confirm_combat(room_key: int) -> void:
+	if not _pending_rooms.has(room_key):
+		return
+	_pending_rooms.erase(room_key)
+	_active_combat_rooms[room_key] = true
+	play_music(select_music_for_room_started())
 
 
 func _on_room_cleared(room: Node) -> void:
 	var room_key: int = room.get_instance_id() if (room != null and is_instance_valid(room)) else 0
-	var was_in_combat: bool = false
-	if _active_combat_rooms.has(room_key):
-		var start_frame: int = _active_combat_rooms[room_key]
-		_active_combat_rooms.erase(room_key)
-		if start_frame != _current_frame:
-			was_in_combat = true
-
+	if _pending_rooms.has(room_key):
+		_pending_rooms.erase(room_key)  # เข้าห้องที่เคลียร์แล้ว: ไม่สลับเพลง ไม่มีเสียงประตู
+		return
+	var was_in_combat: bool = _active_combat_rooms.erase(room_key)
 	play_music(select_music_for_room_cleared())
 	if was_in_combat:
 		play_sfx(select_sfx_for_room_cleared())

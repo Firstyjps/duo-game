@@ -174,6 +174,7 @@ func test_event_bus_room_transitions() -> bool:
 
 	# 1. room_started -> combat music
 	EventBus.room_started.emit(director, Rect2(0, 0, 960, 540))
+	director._confirm_combat(director.get_instance_id())  # จบ frame (เทสต์อยู่นอก tree — call_deferred ไม่รัน)
 	var room_start_ok: bool = director.current_music_name == &"music_combat"
 	director.tick(0.6)
 
@@ -436,6 +437,7 @@ func test_room_started_and_cleared_same_frame() -> bool:
 
 	# 3. Conversely, when room has real combat (tick between started and cleared) -> door_open plays!
 	EventBus.room_started.emit(mock_room, Rect2(0, 0, 960, 540))
+	director._confirm_combat(mock_room.get_instance_id())  # จบ frame โดยยังไม่มี room_cleared = สู้จริง
 	director.tick(0.5) # combat active over time
 	EventBus.room_cleared.emit(mock_room)
 	var door_open_played_after_combat: bool = director._sfx_play_counter > sfx_count_before
