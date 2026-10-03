@@ -112,17 +112,23 @@ func _ready() -> void:
 func _enter_tree() -> void:
 	if not EventBus.enemy_died.is_connected(_on_enemy_died):
 		EventBus.enemy_died.connect(_on_enemy_died)
+	if not EventBus.player_respawn_requested.is_connected(revive):
+		EventBus.player_respawn_requested.connect(revive)
 
 
 func _exit_tree() -> void:
 	if EventBus.enemy_died.is_connected(_on_enemy_died):
 		EventBus.enemy_died.disconnect(_on_enemy_died)
+	if EventBus.player_respawn_requested.is_connected(revive):
+		EventBus.player_respawn_requested.disconnect(revive)
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
 		if EventBus != null and EventBus.enemy_died.is_connected(_on_enemy_died):
 			EventBus.enemy_died.disconnect(_on_enemy_died)
+		if EventBus != null and EventBus.player_respawn_requested.is_connected(revive):
+			EventBus.player_respawn_requested.disconnect(revive)
 
 
 ## ผูก node ลูก + signal + input action — แยกจาก _ready ให้เทสต์เรียกได้โดยไม่ต้องอยู่ใน scene tree
@@ -170,6 +176,8 @@ func setup() -> void:
 		hurtbox.invulnerable = false
 		if not hurtbox.hurt.is_connected(_on_hurt):
 			hurtbox.hurt.connect(_on_hurt)
+		if not hurtbox.deflected.is_connected(_on_deflected):
+			hurtbox.deflected.connect(_on_deflected)
 
 	if lock_area != null:
 		lock_area.collision_layer = 0
@@ -283,6 +291,8 @@ func tick(delta: float) -> void:
 			_state_parry(delta)
 		State.DEAD:
 			velocity = Vector2.ZERO
+	if state != State.PARRY and hurtbox != null:
+		hurtbox.deflecting = false  # ออกจาก parry ทางไหนก็ตาม (dodge ยกเลิก/โดนตี) ต้องปิดหน้าต่างปัด
 
 	knock = knock.move_toward(Vector2.ZERO, knockback_friction * delta)
 	velocity += knock
@@ -382,12 +392,16 @@ func _start_parry() -> bool:
 	velocity = Vector2.ZERO
 	if hitbox != null:
 		hitbox.deactivate()
+	if hurtbox != null:
+		hurtbox.deflecting = true
 	return true
 
 
 func _state_parry(delta: float) -> void:
 	velocity = Vector2.ZERO
 	_state_t += delta
+	if hurtbox != null:
+		hurtbox.deflecting = _state_t <= parry_window
 	if _state_t >= (parry_window + parry_recover):
 		state = State.MOVE
 		_state_t = 0.0
@@ -529,16 +543,6 @@ func _regen(delta: float) -> void:
 func _on_hurt(info: DamageInfo) -> void:
 	if state == State.DEAD:
 		return
-	if state == State.PARRY and _state_t <= parry_window:
-		stamina = minf(stamina_max, stamina + parry_refund)
-		_regen_wait = 0.0
-		stamina_changed.emit(stamina, stamina_max)
-		parried.emit(info)
-		_flash_t = 0.15
-		_flash_color = Color(2.5, 2.3, 1.2)
-		state = State.MOVE
-		_state_t = 0.0
-		return
 
 	var final_amount: int = compute_damage(info.amount, defense)
 	var dealt: int = health.take_damage(final_amount)
@@ -553,6 +557,50 @@ func _on_hurt(info: DamageInfo) -> void:
 		swing = 0.0
 		if hitbox != null:
 			hitbox.deactivate()
+
+
+## parry สำเร็จ (Hurtbox.deflected ระหว่างหน้าต่าง parry) — ไม่เสียเลือด · ผู้ตีได้ Hitbox.deflected
+func _on_deflected(info: DamageInfo) -> void:
+	if state != State.PARRY:
+		return
+	if hurtbox != null:
+		hurtbox.deflecting = false
+	stamina = minf(stamina_max, stamina + parry_refund)
+	_regen_wait = 0.0
+	stamina_changed.emit(stamina, stamina_max)
+	parried.emit(info)
+	EventBus.attack_deflected.emit(self, info)
+	_flash_t = 0.15
+	_flash_color = Color(2.5, 2.3, 1.2)
+	state = State.MOVE
+	_state_t = 0.0
+
+
+## ฟื้นเต็มที่ตำแหน่งที่ dungeon ส่งมา (EventBus.player_respawn_requested) — ใช้ได้ทั้งตอนตายและยังไม่ตาย
+func revive(at: Vector2) -> void:
+	global_position = at
+	if health != null:
+		health.reset()
+	stamina = stamina_max
+	stamina_changed.emit(stamina, stamina_max)
+	_died_emitted = false
+	state = State.MOVE
+	attack_phase = AttackPhase.NONE
+	_state_t = 0.0
+	velocity = Vector2.ZERO
+	knock = Vector2.ZERO
+	unlock()
+	if hurtbox != null:
+		hurtbox.invulnerable = false
+		hurtbox.deflecting = false
+	if hitbox != null:
+		hitbox.deactivate()
+	collision_layer = Combat.LAYER_PLAYER
+	collision_mask = Combat.LAYER_WORLD | Combat.LAYER_ENEMY
+	if sprite != null:
+		sprite.modulate = Color.WHITE
+	if dir_sprite != null:
+		dir_sprite.play_action(&"idle")
 
 
 func _on_died() -> void:

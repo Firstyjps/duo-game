@@ -413,9 +413,12 @@ func show_boss(display_name: String, health: Health) -> void:
 		boss_box.modulate.a = 1.0
 
 	if _boss_health != null:
-		_boss_health.changed.connect(_on_boss_health_changed)
-		_boss_health.died.connect(_on_boss_died)
-		_boss_health.tree_exiting.connect(_on_boss_tree_exiting)
+		if not _boss_health.changed.is_connected(_on_boss_health_changed):
+			_boss_health.changed.connect(_on_boss_health_changed)
+		if not _boss_health.died.is_connected(_on_boss_died):
+			_boss_health.died.connect(_on_boss_died)
+		if not _boss_health.tree_exiting.is_connected(_on_boss_tree_exiting):
+			_boss_health.tree_exiting.connect(_on_boss_tree_exiting)
 
 
 func hide_boss() -> void:

@@ -519,3 +519,48 @@ func test_ensure_input_actions_keeps_rebind() -> bool:
 	for e: InputEvent in saved:
 		InputMap.action_add_event(&"parry", e)
 	return ok
+
+
+## parry สำเร็จ → EventBus.attack_deflected + Hurtbox ปิดหน้าต่างปัด · ออกจาก parry ด้วยวิธีอื่น deflecting ต้องปิด
+func test_parry_emits_attack_deflected_and_closes_window() -> bool:
+	var player: Player = _spawn()
+	var got: Array[Node] = []
+	var cb := func(defender: Node, _i: DamageInfo) -> void: got.append(defender)
+	EventBus.attack_deflected.connect(cb)
+	player.set_intent(Vector2.ZERO, Vector2.RIGHT, false, false, true)
+	player.tick(0.0)
+	var open_ok: bool = player.hurtbox.deflecting
+	var hit := DamageInfo.new()
+	hit.team = Combat.Team.ENEMY
+	hit.amount = 5
+	var result: Hurtbox.Result = player.hurtbox.receive_result(hit)
+	var ok: bool = open_ok and result == Hurtbox.Result.DEFLECTED and got == [player] \
+		and not player.hurtbox.deflecting and player.health.hp == player.max_hp
+	EventBus.attack_deflected.disconnect(cb)
+	player.free()
+	return ok
+
+
+## ตายแล้ว dungeon สั่ง respawn → ฟื้นเต็ม ที่ตำแหน่งใหม่ ควบคุมได้อีก และตายซ้ำแล้ว emit player_died อีกครั้ง
+func test_respawn_requested_revives_player() -> bool:
+	var player: Player = _spawn()
+	player._enter_tree()  # ต่อ EventBus แบบตอนอยู่ใน tree
+	var hit := DamageInfo.new()
+	hit.team = Combat.Team.ENEMY
+	hit.amount = 999
+	player.hurtbox.receive(hit)
+	var dead: bool = player.is_dead()
+	EventBus.player_respawn_requested.emit(Vector2(64, 32))
+	var revived: bool = not player.is_dead() and player.state == Player.State.MOVE \
+		and player.health.hp == player.max_hp and player.global_position == Vector2(64, 32) \
+		and not player.hurtbox.invulnerable and player.collision_layer == Combat.LAYER_PLAYER \
+		and is_equal_approx(player.stamina, player.stamina_max)
+	var deaths: Array[bool] = []
+	var cb := func() -> void: deaths.append(true)
+	EventBus.player_died.connect(cb)
+	player.hurtbox.receive(hit)
+	var died_again: bool = deaths.size() == 1
+	EventBus.player_died.disconnect(cb)
+	player._exit_tree()
+	player.free()
+	return dead and revived and died_again
