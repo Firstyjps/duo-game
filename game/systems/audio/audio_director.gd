@@ -37,6 +37,8 @@ const DEFAULT_MUSIC_VOLUME_DB: float = 0.0
 @export var max_polyphony_per_sfx: int = 3
 
 @export_group("Playback Tuning")
+## เพลงที่จะเล่นอัตโนมัติเมื่อเริ่มเกม และเล่นใหม่เมื่อผู้เล่นเกิดใหม่ (respawn)
+@export var autoplay_music: StringName = &"music_explore"
 ## การสุ่ม pitch ของ SFX (±5% คือ 0.05)
 @export var pitch_randomness: float = 0.05
 ## ระยะเวลา crossfade เพลงพื้นฐาน (วินาที)
@@ -52,20 +54,30 @@ var _music_cache: Dictionary = {}
 var _sfx_pool: Array[AudioStreamPlayer] = []
 var _sfx_2d_pool: Array[AudioStreamPlayer2D] = []
 var _sfx_active_counts: Dictionary = {}
+var _sfx_play_counter: int = 0
 
+var _music_players: Array[AudioStreamPlayer] = []
 var _music_player_a: AudioStreamPlayer = null
 var _music_player_b: AudioStreamPlayer = null
 var _active_music_player: AudioStreamPlayer = null
 var _fading_music_player: AudioStreamPlayer = null
+var _fading_entries: Array[Dictionary] = []
 
 var _is_crossfading: bool = false
 var _is_fading_out: bool = false
 var _fade_timer: float = 0.0
 var _fade_duration: float = 1.5
+var _fade_start_active_linear: float = 0.0
+
+
+func _enter_tree() -> void:
+	_connect_event_bus()
 
 
 func _ready() -> void:
 	setup()
+	if not autoplay_music.is_empty():
+		play_music(autoplay_music, 0.0)
 
 
 func _process(delta: float) -> void:
@@ -114,6 +126,7 @@ func _init_music_players() -> void:
 		_music_player_a.bus = &"Music"
 		_music_player_a.volume_db = SILENCE_DB
 		add_child(_music_player_a)
+		_music_players.append(_music_player_a)
 
 	if _music_player_b == null:
 		_music_player_b = AudioStreamPlayer.new()
@@ -121,6 +134,7 @@ func _init_music_players() -> void:
 		_music_player_b.bus = &"Music"
 		_music_player_b.volume_db = SILENCE_DB
 		add_child(_music_player_b)
+		_music_players.append(_music_player_b)
 
 	_active_music_player = _music_player_a
 	_fading_music_player = _music_player_b
@@ -138,6 +152,8 @@ func _connect_event_bus() -> void:
 		EventBus.enemy_died.connect(_on_enemy_died)
 	if not EventBus.player_died.is_connected(_on_player_died):
 		EventBus.player_died.connect(_on_player_died)
+	if not EventBus.player_respawn_requested.is_connected(_on_player_respawn_requested):
+		EventBus.player_respawn_requested.connect(_on_player_respawn_requested)
 	if not EventBus.boss_engaged.is_connected(_on_boss_engaged):
 		EventBus.boss_engaged.connect(_on_boss_engaged)
 	if not EventBus.room_started.is_connected(_on_room_started):
@@ -160,6 +176,8 @@ func _disconnect_event_bus() -> void:
 		EventBus.enemy_died.disconnect(_on_enemy_died)
 	if EventBus.player_died.is_connected(_on_player_died):
 		EventBus.player_died.disconnect(_on_player_died)
+	if EventBus.player_respawn_requested.is_connected(_on_player_respawn_requested):
+		EventBus.player_respawn_requested.disconnect(_on_player_respawn_requested)
 	if EventBus.boss_engaged.is_connected(_on_boss_engaged):
 		EventBus.boss_engaged.disconnect(_on_boss_engaged)
 	if EventBus.room_started.is_connected(_on_room_started):
@@ -180,31 +198,48 @@ func tick(delta: float) -> void:
 		_fade_timer += delta
 		var progress: float = clampf(_fade_timer / maxf(0.001, _fade_duration), 0.0, 1.0)
 		if _active_music_player != null:
-			_active_music_player.volume_db = _linear_to_db_safe(progress)
-		if _fading_music_player != null:
-			_fading_music_player.volume_db = _linear_to_db_safe(1.0 - progress)
+			var act_linear: float = lerpf(_fade_start_active_linear, 1.0, progress)
+			_active_music_player.volume_db = _linear_to_db_safe(act_linear)
+
+		for entry: Dictionary in _fading_entries:
+			var p: AudioStreamPlayer = entry["player"]
+			var start_lin: float = float(entry["start_linear"])
+			p.volume_db = _linear_to_db_safe(start_lin * (1.0 - progress))
 
 		if progress >= 1.0:
 			_is_crossfading = false
-			if _fading_music_player != null:
-				if _fading_music_player.is_inside_tree():
-					_fading_music_player.stop()
-				_fading_music_player.volume_db = SILENCE_DB
+			for entry: Dictionary in _fading_entries:
+				var p: AudioStreamPlayer = entry["player"]
+				if p.is_inside_tree():
+					p.stop()
+				p.volume_db = SILENCE_DB
+			_fading_entries.clear()
+			_fading_music_player = null
 			if _active_music_player != null:
 				_active_music_player.volume_db = DEFAULT_MUSIC_VOLUME_DB
 
 	elif _is_fading_out:
 		_fade_timer += delta
 		var progress: float = clampf(_fade_timer / maxf(0.001, _fade_duration), 0.0, 1.0)
-		if _active_music_player != null:
-			_active_music_player.volume_db = _linear_to_db_safe(1.0 - progress)
+		for entry: Dictionary in _fading_entries:
+			var p: AudioStreamPlayer = entry["player"]
+			var start_lin: float = float(entry["start_linear"])
+			p.volume_db = _linear_to_db_safe(start_lin * (1.0 - progress))
 
 		if progress >= 1.0:
 			_is_fading_out = false
+			for entry: Dictionary in _fading_entries:
+				var p: AudioStreamPlayer = entry["player"]
+				if p.is_inside_tree():
+					p.stop()
+				p.volume_db = SILENCE_DB
+			_fading_entries.clear()
+			_fading_music_player = null
 			if _active_music_player != null:
 				if _active_music_player.is_inside_tree():
 					_active_music_player.stop()
 				_active_music_player.volume_db = SILENCE_DB
+				_active_music_player = null
 			current_music_name = &""
 
 
@@ -212,6 +247,12 @@ func _linear_to_db_safe(linear_val: float) -> float:
 	if linear_val <= 0.0001:
 		return SILENCE_DB
 	return linear_to_db(linear_val)
+
+
+func _db_to_linear_safe(db_val: float) -> float:
+	if db_val <= SILENCE_DB:
+		return 0.0
+	return db_to_linear(db_val)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -231,6 +272,7 @@ func play_sfx(sfx_name: StringName, position: Vector2 = Vector2.INF) -> void:
 		return
 
 	var pitch: float = 1.0 + randf_range(-pitch_randomness, pitch_randomness)
+	_sfx_play_counter += 1
 
 	if position == Vector2.INF:
 		var player: AudioStreamPlayer = _acquire_sfx_player()
@@ -242,6 +284,7 @@ func play_sfx(sfx_name: StringName, position: Vector2 = Vector2.INF) -> void:
 		player.bus = &"SFX"
 		player.set_meta(&"sfx_name", sfx_name)
 		player.set_meta(&"busy", true)
+		player.set_meta(&"play_order", _sfx_play_counter)
 		if player.is_inside_tree():
 			player.play()
 	else:
@@ -256,6 +299,7 @@ func play_sfx(sfx_name: StringName, position: Vector2 = Vector2.INF) -> void:
 		player_2d.position = position
 		player_2d.set_meta(&"sfx_name", sfx_name)
 		player_2d.set_meta(&"busy", true)
+		player_2d.set_meta(&"play_order", _sfx_play_counter)
 		if player_2d.is_inside_tree():
 			player_2d.play()
 
@@ -271,22 +315,71 @@ func play_music(music_name: StringName, fade: float = -1.0) -> void:
 
 	var duration: float = music_crossfade_duration if fade < 0.0 else fade
 
-	# สลับ active player ไปยังอีกตัว
-	var incoming_player: AudioStreamPlayer = _music_player_b if _active_music_player == _music_player_a else _music_player_a
-	_fading_music_player = _active_music_player
+	# ถ้าเพลงเดิมกำลัง fade out ให้ reverse fade กลับขึ้นมาจากระดับเสียงปัจจุบัน
+	if music_name == current_music_name and _is_fading_out:
+		var resume_player: AudioStreamPlayer = null
+		var resume_lin: float = 0.0
+		for i in range(_fading_entries.size() - 1, -1, -1):
+			var entry: Dictionary = _fading_entries[i]
+			if entry["player"].stream == stream:
+				resume_player = entry["player"]
+				resume_lin = _db_to_linear_safe(resume_player.volume_db)
+				_fading_entries.remove_at(i)
+				break
+		if resume_player != null:
+			_active_music_player = resume_player
+			_fade_start_active_linear = resume_lin
+			if duration <= 0.0:
+				_is_fading_out = false
+				_is_crossfading = false
+				_active_music_player.volume_db = DEFAULT_MUSIC_VOLUME_DB
+				if _active_music_player.is_inside_tree():
+					_active_music_player.play()
+			else:
+				_is_fading_out = false
+				_is_crossfading = true
+				_fade_timer = 0.0
+				_fade_duration = duration
+			return
+
+	# เปลี่ยนเพลง: active player ปัจจุบันย้ายเข้า _fading_entries โดยจำระดับเสียงปัจจุบันไว้
+	if _active_music_player != null:
+		var act_lin: float = _db_to_linear_safe(_active_music_player.volume_db)
+		if act_lin > 0.0001:
+			_fading_entries.append({ "player": _active_music_player, "start_linear": act_lin })
+		else:
+			if _active_music_player.is_inside_tree():
+				_active_music_player.stop()
+			_active_music_player.volume_db = SILENCE_DB
+		_active_music_player = null
+
+	# อัปเดต start_linear ของทุก player ที่กำลัง fade อยู่ ให้เริ่ม fade ลงจากระดับเสียงปัจจุบัน ไม่เด้งกลับ 0 dB
+	for entry: Dictionary in _fading_entries:
+		var p: AudioStreamPlayer = entry["player"]
+		entry["start_linear"] = _db_to_linear_safe(p.volume_db)
+
+	# เลือกหรือสร้าง music player ใหม่ที่ไม่ติด fading อยู่ เพื่อไม่ตัดเสียง player ที่เล่นค้าง
+	var incoming_player: AudioStreamPlayer = _acquire_music_player()
 	_active_music_player = incoming_player
+	_fade_start_active_linear = 0.0
 	current_music_name = music_name
 
 	incoming_player.stream = stream
 	incoming_player.bus = &"Music"
 
+	if not _fading_entries.is_empty():
+		_fading_music_player = _fading_entries[-1]["player"]
+
 	if duration <= 0.0:
 		_is_crossfading = false
 		_is_fading_out = false
-		if _fading_music_player != null:
-			if _fading_music_player.is_inside_tree():
-				_fading_music_player.stop()
-			_fading_music_player.volume_db = SILENCE_DB
+		for entry: Dictionary in _fading_entries:
+			var p: AudioStreamPlayer = entry["player"]
+			if p.is_inside_tree():
+				p.stop()
+			p.volume_db = SILENCE_DB
+		_fading_entries.clear()
+		_fading_music_player = null
 		incoming_player.volume_db = DEFAULT_MUSIC_VOLUME_DB
 		if incoming_player.is_inside_tree():
 			incoming_player.play()
@@ -300,9 +393,9 @@ func play_music(music_name: StringName, fade: float = -1.0) -> void:
 			incoming_player.play()
 
 
-## ค่อย ๆ ลดเสียงเพลงจนเงียบ (fade out)
+## ค่อย ๆ ลดเสียงเพลงจนเงียบ (fade out) ทั้ง active และ fading player
 func stop_music(fade: float = -1.0) -> void:
-	if current_music_name.is_empty() and not _is_crossfading:
+	if current_music_name.is_empty() and not _is_crossfading and _fading_entries.is_empty():
 		return
 
 	var duration: float = music_crossfade_duration if fade < 0.0 else fade
@@ -313,16 +406,39 @@ func stop_music(fade: float = -1.0) -> void:
 			if _active_music_player.is_inside_tree():
 				_active_music_player.stop()
 			_active_music_player.volume_db = SILENCE_DB
-		if _fading_music_player != null:
-			if _fading_music_player.is_inside_tree():
-				_fading_music_player.stop()
-			_fading_music_player.volume_db = SILENCE_DB
+			_active_music_player = null
+		for entry: Dictionary in _fading_entries:
+			var p: AudioStreamPlayer = entry["player"]
+			if p.is_inside_tree():
+				p.stop()
+			p.volume_db = SILENCE_DB
+		_fading_entries.clear()
+		_fading_music_player = null
 		current_music_name = &""
 	else:
 		_is_crossfading = false
 		_is_fading_out = true
 		_fade_timer = 0.0
 		_fade_duration = duration
+
+		if _active_music_player != null:
+			var act_lin: float = _db_to_linear_safe(_active_music_player.volume_db)
+			if act_lin > 0.0001:
+				_fading_entries.append({ "player": _active_music_player, "start_linear": act_lin })
+			else:
+				if _active_music_player.is_inside_tree():
+					_active_music_player.stop()
+				_active_music_player.volume_db = SILENCE_DB
+			_active_music_player = null
+
+		for entry: Dictionary in _fading_entries:
+			var p: AudioStreamPlayer = entry["player"]
+			entry["start_linear"] = _db_to_linear_safe(p.volume_db)
+
+		if not _fading_entries.is_empty():
+			_fading_music_player = _fading_entries[-1]["player"]
+
+		current_music_name = &""
 
 
 # ─────────────────────────────────────────────────────────────
@@ -353,16 +469,34 @@ func get_music_stream(music_name: StringName) -> AudioStream:
 	var path: String = MUSIC_PATHS[music_name]
 	var stream: AudioStream = load(path) as AudioStream
 	if stream != null:
-		if stream is AudioStreamWAV:
-			var wav: AudioStreamWAV = stream as AudioStreamWAV
-			wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		_music_cache[music_name] = stream
 	return stream
 
 
 # ─────────────────────────────────────────────────────────────
-# Pooling Implementation
+# Pooling & Acquisition Implementation
 # ─────────────────────────────────────────────────────────────
+
+func _acquire_music_player() -> AudioStreamPlayer:
+	for p: AudioStreamPlayer in _music_players:
+		if p != _active_music_player and not _is_player_fading(p):
+			return p
+
+	var new_player := AudioStreamPlayer.new()
+	new_player.name = "MusicPlayer_%d" % _music_players.size()
+	new_player.bus = &"Music"
+	new_player.volume_db = SILENCE_DB
+	add_child(new_player)
+	_music_players.append(new_player)
+	return new_player
+
+
+func _is_player_fading(player: AudioStreamPlayer) -> bool:
+	for entry: Dictionary in _fading_entries:
+		if entry["player"] == player:
+			return true
+	return false
+
 
 func _is_player_busy(player: Node) -> bool:
 	if player.is_inside_tree():
@@ -388,9 +522,15 @@ func _acquire_sfx_player() -> AudioStreamPlayer:
 		_sfx_pool.append(new_player)
 		return new_player
 
-	# หากเต็ม limit แล้ว ให้แย่งตัวที่เล่นมานานที่สุด (player ตัวแรกใน pool)
+	# หากเต็ม limit แล้ว ให้แย่งตัวที่เล่นมานานที่สุดจริง (play_order ต่ำสุด)
 	if not _sfx_pool.is_empty():
 		var oldest: AudioStreamPlayer = _sfx_pool[0]
+		var oldest_order: int = int(oldest.get_meta(&"play_order", 0))
+		for p: AudioStreamPlayer in _sfx_pool:
+			var order: int = int(p.get_meta(&"play_order", 0))
+			if order < oldest_order:
+				oldest = p
+				oldest_order = order
 		_return_sfx_polyphony(oldest)
 		oldest.set_meta(&"busy", false)
 		if oldest.is_inside_tree():
@@ -413,8 +553,15 @@ func _acquire_sfx_2d_player() -> AudioStreamPlayer2D:
 		_sfx_2d_pool.append(new_player)
 		return new_player
 
+	# หากเต็ม limit แล้ว ให้แย่งตัวที่เล่นมานานที่สุดจริง (play_order ต่ำสุด)
 	if not _sfx_2d_pool.is_empty():
 		var oldest: AudioStreamPlayer2D = _sfx_2d_pool[0]
+		var oldest_order: int = int(oldest.get_meta(&"play_order", 0))
+		for p: AudioStreamPlayer2D in _sfx_2d_pool:
+			var order: int = int(p.get_meta(&"play_order", 0))
+			if order < oldest_order:
+				oldest = p
+				oldest_order = order
 		_return_sfx_2d_polyphony(oldest)
 		oldest.set_meta(&"busy", false)
 		if oldest.is_inside_tree():
@@ -540,6 +687,11 @@ func _on_enemy_died(_enemy: Node, _enemy_id: StringName, position: Vector2) -> v
 
 func _on_player_died() -> void:
 	stop_music()
+
+
+func _on_player_respawn_requested(_position: Vector2) -> void:
+	if not autoplay_music.is_empty():
+		play_music(autoplay_music)
 
 
 func _on_boss_engaged(boss: Node, _health: Health, _display_name: String) -> void:

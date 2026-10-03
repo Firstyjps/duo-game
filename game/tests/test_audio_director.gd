@@ -32,15 +32,13 @@ func test_all_wav_files_loadable_and_non_empty() -> bool:
 			return false
 		if stream is AudioStreamWAV:
 			var wav: AudioStreamWAV = stream as AudioStreamWAV
-			# ตรวจสอบการตั้งค่า loop
+			# ตรวจสอบการตั้งค่า loop จาก .import
 			if wav.loop_mode != AudioStreamWAV.LOOP_FORWARD:
-				# ถ้าใน .import ยังเป็น default ให้ AudioDirector.get_music_stream() ตั้งค่า loop ให้
-				var director := AudioDirector.new()
-				var loaded_stream: AudioStream = director.get_music_stream(music_name)
-				director.free()
-				if loaded_stream is AudioStreamWAV and (loaded_stream as AudioStreamWAV).loop_mode != AudioStreamWAV.LOOP_FORWARD:
-					printerr("Music stream loop_mode is not LOOP_FORWARD: ", path)
-					return false
+				printerr("Music stream loop_mode is not LOOP_FORWARD: ", path)
+				return false
+			if wav.loop_end <= 0:
+				printerr("Music stream loop_end is not greater than 0: ", path, " (got: ", wav.loop_end, ")")
+				return false
 
 	return true
 
@@ -224,4 +222,188 @@ func test_polyphony_limit() -> bool:
 	director.free()
 
 	return slash_active <= 2
+
+
+func test_music_playback_beyond_17s_loops() -> bool:
+	for music_name: StringName in AudioDirector.MUSIC_PATHS:
+		var path: String = AudioDirector.MUSIC_PATHS[music_name]
+		var stream: AudioStream = load(path) as AudioStream
+		if not (stream is AudioStreamWAV):
+			return false
+		var wav: AudioStreamWAV = stream as AudioStreamWAV
+		if wav.loop_mode != AudioStreamWAV.LOOP_FORWARD or wav.loop_end <= 0:
+			printerr("Music loop not configured: ", path, " mode=", wav.loop_mode, " end=", wav.loop_end)
+			return false
+
+		# Render playback beyond 17s (file length is 16.0s)
+		var playback: AudioStreamPlayback = wav.instantiate_playback()
+		if playback == null:
+			printerr("Could not instantiate playback: ", path)
+			return false
+		playback.start(0.0)
+		var chunk_size: int = 44100
+		var has_sound: bool = false
+		for sec in range(18):
+			var frames: PackedVector2Array = playback.mix_audio(1.0, chunk_size)
+			if not playback.is_playing():
+				printerr("Playback stopped prematurely at sec ", sec, " for ", path)
+				return false
+			for f in frames:
+				if f.x != 0.0 or f.y != 0.0:
+					has_sound = true
+					break
+
+		if not playback.is_playing():
+			printerr("Playback not playing after 18s: ", path)
+			return false
+		var pos: float = playback.get_playback_position()
+		if pos > 3.0:
+			printerr("Playback position did not loop back: pos=", pos)
+			return false
+		if not has_sound:
+			printerr("Playback produced only silence: ", path)
+			return false
+
+	return true
+
+
+func test_stop_music_during_crossfade_fades_and_stops_both() -> bool:
+	var director := AudioDirector.new()
+	director.music_crossfade_duration = 2.0
+	director.setup()
+
+	# Start explore music
+	director.play_music(&"music_explore", 0.0)
+	var p_explore: AudioStreamPlayer = director._active_music_player
+
+	# Crossfade to combat music over 2.0s
+	director.play_music(&"music_combat", 2.0)
+	var p_combat: AudioStreamPlayer = director._active_music_player
+
+	# Tick 1.0s into crossfade — both should be sounding
+	director.tick(1.0)
+	var explore_mid_vol: float = p_explore.volume_db
+	var combat_mid_vol: float = p_combat.volume_db
+	var both_sounding: bool = explore_mid_vol > AudioDirector.SILENCE_DB and combat_mid_vol > AudioDirector.SILENCE_DB
+
+	# Stop music with fade 1.0s during crossfade
+	director.stop_music(1.0)
+	var is_fading_out: bool = director._is_fading_out
+
+	# Tick 0.5s into stop fade — both players should still be fading down from mid volume
+	director.tick(0.5)
+	var explore_fading_down: bool = p_explore.volume_db < explore_mid_vol and p_explore.volume_db > AudioDirector.SILENCE_DB
+	var combat_fading_down: bool = p_combat.volume_db < combat_mid_vol and p_combat.volume_db > AudioDirector.SILENCE_DB
+
+	# Tick to completion (0.6s -> 1.1s total)
+	director.tick(0.6)
+	var explore_silent: bool = p_explore.volume_db <= AudioDirector.SILENCE_DB
+	var combat_silent: bool = p_combat.volume_db <= AudioDirector.SILENCE_DB
+	var stopped_clean: bool = director.current_music_name == &"" and not director._is_fading_out and not director._is_crossfading
+
+	director.free()
+	return both_sounding and is_fading_out and explore_fading_down and combat_fading_down and explore_silent and combat_silent and stopped_clean
+
+
+func test_play_music_during_fade_does_not_bounce_volume() -> bool:
+	var director := AudioDirector.new()
+	director.music_crossfade_duration = 2.0
+	director.setup()
+
+	director.play_music(&"music_explore", 0.0)
+	var p_explore: AudioStreamPlayer = director._active_music_player
+
+	# Fade out over 2.0s
+	director.stop_music(2.0)
+	director.tick(1.0)  # at 1.0s / 2.0s, linear volume is ~0.5 (~ -6 dB)
+	var vol_before_play: float = p_explore.volume_db
+
+	# While fading out, call play_music(combat)
+	director.play_music(&"music_combat", 2.0)
+	# explore player must NOT bounce back to 0 dB!
+	# Its volume must immediately be <= vol_before_play
+	var vol_after_play: float = p_explore.volume_db
+	var did_not_bounce: bool = vol_after_play <= vol_before_play + 0.1 and vol_after_play < -3.0
+
+	# Tick 0.5s -> explore should continue fading down from vol_before_play, not from 0 dB
+	director.tick(0.5)
+	var continued_fading_down: bool = p_explore.volume_db < vol_before_play
+
+	director.free()
+	return did_not_bounce and continued_fading_down
+
+
+func test_change_music_during_crossfade_does_not_cut_sound() -> bool:
+	var director := AudioDirector.new()
+	director.music_crossfade_duration = 2.0
+	director.setup()
+
+	# Start explore
+	director.play_music(&"music_explore", 0.0)
+	var p1: AudioStreamPlayer = director._active_music_player
+
+	# Crossfade to combat
+	director.play_music(&"music_combat", 2.0)
+	var p2: AudioStreamPlayer = director._active_music_player
+
+	director.tick(0.8)
+	var p2_vol_mid: float = p2.volume_db
+
+	# Middle of crossfade! Now change back to explore
+	director.play_music(&"music_explore", 2.0)
+
+	# Sound should NOT be abruptly cut to SILENCE_DB
+	var p2_not_cut: bool = p2.volume_db > AudioDirector.SILENCE_DB
+	# p2 should fade down smoothly
+	director.tick(0.5)
+	var p2_fading_smoothly: bool = p2.volume_db < p2_vol_mid and p2.volume_db > AudioDirector.SILENCE_DB
+
+	director.free()
+	return p2_not_cut and p2_fading_smoothly
+
+
+func test_autoplay_and_respawn() -> bool:
+	var director := AudioDirector.new()
+	var default_autoplay_ok: bool = director.autoplay_music == &"music_explore"
+
+	# When ready is called, autoplay_music starts
+	director._ready()
+	var autoplay_started: bool = director.current_music_name == &"music_explore"
+
+	# When player dies, music stops
+	EventBus.player_died.emit()
+	director.tick(2.0)
+	var stopped_on_death: bool = director.current_music_name == &""
+
+	# When player respawns, autoplay_music resumes
+	EventBus.player_respawn_requested.emit(Vector2.ZERO)
+	var resumed_on_respawn: bool = director.current_music_name == &"music_explore"
+
+	director.free()
+	return default_autoplay_ok and autoplay_started and stopped_on_death and resumed_on_respawn
+
+
+func test_pool_eviction_steals_oldest_player() -> bool:
+	var director := AudioDirector.new()
+	director.max_sfx_players = 2
+	director.max_polyphony_per_sfx = 10
+	director.setup()
+
+	# Play 1 -> acquires player 0
+	director.play_sfx(&"slash")
+	var p0: AudioStreamPlayer = director._sfx_pool[0]
+
+	# Play 2 -> acquires player 1
+	director.play_sfx(&"slash")
+	var p1: AudioStreamPlayer = director._sfx_pool[1]
+
+	# Pool is full (size 2). Next acquire must steal p0 (the oldest)
+	director.play_sfx(&"slash")
+	var p_stolen_first: AudioStreamPlayer = director._acquire_sfx_player()
+	# Because p0 was used for Play 3, p1 has now been playing longest!
+	# So p_stolen_first should be p1!
+	var stole_oldest_p1: bool = (p_stolen_first == p1)
+
+	director.free()
+	return stole_oldest_p1
 

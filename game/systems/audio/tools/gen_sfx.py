@@ -550,25 +550,21 @@ NOTES = {
     'A5': 880.00,
 }
 
-def render_seamless_loop(duration, tail_sec, render_func):
+def render_seamless_loop(duration, render_func):
     """
-    Renders (duration + tail_sec), then wraps the tail (from duration to duration+tail_sec)
-    back into the beginning [0..tail_sec] to ensure completely seamless loop boundaries.
+    Renders 2 * duration with duplicated pattern into the 2nd loop,
+    then extracts the slice [duration, 2 * duration) without folding.
+    This ensures that steady-state decays naturally enter the start of the loop
+    without doubling notes or energy at the beginning.
     """
-    total_dur = duration + tail_sec
+    total_dur = 2.0 * duration
     left, right = render_func(total_dur)
 
     loop_samples = int(duration * SAMPLE_RATE)
-    tail_samples = int(tail_sec * SAMPLE_RATE)
+    end_samples = int(2.0 * duration * SAMPLE_RATE)
 
-    final_l = left[:loop_samples]
-    final_r = right[:loop_samples]
-
-    for i in range(tail_samples):
-        src_idx = loop_samples + i
-        if src_idx < len(left):
-            final_l[i] += left[src_idx]
-            final_r[i] += right[src_idx]
+    final_l = left[loop_samples:end_samples]
+    final_r = right[loop_samples:end_samples]
 
     return final_l, final_r
 
@@ -578,7 +574,6 @@ def gen_music_explore():
     Atmosphere: Moonlit Japanese dungeon, meditative koto & shakuhachi, Miyako-bushi scale.
     """
     loop_dur = 16.0
-    tail_sec = 4.0
 
     def render(total_duration):
         n_samples = int(total_duration * SAMPLE_RATE)
@@ -654,7 +649,7 @@ def gen_music_explore():
 
         return left, right
 
-    final_l, final_r = render_seamless_loop(loop_dur, tail_sec, render)
+    final_l, final_r = render_seamless_loop(loop_dur, render)
     return final_l, final_r
 
 def gen_music_combat():
@@ -664,7 +659,6 @@ def gen_music_combat():
     Tempo: 120 BPM (1 beat = 0.5s, 1 bar = 2.0s). 8 bars = 16.0s.
     """
     loop_dur = 16.0
-    tail_sec = 4.0
 
     def render(total_duration):
         n_samples = int(total_duration * SAMPLE_RATE)
@@ -766,7 +760,7 @@ def gen_music_combat():
 
         return left, right
 
-    final_l, final_r = render_seamless_loop(loop_dur, tail_sec, render)
+    final_l, final_r = render_seamless_loop(loop_dur, render)
     return final_l, final_r
 
 # ─────────────────────────────────────────────────────────────
@@ -784,34 +778,36 @@ def main():
     print(f"Generating audio files into: {out_dir}")
 
     sfx_generators = [
-        ("slash.wav", gen_slash),
-        ("hit_flesh.wav", gen_hit_flesh),
-        ("hit_player.wav", gen_hit_player),
-        ("parry.wav", gen_parry),
-        ("dodge.wav", gen_dodge),
-        ("enemy_die.wav", gen_enemy_die),
-        ("boss_roar.wav", gen_boss_roar),
-        ("door_close.wav", gen_door_close),
-        ("door_open.wav", gen_door_open),
-        ("heal.wav", gen_heal),
-        ("shard_pickup.wav", gen_shard_pickup),
-        ("ui_move.wav", gen_ui_move),
-        ("ui_confirm.wav", gen_ui_confirm),
-        ("thud.wav", gen_thud),
+        ("slash.wav", gen_slash, 1001),
+        ("hit_flesh.wav", gen_hit_flesh, 1002),
+        ("hit_player.wav", gen_hit_player, 1003),
+        ("parry.wav", gen_parry, 1004),
+        ("dodge.wav", gen_dodge, 1005),
+        ("enemy_die.wav", gen_enemy_die, 1006),
+        ("boss_roar.wav", gen_boss_roar, 1007),
+        ("door_close.wav", gen_door_close, 1008),
+        ("door_open.wav", gen_door_open, 1009),
+        ("heal.wav", gen_heal, 1010),
+        ("shard_pickup.wav", gen_shard_pickup, 1011),
+        ("ui_move.wav", gen_ui_move, 1012),
+        ("ui_confirm.wav", gen_ui_confirm, 1013),
+        ("thud.wav", gen_thud, 1014),
     ]
 
-    for fname, func in sfx_generators:
+    for fname, func, seed_val in sfx_generators:
+        random.seed(seed_val)
         path = os.path.join(out_dir, fname)
         print(f"  Synthesizing SFX: {fname}...")
         samples = func()
         save_wav_mono(path, samples)
 
     music_generators = [
-        ("music_explore.wav", gen_music_explore),
-        ("music_combat.wav", gen_music_combat),
+        ("music_explore.wav", gen_music_explore, 2001),
+        ("music_combat.wav", gen_music_combat, 2002),
     ]
 
-    for fname, func in music_generators:
+    for fname, func, seed_val in music_generators:
+        random.seed(seed_val)
         path = os.path.join(out_dir, fname)
         print(f"  Synthesizing Music: {fname}...")
         l, r = func()

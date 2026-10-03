@@ -20,6 +20,7 @@
 - listen: `EventBus.attack_deflected` — เล่นเสียง `parry`
 - listen: `EventBus.enemy_died` — เล่นเสียง `enemy_die` ตามตำแหน่งศัตรู
 - listen: `EventBus.player_died` — fade out เพลงจนเงียบ
+- listen: `EventBus.player_respawn_requested` — เล่นเพลง `autoplay_music` (ค่าเริ่มต้น `music_explore`)
 - listen: `EventBus.boss_engaged` — เล่น `boss_roar` และ crossfade ไป `music_combat`
 - listen: `EventBus.room_started` — crossfade ไป `music_combat`
 - listen: `EventBus.room_cleared` — crossfade ไป `music_explore` และเล่นเสียง `door_open`
@@ -29,7 +30,7 @@
 - `AudioDirector` วางในฉากเกม **ไม่ใช่ autoload**
 - ต้องตรวจหา Audio Bus `Music` และ `SFX` ก่อนสร้างใหม่ด้วย `ensure_buses()` เสมอ เพราะระบบเมนู (#42) ใช้ชื่อเดียวกัน
 - Node นอก SceneTree ห้ามสั่ง `.play()` ตรง ๆ (ใช้ `is_inside_tree()` guard เพื่อให้ deterministic unit test รันได้)
-- ไฟล์เพลง WAV ทั้ง 2 แทร็กต้องเปิด `loop_mode = LOOP_FORWARD` (1) ใน `.import` หรือตั้งผ่าน code
+- ไฟล์เพลง WAV ทั้ง 2 แทร็กต้องเปิด `edit/loop_mode=2` (Forward) ใน `.import` พร้อม `edit/loop_begin=0`, `edit/loop_end=-1` (ใน Godot WAV importer: 0=Detect, 1=Disabled, 2=Forward) ห้าม override ทับด้วย LOOP_FORWARD ในโค้ดโดยไม่ตั้ง loop_end
 
 ## เทสต์
 - `game/tests/test_audio_director.gd`
