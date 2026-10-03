@@ -487,3 +487,47 @@ func test_player_died_hides_lock_marker() -> bool:
 	target.free()
 	hud.free()
 	return shown and hidden
+
+
+class MockFlaskSource extends RefCounted:
+	signal flasks_changed(current: int, maximum: int)
+	var flasks: int = 3
+	var flask_max: int = 3
+
+
+## ผูก source ที่มี flasks_changed แสดงไอคอนขวดชาใต้หลอด stamina
+func test_flasks_display_duck_typing() -> bool:
+	var hud: GameHud = _spawn_hud()
+	var src := MockFlaskSource.new()
+	hud.bind_player(null, src)
+
+	var init_shown: bool = hud.flask_container != null \
+		and hud.flask_container.visible \
+		and hud.flask_container.get_child_count() == 3
+
+	var all_full: bool = true
+	for i: int in 3:
+		var rect: ColorRect = hud.flask_container.get_child(i) as ColorRect
+		if rect == null or rect.color != hud.flask_full_color:
+			all_full = false
+
+	# ดื่มไป 1 ขวด (เหลือ 2)
+	src.flasks_changed.emit(2, 3)
+	var two_full_one_empty: bool = true
+	var r0: ColorRect = hud.flask_container.get_child(0) as ColorRect
+	var r1: ColorRect = hud.flask_container.get_child(1) as ColorRect
+	var r2: ColorRect = hud.flask_container.get_child(2) as ColorRect
+	if r0.color != hud.flask_full_color or r1.color != hud.flask_full_color or r2.color != hud.flask_empty_color:
+		two_full_one_empty = false
+
+	# ขวดหมด (เหลือ 0)
+	src.flasks_changed.emit(0, 3)
+	var all_empty: bool = true
+	for i: int in 3:
+		var rect: ColorRect = hud.flask_container.get_child(i) as ColorRect
+		if rect == null or rect.color != hud.flask_empty_color:
+			all_empty = false
+
+	hud.cleanup()
+	hud.free()
+	return init_shown and all_full and two_full_one_empty and all_empty

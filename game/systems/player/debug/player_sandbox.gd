@@ -16,6 +16,7 @@ func _ready() -> void:
 			player.health.changed.connect(_on_hp_changed)
 		player.lock_target_changed.connect(_on_lock_target_changed)
 		player.parried.connect(_on_parried)
+		player.flasks_changed.connect(_on_flasks_changed)
 	_update_hud()
 
 
@@ -52,6 +53,10 @@ func _on_lock_target_changed(_target: Node2D) -> void:
 	_update_hud()
 
 
+func _on_flasks_changed(_cur: int, _max: int) -> void:
+	_update_hud()
+
+
 func _on_parried(_info: DamageInfo) -> void:
 	_parry_feedback_t = 1.0
 	if parry_label != null:
@@ -66,7 +71,8 @@ func _update_hud() -> void:
 	if player.state == Player.State.ATTACK and player.attack_phase == Player.AttackPhase.CHARGING:
 		state_name = "CHARGING (Ready!)" if player.is_charged() else "CHARGING..."
 	var hp_str: String = "%d/%d" % [player.health.hp, player.health.max_hp] if player.health != null else "-"
+	var flask_str: String = "%d/%d" % [player.flasks, player.flask_max]
 	var lock_str: String = player.lock_target.name if player.is_locked_on() else "None"
-	hud_label.text = "HP: %s  |  Stamina: %.1f/%.0f  |  State: %s  |  Lock-on: %s" % [
-		hp_str, player.stamina, player.stamina_max, state_name, lock_str
+	hud_label.text = "HP: %s  |  Stamina: %.1f/%.0f  |  Flasks: %s (R)  |  State: %s  |  Lock-on: %s" % [
+		hp_str, player.stamina, player.stamina_max, flask_str, state_name, lock_str
 	]

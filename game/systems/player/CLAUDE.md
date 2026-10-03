@@ -3,8 +3,8 @@
 - เจ้าของ: @Firstyjps (Kron) · contract ที่เกี่ยว: `docs/contracts/damage.md`
 
 ## ทำอะไร
-- มุมผู้เล่น: ควบคุมอัศวิน เดิน (WASD) เล็งเมาส์ ฟันโจมตี 3 จังหวะ (กดค้างเป็นท่าชาร์จ), dodge หลบพร้อม i-frames, parry ปัดป้องการโจมตีคืน stamina, และ lock-on ล็อคเป้าหมายศัตรู
-- มุมโค้ด: `CharacterBody2D` มี FSM (MOVE/DODGE/ATTACK/HURT/DEAD/PARRY), คุม stamina regen, จัดการ i-frames ผ่าน `Hurtbox.invulnerable`, ทำดาเมจผ่าน `Hitbox`, รับดาเมจและ emit signal ตาม contract damage
+- มุมผู้เล่น: ควบคุมอัศวิน เดิน (WASD) เล็งเมาส์ ฟันโจมตี 3 จังหวะ (กดค้างเป็นท่าชาร์จ), dodge หลบพร้อม i-frames, parry ปัดป้องการโจมตีคืน stamina, lock-on ล็อคเป้าหมายศัตรู, และดื่มขวดชาฟื้นพลัง (คีย์ R / จอย Y)
+- มุมโค้ด: `CharacterBody2D` มี FSM (MOVE/DODGE/ATTACK/HURT/DEAD/PARRY/DRINK), คุม stamina regen, จัดการ i-frames ผ่าน `Hurtbox.invulnerable`, ทำดาเมจผ่าน `Hitbox`, รับดาเมจและ emit signal ตาม contract damage, คุมจำนวนขวดชาและการฟื้นพลัง HP ตามเวลา `heal_at`
 
 ## ไฟล์สำคัญ
 | ไฟล์ | หน้าที่ |
@@ -32,14 +32,16 @@
 - `stamina_empty`
 - `lock_target_changed(target: Node2D)` — แจ้งเตือนเมื่อเป้าล็อคเปลี่ยนหรือปลด (เป็น null)
 - `parried(info: DamageInfo)` — ปล่อยเมื่อโดนโจมตีในหน้าต่าง parry สำเร็จ
+- `flasks_changed(current: int, maximum: int)` — ปล่อยเมื่อจำนวนขวดชาเปลี่ยน (ดื่ม, เติมขวด, ฟื้นคืนชีพ)
 
 ## กติกาเฉพาะระบบ / กับดักที่เคยเจอ
 - อย่าเรียก `move_and_slide()` ใน `tick(delta)` — แยกให้เทสต์เรียก `tick(delta)` แบบ deterministic ได้
-- ป้อน input สำหรับเทสต์ผ่าน `set_intent(move, aim, attack, dodge, parry, lock_on, attack_held)` โดยมีค่า default ป้องกันเทสต์เดิมพัง
-- Input actions (`move_*`, `attack`, `dodge`, `parry`, `lock_on`) ลงทะเบียนตอน runtime ด้วย `ensure_input_actions()` เสมอ (ห้ามแก้ `project.godot`)
+- ป้อน input สำหรับเทสต์ผ่าน `set_intent(move, aim, attack, dodge, parry, lock_on, attack_held, heal)` โดยมีค่า default ป้องกันเทสต์เดิมพัง
+- Input actions (`move_*`, `attack`, `dodge`, `parry`, `lock_on`, `heal`) ลงทะเบียนตอน runtime ด้วย `ensure_input_actions()` เสมอ (ห้ามแก้ `project.godot`)
 - ระหว่าง dodge ให้เปลี่ยน `collision_mask` เหลือเพียง `Combat.LAYER_WORLD` เท่านั้น แล้วคืนค่า `WORLD | ENEMY` เมื่อจบ dodge
 - ขณะ Parry อยู่ในหน้าต่าง `parry_window` หากโดนโจมตีจะไม่เสีย HP และได้รับ stamina คืน `parry_refund`
 - ท่าชาร์จเข้าสู่ `CHARGING` เมื่อกดค้างครบ `charge_threshold` (0.15s) ไม่ใช่ windup_time; ปล่อยก่อน `charge_time` เป็นท่าฟันธรรมดาหัก stamina แค่ `attack_cost`; ระหว่างชาร์จสามารถกด dodge หรือ parry ยกเลิกได้
+- ขวดชาฟื้นพลัง (`DRINK`): เดินช้าลงเหลือ 0.3x, โจมตี/parry ไม่ได้, dodge ยกเลิกได้ก่อน `heal_at` เสียขวดฟรี, โดนตีก่อน `heal_at` ขวดหายไม่ได้ฟื้น; HP เต็มหรือขวดหมดกดดื่มไม่ได้ (`can_drink()` คืน false); `refill_flasks()` เติมขวดเต็มตาม `flask_max` และถูกเรียกใน `revive()`
 - ห้ามอ่านข้อมูลภายใน enemy entity (`Health`, `is_dead`, `Dummy`) จาก `player.gd` โดยเด็ดขาด — ตรวจหาศัตรูผ่าน `LockArea` (Area2D ที่ตรวจจับ `Hurtbox` ฝั่งศัตรู) เท่านั้น และปลดเป้าหมายผ่าน `EventBus.enemy_died`, หลุดระยะ buffer (`lock_range * lock_release_mult`), หรือ instance ถูกทำลาย
 - ใช้ `is_instance_valid(lock_target)` แทนการเช็ค `!= null` ทุกที่ เนื่องจากใน GDScript 4 วัตถุที่ถูก `free()` ไปแล้วจะเทียบ `== null` เป็น true ทำให้ `_set_lock_target(null)` return ก่อนส่งสัญญาณหากไม่ตรวจ `is_instance_valid`
 - ต่อ `EventBus.enemy_died` ใน `_enter_tree()` และ disconnect ใน `_exit_tree()` (รวมทั้งใน `NOTIFICATION_PREDELETE`) เสมอ
@@ -48,9 +50,10 @@
 - ทิศ north ของ kintsugi_hero ผมออกมาเป็นเบจ → `--fix-north-hair` remap เป็นลาเวนเดอร์ (ใช้ทุกครั้งที่ build)
 - ตัวละครนี้อิง sample Merakintsugi ที่ยังไม่เช็คสิทธิ์ → ใช้ทดสอบเท่านั้น ก่อนขายต้องออกแบบใหม่
 
-- ภาพ: `sprite` = node ภาพ (DirSprite หรือ Sprite2D) ใช้ทำเอฟเฟกต์ scale/สี · `_animate_dir_sprite()` เลือกท่าตาม state (ATTACK/PARRY ใช้ idle + เอฟเฟกต์จนกว่าจะมีท่าฟัน) · เดิน = หันตามทิศเดิน, โจมตี/lock-on = หันตาม aim, โดนตี = คงทิศ
+- ภาพ: `sprite` = node ภาพ (DirSprite หรือ Sprite2D) ใช้ทำเอฟเฟกต์ scale/สี · `_animate_dir_sprite()` เลือกท่าตาม state (ATTACK/PARRY/DRINK ใช้ idle + เอฟเฟกต์จนกว่าจะมีท่าจริง, DRINK กระพริบเขียวอ่อนตอน heal_at) · เดิน = หันตามทิศเดิน, โจมตี/lock-on = หันตาม aim, โดนตี = คงทิศ
 
 ## เทสต์
 - `game/tests/test_player_combat.gd` (เทสต์พื้นฐานเดิม)
 - `game/tests/test_player_combat_ext.gd` (Lock-on, Parry, Charge Attack)
 - `game/tests/test_player_dir8.gd` (Dir8 / DirSprite)
+- `game/tests/test_player_heal_flask.gd` (ขวดชาฟื้นพลัง)
