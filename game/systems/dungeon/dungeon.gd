@@ -14,6 +14,7 @@ signal run_completed
 var current_room_index: int = 0
 var _respawn_timer: Timer = null
 var _timer_running: bool = false
+var _respawning: bool = false
 
 
 func _ready() -> void:
@@ -36,8 +37,11 @@ func _notification(what: int) -> void:
 
 
 func _cleanup_event_bus() -> void:
-	if EventBus != null and is_instance_valid(EventBus) and EventBus.player_died.is_connected(_on_player_died):
-		EventBus.player_died.disconnect(_on_player_died)
+	if EventBus != null and is_instance_valid(EventBus):
+		if EventBus.player_died.is_connected(_on_player_died):
+			EventBus.player_died.disconnect(_on_player_died)
+		if EventBus.player_respawn_requested.is_connected(_on_player_respawn_requested):
+			EventBus.player_respawn_requested.disconnect(_on_player_respawn_requested)
 
 
 func setup() -> void:
@@ -61,6 +65,8 @@ func setup() -> void:
 	if EventBus != null and is_instance_valid(EventBus):
 		if not EventBus.player_died.is_connected(_on_player_died):
 			EventBus.player_died.connect(_on_player_died)
+		if not EventBus.player_respawn_requested.is_connected(_on_player_respawn_requested):
+			EventBus.player_respawn_requested.connect(_on_player_respawn_requested)
 	
 	if _respawn_timer == null:
 		_respawn_timer = get_node_or_null("RespawnTimer") as Timer
@@ -117,22 +123,33 @@ func _do_respawn() -> void:
 	var spawn_pos: Vector2 = Vector2.ZERO
 	if not rooms.is_empty() and rooms[0].player_spawn_point != null:
 		spawn_pos = rooms[0].player_spawn_point.global_position
+	_respawning = true
 	EventBus.player_respawn_requested.emit(spawn_pos)
-	_check_player_in_rooms_deferred()
+	_respawning = false
+	_start_room_at.call_deferred(spawn_pos)
 
 
-func _check_player_in_rooms_deferred() -> void:
-	if not is_inside_tree():
-		_check_player_in_rooms()
-		return
-	await get_tree().physics_frame
-	_check_player_in_rooms()
+## หลังฟื้น: เริ่มเฉพาะห้องที่มีจุดฟื้น (เช็คจากตำแหน่ง ไม่ใช้ overlap cache ที่ยังเป็นของห้องเดิม) — ห้องอื่นห้ามเริ่มเอง
+func _start_room_at(world_pos: Vector2) -> void:
+	var r: Room = room_at(world_pos)
+	if r != null and r.state == Room.State.IDLE:
+		r.start_room()
 
 
-func _check_player_in_rooms() -> void:
+func room_at(world_pos: Vector2) -> Room:
 	for r: Room in rooms:
-		if r.state == Room.State.IDLE:
-			r.check_player_inside()
+		if r.is_point_inside_detector(world_pos):
+			return r
+	return null
+
+
+## ฟื้นที่ไม่ได้มาจากความตาย (พักศาลเจ้า) → ส่ง room_started ของห้องปัจจุบันซ้ำให้กล้องได้ขอบคืน (ไม่ reset ห้อง)
+func _on_player_respawn_requested(world_pos: Vector2) -> void:
+	if _respawning:
+		return
+	var r: Room = room_at(world_pos)
+	if r != null and rooms.find(r) == current_room_index and r.state != Room.State.IDLE:
+		EventBus.room_started.emit(r, r.get_room_rect())
 
 
 func _on_room_started(room: Room) -> void:

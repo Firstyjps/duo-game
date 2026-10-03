@@ -375,6 +375,7 @@ func test_door_entered_signal_chain_real_objects() -> bool:
 	dummy_p.add_to_group(&"player")
 	dummy_p.collision_layer = Combat.LAYER_PLAYER
 	r_last.add_child(dummy_p)
+	r_last.state = Room.State.CLEARED  # ห้องสุดท้ายไม่มีศัตรู = เคลียร์ทันทีที่เข้า
 	r_last._on_run_complete_trigger_body_entered(dummy_p)
 	dummy_p.free()
 	
@@ -756,6 +757,7 @@ func test_room3_completion_trigger_and_solid_wall() -> bool:
 	dummy_p.add_to_group(&"player")
 	dummy_p.collision_layer = Combat.LAYER_PLAYER
 	r3.add_child(dummy_p)
+	r3.state = Room.State.CLEARED
 	r3._on_run_complete_trigger_body_entered(dummy_p)
 	
 	var signals_ok: bool = run_completed_fired[0] and dungeon_completed_fired[0]
@@ -768,3 +770,38 @@ func test_room3_completion_trigger_and_solid_wall() -> bool:
 static func _safe_free(node: Node) -> void:
 	if node != null:
 		node.free()
+
+
+## ตายในห้อง 2 → ฟื้นห้อง 1: เริ่มเฉพาะห้องที่มีจุดฟื้น ห้อง 2 ต้องยัง IDLE (เดิม overlap cache ทำให้ห้อง 2 เริ่มเอง → ด่านค้าง)
+func test_death_in_room2_only_spawn_room_starts() -> bool:
+	var dungeon: Dungeon = DUNGEON_SCENE.instantiate()
+	dungeon.setup()
+	var spawn: Vector2 = dungeon.rooms[0].player_spawn_point.global_position
+	var r0_ok: bool = dungeon.room_at(spawn) == dungeon.rooms[0]
+	dungeon._start_room_at(spawn)
+	var ok: bool = r0_ok and dungeon.rooms[0].state != Room.State.IDLE \
+		and dungeon.rooms[1].state == Room.State.IDLE and dungeon.rooms[2].state == Room.State.IDLE
+	_safe_free(dungeon)
+	return ok
+
+
+## trigger จบด่าน: ไม่ยิงตอนห้องยังไม่เคลียร์ · ยิงครั้งเดียว
+func test_run_complete_only_when_cleared_and_once() -> bool:
+	var dungeon: Dungeon = DUNGEON_SCENE.instantiate()
+	dungeon.setup()
+	var r3: Room = dungeon.rooms[2]
+	var count: Array[int] = [0]
+	var cb := func(_r: Room) -> void: count[0] += 1
+	r3.run_completed.connect(cb)
+	var body := CharacterBody2D.new()
+	body.add_to_group(&"player")
+	r3.state = Room.State.LOCKED
+	r3._on_run_complete_trigger_body_entered(body)
+	var blocked: bool = count[0] == 0
+	r3.state = Room.State.CLEARED
+	r3._on_run_complete_trigger_body_entered(body)
+	r3._on_run_complete_trigger_body_entered(body)
+	var once: bool = count[0] == 1
+	body.free()
+	_safe_free(dungeon)
+	return blocked and once

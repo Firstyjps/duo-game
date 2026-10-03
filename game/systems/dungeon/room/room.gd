@@ -22,6 +22,7 @@ var doors: Array[Door] = []
 
 var floor_layer: TileMapLayer
 var wall_layer: TileMapLayer
+var _run_completed_emitted: bool = false
 var player_detector: Area2D
 var doors_container: Node2D
 var spawn_points_container: Node2D
@@ -339,8 +340,12 @@ func _on_player_detector_body_entered(body: Node2D) -> void:
 		start_room.call_deferred()
 
 
+## จบด่านครั้งเดียว และต้องเคลียร์ห้องนี้ก่อน (กันเดินแตะ trigger ตอนห้อง LOCKED)
 func _on_run_complete_trigger_body_entered(body: Node2D) -> void:
+	if _run_completed_emitted or state != State.CLEARED:
+		return
 	if body.is_in_group(&"player") or (body.collision_layer & Combat.LAYER_PLAYER) != 0:
+		_run_completed_emitted = true
 		run_completed.emit(self)
 
 
