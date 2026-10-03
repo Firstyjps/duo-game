@@ -95,3 +95,36 @@ func test_health_heal_caps_at_max() -> bool:
 	var hp: int = h.hp
 	h.free()
 	return healed == 3 and hp == 10
+
+
+## Hurtbox.deflecting: ไม่ emit hurt · Hitbox ได้ deflected (ไม่ใช่ hit_landed) · นับ 1 ครั้งของ activate
+func test_deflect_emits_deflected_not_hit_landed() -> bool:
+	var hb := Hitbox.new()
+	hb.team = Combat.Team.ENEMY
+	hb.damage = 4
+	var hurt := Hurtbox.new()
+	hurt.team = Combat.Team.PLAYER
+	hurt.deflecting = true
+	var log: Array[String] = []
+	hurt.hurt.connect(func(_i: DamageInfo) -> void: log.append("hurt"))
+	hurt.deflected.connect(func(_i: DamageInfo) -> void: log.append("hurtbox_deflected"))
+	hb.hit_landed.connect(func(_h: Hurtbox, _i: DamageInfo) -> void: log.append("hit_landed"))
+	hb.deflected.connect(func(_h: Hurtbox, _i: DamageInfo) -> void: log.append("hitbox_deflected"))
+	var first: bool = hb.try_hit(hurt)
+	hurt.deflecting = false
+	var second: bool = hb.try_hit(hurt)  # activate รอบเดียวกัน → ไม่โดนซ้ำหลังถูกปัด
+	var ok: bool = not first and not second and log == ["hurtbox_deflected", "hitbox_deflected"]
+	hb.free()
+	hurt.free()
+	return ok
+
+
+func test_receive_result_rejected_for_same_team_even_if_deflecting() -> bool:
+	var hurt := Hurtbox.new()
+	hurt.team = Combat.Team.ENEMY
+	hurt.deflecting = true
+	var info := DamageInfo.new()
+	info.team = Combat.Team.ENEMY
+	var ok: bool = hurt.receive_result(info) == Hurtbox.Result.REJECTED and not hurt.receive(info)
+	hurt.free()
+	return ok
