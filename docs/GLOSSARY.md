@@ -5,6 +5,7 @@
 | คำ (ในเกม/คุยกัน) | ชื่อในโค้ด | ความหมาย | ระบบ |
 |---|---|---|---|
 | _ตัวอย่าง:_ ห้อง | `Room` | พื้นที่ 1 จอ ปิดประตูจนกว่าศัตรูหมด | world |
+| ขวดชา | `flask` · `flask_heal` · `flask_max` · `Player.State.DRINK` · `flasks_changed` | ขวดชาฟื้นพลัง ดื่มเพื่อฟื้น HP มีจำนวนจำกัด เติมเต็มเมื่อเกิดใหม่/revive ขณะดื่มเดินช้าลงและเสี่ยงโดนตีขัด | player |
 | ข้อมูลดาเมจ | `DamageInfo` | ข้อมูลการโจมตี 1 ครั้ง (ดาเมจก่อนหัก defense, knockback, stagger) | core/combat |
 | ท่าชาร์จ | `Charge Attack` · `charge_time` · `charge_mult` | ท่าโจมตีหนักด้วยการกดค้าง ≥ `charge_time` แล้วปล่อย คูณดาเมจ/knockback/stagger และใช้ stamina เพิ่ม | player |
 | ท่าเตรียม | telegraph · `TelegraphMarker` (วงเตือนบนพื้น) | ท่า/VFX บอกล่วงหน้าก่อนศัตรูโจมตี (บังคับทุกท่า) | enemy |
