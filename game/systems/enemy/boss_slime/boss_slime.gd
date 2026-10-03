@@ -85,6 +85,9 @@ const SLIME_SCENE: PackedScene = preload("res://systems/enemy/slime/slime.tscn")
 
 @export_group("Shape & Isometric")
 @export var squash: float = 0.55
+@export var aoe_hurt_offset_y: float = -22.0
+@export var aoe_hurt_radius_margin: float = 16.0
+@export var body_radius: float = 16.0
 @export var hurt_time: float = 0.35
 @export var corpse_time: float = 1.8
 
@@ -166,6 +169,11 @@ func setup() -> void:
 		if not detect.body_exited.is_connected(_on_body_exited):
 			detect.body_exited.connect(_on_body_exited)
 
+	if has_node("Body"):
+		var b_node: Node = get_node("Body")
+		if b_node is CollisionShape2D and (b_node as CollisionShape2D).shape is CircleShape2D:
+			body_radius = ((b_node as CollisionShape2D).shape as CircleShape2D).radius
+
 	if telegraph_marker != null:
 		telegraph_marker.top_level = true
 		telegraph_marker.z_index = -1
@@ -173,6 +181,9 @@ func setup() -> void:
 		telegraph_marker.visible = false
 
 	if hitbox_shape != null:
+		if hitbox_shape.shape != null:
+			hitbox_shape.shape = hitbox_shape.shape.duplicate()
+		hitbox_shape.position = Vector2(0, aoe_hurt_offset_y)
 		hitbox_shape.scale = Vector2(1.0, squash)
 
 	_play(&"idle")
@@ -228,7 +239,8 @@ func set_target(node: Node2D) -> void:
 
 func _physics_process(delta: float) -> void:
 	tick(delta)
-	move_and_slide()
+	if state != State.LEAP_AIRBORNE:
+		move_and_slide()
 
 
 func _process(delta: float) -> void:
@@ -363,9 +375,8 @@ func _tick_leap_airborne(delta: float) -> void:
 
 	var dir: Vector2 = (_leap_to - _leap_from).normalized() if (_leap_to - _leap_from).length() > 0.01 else Vector2.ZERO
 	var total_dist: float = _leap_from.distance_to(_leap_to)
-	var desired_pos: Vector2 = _leap_from + dir * (total_dist * k)
-
-	velocity = (desired_pos - global_position) / delta if delta > 0.0 else Vector2.ZERO
+	global_position = _leap_from + dir * (total_dist * k)
+	velocity = Vector2.ZERO
 
 	var v: Vector2 = dir * (total_dist / total_dur) + Vector2(0, -leap_height * PI * cos(k * PI) / total_dur)
 	if v.length() > 0.01:
@@ -376,14 +387,50 @@ func _tick_leap_airborne(delta: float) -> void:
 		_enter(State.LEAP_IMPACT)
 
 
+func _cast_leap_destination(from: Vector2, to: Vector2) -> Vector2:
+	var motion: Vector2 = to - from
+	if motion.length_squared() < 0.01:
+		return to
+	if not is_inside_tree() or get_world_2d() == null:
+		return to
+	var space_state: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	if space_state == null:
+		return to
+
+	var query := PhysicsShapeQueryParameters2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = body_radius
+	query.shape = circle
+	var body_offset: Vector2 = Vector2(0, -8)
+	if has_node("Body"):
+		var b_node: Node = get_node("Body")
+		if b_node is Node2D:
+			body_offset = (b_node as Node2D).position
+	query.transform = Transform2D(0.0, from + body_offset)
+	query.motion = motion
+	query.collision_mask = Combat.LAYER_WORLD
+	query.exclude = [get_rid()]
+
+	var res: PackedFloat32Array = space_state.cast_motion(query)
+	if res.size() >= 1 and res[0] < 1.0:
+		return from + motion * res[0]
+	return to
+
+
 func _enter(next: State) -> void:
 	var prev: State = state
 	if prev == State.DEAD:
 		return
 
 	# ล้างสถานะเดิม
-	if prev == State.SLAM_WINDUP or prev == State.LEAP_WINDUP:
+	if prev == State.SLAM_WINDUP:
 		if telegraph_marker != null:
+			telegraph_marker.visible = false
+	elif prev == State.LEAP_WINDUP:
+		if next != State.LEAP_AIRBORNE and telegraph_marker != null:
+			telegraph_marker.visible = false
+	elif prev == State.LEAP_AIRBORNE:
+		if next != State.LEAP_IMPACT and telegraph_marker != null:
 			telegraph_marker.visible = false
 	if prev == State.SLAM_ACTIVE or prev == State.LEAP_IMPACT:
 		is_attack_active = false
@@ -429,6 +476,7 @@ func _enter(next: State) -> void:
 			_leap_from = global_position
 			var t_pos: Vector2 = target.global_position if _has_target() else global_position + Vector2.RIGHT * 60.0
 			_leap_to = leap_target(_leap_from, t_pos, leap_distance)
+			_leap_to = _cast_leap_destination(_leap_from, _leap_to)
 			if telegraph_marker != null:
 				telegraph_marker.radius = leap_radius
 				telegraph_marker.squash = squash
@@ -439,6 +487,7 @@ func _enter(next: State) -> void:
 		State.LEAP_IMPACT:
 			_play(&"slam")
 			is_attack_active = true
+			velocity = Vector2.ZERO
 			global_position = _leap_to
 			if telegraph_marker != null:
 				telegraph_marker.visible = false
@@ -462,13 +511,16 @@ func _enter(next: State) -> void:
 		State.DEAD:
 			_play(&"death")
 			is_attack_active = false
+			if telegraph_marker != null:
+				telegraph_marker.visible = false
 
 
 func _configure_hitbox_shape(r: float) -> void:
 	if hitbox_shape != null:
 		var circle := hitbox_shape.shape as CircleShape2D
 		if circle != null:
-			circle.radius = r
+			circle.radius = maxf(1.0, r - aoe_hurt_radius_margin)
+		hitbox_shape.position = Vector2(0, aoe_hurt_offset_y)
 		hitbox_shape.scale = Vector2(1.0, squash)
 
 
@@ -491,15 +543,15 @@ func _spawn_minions() -> void:
 		var angle: float = randf() * TAU
 		var dist: float = randf_range(35.0, 60.0)
 		var spawn_pos: Vector2 = global_position + Vector2(cos(angle), sin(angle) * squash) * dist
-		if minion is Node2D:
-			minion.global_position = spawn_pos
-		if minion.has_method("setup"):
-			minion.call("setup")
-		if minion.has_method("set_target") and target != null:
-			minion.call("set_target", target)
 		_minions.append(minion)
 		if parent_node != null:
 			parent_node.add_child(minion)
+		if minion is Node2D:
+			minion.global_position = spawn_pos
+		if minion.has_method("setup") and minion.get("sprite") == null:
+			minion.call("setup")
+		if minion.has_method("set_target") and target != null:
+			minion.call("set_target", target)
 
 
 func get_alive_minions_count() -> int:

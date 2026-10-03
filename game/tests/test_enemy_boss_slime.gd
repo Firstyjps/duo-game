@@ -20,19 +20,26 @@ func _hit(amount: int, stagger: float = 0.0) -> DamageInfo:
 
 
 func test_setup_nodes_and_defaults() -> bool:
-	var boss: BossSlime = _spawn()
-	var ok: bool = boss.enemy_id == &"boss_slime" \
-		and boss.sprite != null and boss.sprite.hframes == 20 \
-		and boss.sprite.offset == Vector2(0, -56) \
-		and boss.health != null and boss.health.max_hp == 150 and boss.health.hp == 150 \
-		and boss.hurtbox != null and boss.hurtbox.team == Combat.Team.ENEMY \
-		and boss.hitbox != null and boss.hitbox.team == Combat.Team.ENEMY \
-		and not boss.hitbox.monitoring and not boss.is_attack_active \
-		and boss.detect != null and boss.detect.collision_mask == Combat.LAYER_PLAYER \
-		and boss.telegraph_marker != null and boss.telegraph_marker.top_level \
-		and is_equal_approx(boss.telegraph_marker.squash, 0.55) \
-		and boss.hitbox_shape != null and is_equal_approx(boss.hitbox_shape.scale.y, 0.55)
-	boss.free()
+	var boss1: BossSlime = _spawn()
+	var boss2: BossSlime = _spawn()
+	var shapes_duplicated: bool = boss1.hitbox_shape.shape != boss2.hitbox_shape.shape
+	var ok: bool = boss1.enemy_id == &"boss_slime" \
+		and boss1.sprite != null and boss1.sprite.hframes == 20 \
+		and boss1.sprite.offset == Vector2(0, -56) \
+		and boss1.health != null and boss1.health.max_hp == 150 and boss1.health.hp == 150 \
+		and boss1.hurtbox != null and boss1.hurtbox.team == Combat.Team.ENEMY \
+		and boss1.hitbox != null and boss1.hitbox.team == Combat.Team.ENEMY \
+		and not boss1.hitbox.monitoring and not boss1.is_attack_active \
+		and boss1.detect != null and boss1.detect.collision_mask == Combat.LAYER_PLAYER \
+		and boss1.telegraph_marker != null and boss1.telegraph_marker.top_level \
+		and is_equal_approx(boss1.telegraph_marker.squash, 0.55) \
+		and boss1.hitbox_shape != null and is_equal_approx(boss1.hitbox_shape.scale.y, 0.55) \
+		and is_equal_approx(boss1.hitbox_shape.position.y, -22.0) \
+		and is_equal_approx(boss1.aoe_hurt_offset_y, -22.0) \
+		and is_equal_approx(boss1.aoe_hurt_radius_margin, 16.0) \
+		and shapes_duplicated
+	boss1.free()
+	boss2.free()
 	return ok
 
 
@@ -130,11 +137,12 @@ func test_leap_no_hitbox_while_airborne_and_shake_on_landing() -> bool:
 	boss._enter(BossSlime.State.LEAP_WINDUP)
 	var windup_ok: bool = not boss.is_attack_active and boss.telegraph_marker.visible
 
-	# จบ windup เข้าสู่ LEAP_AIRBORNE
+	# จบ windup เข้าสู่ LEAP_AIRBORNE: marker ยังคงแสดงค้างตลอดช่วงลอย
 	boss.tick(boss.leap_windup_time + 0.01)
 	boss.tick(0.05)
 	var airborne_ok: bool = boss.state == BossSlime.State.LEAP_AIRBORNE \
 		and not boss.is_attack_active \
+		and boss.telegraph_marker.visible \
 		and boss._lift > 0.0
 
 	var shakes: Array[float] = []
@@ -142,7 +150,7 @@ func test_leap_no_hitbox_while_airborne_and_shake_on_landing() -> bool:
 		shakes.append(strength)
 	EventBus.screen_shake_requested.connect(on_shake)
 
-	# จบการลอย (เวลาที่เหลือของ leap_air_time) -> ตกทับ (LEAP_IMPACT) -> active + shake 0.6
+	# จบการลอย (เวลาที่เหลือของ leap_air_time) -> ตกทับ (LEAP_IMPACT) -> active + shake 0.6 + marker ซ่อนตอน impact
 	boss.tick(boss.leap_air_time - 0.05 + 0.01)
 	var impact_ok: bool = boss.state == BossSlime.State.LEAP_IMPACT \
 		and boss.is_attack_active \
@@ -157,6 +165,29 @@ func test_leap_no_hitbox_while_airborne_and_shake_on_landing() -> bool:
 	dummy.free()
 	boss.free()
 	return windup_ok and airborne_ok and impact_ok and recover_ok
+
+
+## marker จุดตกซ่อนเมื่อออกจาก LEAP_AIRBORNE ด้วยเหตุอื่น เช่น เซ (poise หมด) หรือตาย
+func test_leap_marker_hidden_when_leaving_airborne_early() -> bool:
+	var boss1: BossSlime = _spawn()
+	boss1._enter(BossSlime.State.LEAP_WINDUP)
+	boss1.tick(boss1.leap_windup_time + 0.01)
+	var marker_visible_airborne: bool = boss1.state == BossSlime.State.LEAP_AIRBORNE and boss1.telegraph_marker.visible
+
+	# เซ (HURT) ระหว่างลอย -> ซ่อน marker
+	boss1._enter(BossSlime.State.HURT)
+	var hide_on_hurt: bool = not boss1.telegraph_marker.visible
+
+	# ตาย (DEAD) ระหว่างลอย -> ซ่อน marker
+	var boss2: BossSlime = _spawn()
+	boss2._enter(BossSlime.State.LEAP_WINDUP)
+	boss2.tick(boss2.leap_windup_time + 0.01)
+	boss2._enter(BossSlime.State.DEAD)
+	var hide_on_dead: bool = not boss2.telegraph_marker.visible
+
+	boss1.free()
+	boss2.free()
+	return marker_visible_airborne and hide_on_hurt and hide_on_dead
 
 
 ## แตกลูก: เกิดเฉพาะ Phase 2 (HP < 50%) และจำกัดจำนวนลูกที่ยังมีชีวิต <= 4
@@ -203,6 +234,37 @@ func test_split_only_in_phase_2_and_limits_alive_count() -> bool:
 	return p1_no_split and p1_count_zero and p2_ok and split_windup_ok and spawn_first_ok and cap_ok and final_cap_ok
 
 
+## แตกลูกในห้องที่ไม่อยู่ origin: ลูกสไลม์ต้องเกิดรอบตัวบอสตาม global_position ไม่เพี้ยนตาม parent offset
+func test_spawn_minions_in_non_origin_room() -> bool:
+	var room := Node2D.new()
+	room.position = Vector2(500, 300)
+
+	var boss: BossSlime = _spawn()
+	boss.position = Vector2(100, 100) # global_position = (600, 400)
+	room.add_child(boss)
+
+	boss.health.take_damage(100) # Phase 2
+	boss._spawn_minions()
+
+	var minions_spawned: bool = boss.get_alive_minions_count() >= 2
+	var positions_correct: bool = true
+	var parent_correct: bool = true
+
+	for m: Node in boss._minions:
+		if is_instance_valid(m) and m is Node2D:
+			if m.get_parent() != room:
+				parent_correct = false
+			var dist: float = (m as Node2D).global_position.distance_to(boss.global_position)
+			if dist < 20.0 or dist > 80.0:
+				positions_correct = false
+			m.free()
+
+	boss._minions.clear()
+	boss.free()
+	room.free()
+	return minions_spawned and parent_correct and positions_correct
+
+
 ## Phase 2: ท่าเร็วขึ้น x0.8
 func test_phase_2_speed_multiplier() -> bool:
 	var boss: BossSlime = _spawn()
@@ -237,7 +299,7 @@ func test_poise_accumulates_stagger_and_breaks_only_at_zero() -> bool:
 	return hit1_ok and hit2_ok and broken_ok
 
 
-## AoE โดน 8 ทิศที่ระยะในวง (physics จริง: add เข้า root ลบท้ายเทสต์)
+## AoE โดน 8 ทิศที่ระยะในวง (0.85x ขอบวงรี) และไม่โดนนอกวง (1.15x ขอบวงรี) ด้วย hurtbox แบบ player.tscn (r13 @ -22)
 func test_aoe_hits_8_directions_within_circle_and_misses_outside() -> bool:
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	var root: Window = tree.root
@@ -246,54 +308,48 @@ func test_aoe_hits_8_directions_within_circle_and_misses_outside() -> bool:
 	boss.position = Vector2(200, 200)
 	root.add_child(boss)
 
-	# 8 ทิศ: E, SE, S, SW, W, NW, N, NE
-	var dirs: Array[Vector2] = [
-		Vector2.RIGHT,
-		Vector2(1, 1).normalized(),
-		Vector2.DOWN,
-		Vector2(-1, 1).normalized(),
-		Vector2.LEFT,
-		Vector2(-1, -1).normalized(),
-		Vector2.UP,
-		Vector2(1, -1).normalized()
-	]
-
+	var angles: Array[float] = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]
 	var inner_hurtboxes: Array[Hurtbox] = []
+	var outer_hurtboxes: Array[Hurtbox] = []
 	var geo_8_dirs_ok: bool = true
 	var r: float = boss.slam_radius
 	var sq: float = boss.squash
 
-	# ระยะในวง (35 px): ในแกน y คูณ squash ให้เข้ากับวงรี
-	for d: Vector2 in dirs:
-		var inner_pt: Vector2 = boss.position + Vector2(d.x * 35.0, d.y * 35.0 * sq)
+	for a: float in angles:
+		var rad: float = deg_to_rad(a)
+		var pt_boundary: Vector2 = boss.position + Vector2(cos(rad) * r, sin(rad) * r * sq)
+		var inner_pt: Vector2 = boss.position + (pt_boundary - boss.position) * 0.85
+		var outer_pt: Vector2 = boss.position + (pt_boundary - boss.position) * 1.15
+
 		if not BossSlime.is_point_in_aoe(inner_pt, boss.position, r, sq):
 			geo_8_dirs_ok = false
-
-		var outer_pt: Vector2 = boss.position + d * (r + 25.0)
 		if BossSlime.is_point_in_aoe(outer_pt, boss.position, r, sq):
 			geo_8_dirs_ok = false
 
-		var hurt := Hurtbox.new()
-		hurt.team = Combat.Team.PLAYER
-		hurt.position = inner_pt
-		var col := CollisionShape2D.new()
-		var c_shape := CircleShape2D.new()
-		c_shape.radius = 4.0
-		col.shape = c_shape
-		hurt.add_child(col)
-		root.add_child(hurt)
-		inner_hurtboxes.append(hurt)
+		# Hurtbox แบบ player.tscn: CollisionShape2D รัศมี 13 ที่ตำแหน่ง (0, -22) เหนือเท้า
+		var hurt_in := Hurtbox.new()
+		hurt_in.team = Combat.Team.PLAYER
+		hurt_in.position = inner_pt
+		var col_in := CollisionShape2D.new()
+		var c_shape_in := CircleShape2D.new()
+		c_shape_in.radius = 13.0
+		col_in.shape = c_shape_in
+		col_in.position = Vector2(0, -22)
+		hurt_in.add_child(col_in)
+		root.add_child(hurt_in)
+		inner_hurtboxes.append(hurt_in)
 
-	# สร้าง Hurtbox นอกวง AoE
-	var far_hurt := Hurtbox.new()
-	far_hurt.team = Combat.Team.PLAYER
-	far_hurt.position = boss.position + Vector2(r + 30.0, 0.0)
-	var far_col := CollisionShape2D.new()
-	var far_shape := CircleShape2D.new()
-	far_shape.radius = 4.0
-	far_col.shape = far_shape
-	far_hurt.add_child(far_col)
-	root.add_child(far_hurt)
+		var hurt_out := Hurtbox.new()
+		hurt_out.team = Combat.Team.PLAYER
+		hurt_out.position = outer_pt
+		var col_out := CollisionShape2D.new()
+		var c_shape_out := CircleShape2D.new()
+		c_shape_out.radius = 13.0
+		col_out.shape = c_shape_out
+		col_out.position = Vector2(0, -22)
+		hurt_out.add_child(col_out)
+		root.add_child(hurt_out)
+		outer_hurtboxes.append(hurt_out)
 
 	# เปิดการโจมตี Slam
 	boss._enter(BossSlime.State.SLAM_ACTIVE)
@@ -304,18 +360,18 @@ func test_aoe_hits_8_directions_within_circle_and_misses_outside() -> bool:
 			hit_count_8_dirs += 1
 
 	var hits_all_8: bool = hit_count_8_dirs == 8
-	var outside_geo: bool = not BossSlime.is_point_in_aoe(far_hurt.position, boss.position, r, sq)
 
 	# ลบท้ายเทสต์ (cleanup nodes from root)
 	for hurt: Hurtbox in inner_hurtboxes:
 		root.remove_child(hurt)
 		hurt.free()
-	root.remove_child(far_hurt)
-	far_hurt.free()
+	for hurt: Hurtbox in outer_hurtboxes:
+		root.remove_child(hurt)
+		hurt.free()
 	root.remove_child(boss)
 	boss.free()
 
-	return geo_8_dirs_ok and hits_all_8 and outside_geo
+	return geo_8_dirs_ok and hits_all_8
 
 
 ## เมื่อบอสตาย ลูกสไลม์ที่เหลือต้องไม่ถูกลบ

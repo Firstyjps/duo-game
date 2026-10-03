@@ -55,6 +55,7 @@ knockback_force = 220.0
 stagger = 25.0
 
 [node name="Shape" type="CollisionShape2D" parent="Hitbox"]
+position = Vector2(0, -22)
 scale = Vector2(1, 0.55)
 shape = SubResource("Shape_hit")
 

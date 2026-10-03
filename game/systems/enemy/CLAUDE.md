@@ -29,7 +29,9 @@
 - art ตามสเปกใน `docs/DESIGN.md` (pixel 32 px, top-down 3/4) · sprite `offset.y = -14` (สไลม์เล็ก) / `offset.y = -56` (บอสสไลม์ เฟรม 128 ฐานอยู่ที่ y=120) ให้เท้าอยู่ที่ origin (y-sort ถูก)
 - ห้ามโจมตีโดยไม่มี telegraph — `Hitbox.activate()` หลัง windup เท่านั้น
 - ถ้าใช้ `TelegraphMarker`: ต้อง `top_level = true` + `z_index = -1` → พื้น/TileMap ต้อง z ต่ำกว่า -1 ไม่งั้นบังวง
-- Hitbox ท่า AoE: ให้สเกล `scale.y = squash (0.55)` ของ CollisionShape2D เพื่อให้เป็นวงรีตรงกับ `TelegraphMarker` ในมุมมอง isometric/top-down 3/4
+- Hitbox ท่า AoE: ให้สเกล `scale.y = squash (0.55)` ของ CollisionShape2D เพื่อให้เป็นวงรีตรงกับ `TelegraphMarker` ในมุมมอง isometric/top-down 3/4 · เลื่อน shape ขึ้น `aoe_hurt_offset_y = -22` และลดรัศมีลง `aoe_hurt_radius_margin = 16` เพื่อให้ตรงกับ hurtbox ของผู้เล่น (r13 ที่ y=-22 เหนือเท้า) ให้ "เท้าอยู่ในวงเตือน = โดน" ทั้ง 8 ทิศ · Duplicate `CircleShape2D` ใน `setup()` ทุก instance ป้องกันการแชร์ shape
+- ท่ากระโดดทับ (Leap): ตอน windup ใช้ shape-cast (รัศมีตัวบอส, mask world) ตัด `_leap_to` ให้อยู่หน้ากำแพง · ระหว่างลอยขยับด้วยการ lerp ตำแหน่งตรง ๆ ไม่เรียก `move_and_slide()` (ไม่ชนลูกสไลม์) · `_enter(LEAP_IMPACT)` ตั้ง `velocity = Vector2.ZERO` · marker จุดตกแสดงค้างตลอดช่วงลอย ซ่อนตอน impact หรือออกจาก AIRBORNE ด้วยเหตุอื่น (เซ/ตาย)
+- แตกลูกสไลม์ (Minions): ให้ `add_child` เข้า parent ก่อน แล้วค่อยตั้ง `global_position` เพื่อให้ตำแหน่งถูกต้องแม้ห้องไม่อยู่ที่ origin
 - เทสต์รันตอน root ยังไม่อยู่ใน tree → อย่าใช้ `@onready` กับ node ที่เทสต์ต้องใช้ · ผูก node ใน `setup()` และแยก AI ไว้ใน `tick()` (ไม่มี physics)
 - ใน GDScript closure/lambda แคปเจอร์ primitive (int/bool/float) แบบ copy-by-value → ถ้าต้องการสะสมค่า/นับครั้งใน callback เทสต์ ให้ใช้ `Array` เสมอ
 
@@ -42,4 +44,5 @@
 - Minotaur ใช้หุ่นโครง 3D ง่าย ๆ: ชิ้นทับกันผิดลำดับ → ปรับ `bias` ความลึกใน `_cap`/`_ell` (ขา -5 = อยู่หลังลำตัวเสมอ, เกราะบ่า +1.5 = ทับกล้ามไหล่เสมอ)
 
 ## เทสต์
-- `game/tests/test_enemy_*.gd`
+- `game/tests/test_enemy_*.gd` (unit tests ทั่วไป ผ่าน `res://tests/run_tests.gd`)
+- `godot --headless --path game --script res://tests/run_boss_slime_physics.gd` — รันเทสต์ physics จริงของบอสสไลม์ (กระโดดตัดหน้ากำแพง, กระโดดข้ามลูกสไลม์, AoE วงรี 8 ทิศกับ player hurtbox, แตกลูกในห้องที่ไม่ใช่ออริจิน)
