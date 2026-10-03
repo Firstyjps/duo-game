@@ -40,7 +40,7 @@ class PhysicsTestNode extends Node2D:
 	func test_wall_collision_via_tick() -> void:
 		var origin_pos := Vector2(200, 200)
 
-		# สร้างกำแพงที่ cell (1, 0) -> down-right: Vector2(32, 16)
+		# สร้างกำแพงที่ cell (0, 1) -> down-left: Vector2(-32, 16) (ด้าน down-right ต้องว่างไว้ให้ผู้เล่นยืนดันไปทาง up-left)
 		var wall := StaticBody2D.new()
 		wall.name = "TestWall"
 		wall.collision_layer = Combat.LAYER_WORLD
@@ -51,7 +51,7 @@ class PhysicsTestNode extends Node2D:
 		])
 		wcol.shape = wpoly
 		wall.add_child(wcol)
-		wall.global_position = origin_pos + Vector2(32, 16)
+		wall.global_position = origin_pos + Vector2(-32, 16)
 
 		var block: PushBlock = BLOCK_SCENE.instantiate()
 		block.setup()
@@ -68,8 +68,8 @@ class PhysicsTestNode extends Node2D:
 		await get_tree().physics_frame
 		await get_tree().physics_frame
 
-		# 1. ผู้เล่นดันไปทางกำแพง cell (1, 0) ผ่าน S+D input intent
-		var push_dir_wall := Vector2(1, 1).normalized()
+		# 1. ผู้เล่นดันไปทางกำแพง cell (0, 1) ผ่าน S+A input intent
+		var push_dir_wall := Vector2(-1, 1).normalized()
 		player.global_position = origin_pos - push_dir_wall * 24.0
 		player.velocity = Vector2.ZERO
 		player.knock = Vector2.ZERO
