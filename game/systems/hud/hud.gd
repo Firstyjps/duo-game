@@ -47,6 +47,11 @@ class LockMarkerControl extends Control:
 @export var hp_bar_size: Vector2 = Vector2(160.0, 10.0)
 @export var stamina_bar_size: Vector2 = Vector2(160.0, 6.0)
 
+@export_group("Flasks")
+@export var flask_full_color: Color = Color(0.3, 0.85, 0.45)
+@export var flask_empty_color: Color = Color(0.2, 0.22, 0.25, 0.5)
+@export var flask_size: Vector2 = Vector2(8.0, 10.0)
+
 @export_group("Boss Bar")
 @export var boss_bar_color: Color = Color(0.95, 0.5, 0.15)
 @export var boss_bar_size: Vector2 = Vector2(420.0, 8.0)
@@ -77,6 +82,7 @@ var root: Control
 var player_box: Control
 var hp_bar: ProgressBar
 var stamina_bar: ProgressBar
+var flask_container: HBoxContainer
 var boss_box: Control
 var boss_name: Label
 var boss_bar: ProgressBar
@@ -89,6 +95,7 @@ var _boss_hide_tween: Tween
 
 var _player_health: Health = null
 var _player_stamina_source: Object = null
+var _flask_source: Object = null
 var _boss_health: Health = null
 var _lock_source: Object = null
 var _lock_target: Node2D = null
@@ -155,7 +162,7 @@ func setup() -> void:
 	player_box.offset_left = player_box_offset.x
 	player_box.offset_top = player_box_offset.y
 	player_box.offset_right = player_box_offset.x + hp_bar_size.x
-	player_box.offset_bottom = player_box_offset.y + 26.0
+	player_box.offset_bottom = player_box_offset.y + 40.0
 
 	hp_bar = player_box.get_node_or_null("HpBar") as ProgressBar
 	if hp_bar == null:
@@ -168,6 +175,15 @@ func setup() -> void:
 		stamina_bar = ProgressBar.new()
 		stamina_bar.name = "StaminaBar"
 		player_box.add_child(stamina_bar)
+
+	flask_container = player_box.get_node_or_null("FlaskContainer") as HBoxContainer
+	if flask_container == null:
+		flask_container = HBoxContainer.new()
+		flask_container.name = "FlaskContainer"
+		flask_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		flask_container.add_theme_constant_override(&"separation", 4)
+		player_box.add_child(flask_container)
+	flask_container.visible = false
 
 	# กล่องหลอดเลือดบอส (anchor กลางบน)
 	boss_box = root.get_node_or_null("BossBox") as Control
@@ -284,6 +300,11 @@ func _cleanup_bindings() -> void:
 			_player_stamina_source.disconnect(&"stamina_empty", _on_player_stamina_empty)
 	_player_stamina_source = null
 
+	if _flask_source != null and is_instance_valid(_flask_source):
+		if _flask_source.has_signal(&"flasks_changed") and _flask_source.is_connected(&"flasks_changed", _on_flasks_changed):
+			_flask_source.disconnect(&"flasks_changed", _on_flasks_changed)
+	_flask_source = null
+
 	if _boss_health != null and is_instance_valid(_boss_health):
 		if _boss_health.changed.is_connected(_on_boss_health_changed):
 			_boss_health.changed.disconnect(_on_boss_health_changed)
@@ -317,7 +338,7 @@ func _cleanup_bindings() -> void:
 # ── Player Binding ───────────────────────────────────────────────
 
 ## ผูก Health และ Stamina ของผู้เล่น (ใช้ duck typing + has_signal ไม่พึ่ง class Player)
-func bind_player(health: Health, stamina_source: Object) -> void:
+func bind_player(health: Health, stamina_source: Object, flask_source: Object = null) -> void:
 	if _player_health != null and is_instance_valid(_player_health):
 		if _player_health.changed.is_connected(_on_player_health_changed):
 			_player_health.changed.disconnect(_on_player_health_changed)
@@ -346,6 +367,71 @@ func bind_player(health: Health, stamina_source: Object) -> void:
 			max_val = _player_stamina_source.get(&"STAMINA_MAX")
 		if cur_val != null and max_val != null:
 			set_player_stamina(float(cur_val), float(max_val))
+
+	var resolved_flask: Object = flask_source
+	if resolved_flask == null:
+		if stamina_source != null and stamina_source.has_signal(&"flasks_changed"):
+			resolved_flask = stamina_source
+		elif health != null and health.has_signal(&"flasks_changed"):
+			resolved_flask = health
+	bind_flask_source(resolved_flask)
+
+
+func bind_flask_source(source: Object) -> void:
+	if _flask_source != null and is_instance_valid(_flask_source):
+		if _flask_source.has_signal(&"flasks_changed") and _flask_source.is_connected(&"flasks_changed", _on_flasks_changed):
+			_flask_source.disconnect(&"flasks_changed", _on_flasks_changed)
+	_flask_source = source
+	if _flask_source != null:
+		if _flask_source.has_signal(&"flasks_changed"):
+			_flask_source.connect(&"flasks_changed", _on_flasks_changed)
+		var cur_flasks: Variant = _flask_source.get(&"flasks")
+		var max_flasks: Variant = _flask_source.get(&"flask_max")
+		if max_flasks == null:
+			max_flasks = _flask_source.get(&"max_flasks")
+		if cur_flasks != null and max_flasks != null:
+			set_flasks(int(cur_flasks), int(max_flasks))
+	else:
+		set_flasks(0, 0)
+
+
+func _on_flasks_changed(current: int, maximum: int) -> void:
+	set_flasks(current, maximum)
+
+
+func set_flasks(current: int, maximum: int) -> void:
+	if flask_container == null:
+		return
+	if maximum <= 0:
+		flask_container.visible = false
+		return
+	flask_container.visible = true
+	while flask_container.get_child_count() < maximum:
+		var rect := ColorRect.new()
+		rect.name = "Flask_%d" % flask_container.get_child_count()
+		rect.custom_minimum_size = flask_size
+		rect.size = flask_size
+		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var neck := ColorRect.new()
+		neck.name = "Neck"
+		neck.custom_minimum_size = Vector2(4.0, 2.0)
+		neck.size = Vector2(4.0, 2.0)
+		neck.position = Vector2(2.0, -2.0)
+		neck.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rect.add_child(neck)
+		flask_container.add_child(rect)
+	while flask_container.get_child_count() > maximum:
+		var child: Node = flask_container.get_child(flask_container.get_child_count() - 1)
+		flask_container.remove_child(child)
+		child.queue_free()
+	for i: int in maximum:
+		var rect: ColorRect = flask_container.get_child(i) as ColorRect
+		if rect != null:
+			var col: Color = flask_full_color if i < current else flask_empty_color
+			rect.color = col
+			var neck: ColorRect = rect.get_node_or_null("Neck") as ColorRect
+			if neck != null:
+				neck.color = col
 
 
 func set_player_health(current: int, maximum: int) -> void:
