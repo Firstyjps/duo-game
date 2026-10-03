@@ -29,6 +29,19 @@ func play_action(act: StringName) -> void:
 	_apply(false)
 
 
+## แสดงเฟรมที่กำหนดของท่า (ไม่เล่นเอง) — ใช้ให้ภาพตรงกับจังหวะในโค้ด เช่น windup/active ของท่าฟัน
+## frame เกินจำนวนเฟรม → ใช้เฟรมสุดท้าย · ท่าไม่มี → ไม่ทำอะไร
+func show_frame(act: StringName, index: int) -> void:
+	if not has_action(act):
+		return
+	action = act
+	var target: StringName = anim_name(act, facing)
+	if animation != target:
+		play(target)
+	pause()
+	frame = clampi(index, 0, sprite_frames.get_frame_count(target) - 1)
+
+
 func has_action(act: StringName) -> bool:
 	return sprite_frames != null and sprite_frames.has_animation(anim_name(act, facing))
 

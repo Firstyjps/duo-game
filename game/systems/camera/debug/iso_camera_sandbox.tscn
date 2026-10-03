@@ -1,0 +1,85 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://systems/camera/debug/iso_camera_sandbox.gd" id="1_iso_sb"]
+[ext_resource type="Script" path="res://systems/camera/game_camera.gd" id="2_cam"]
+[ext_resource type="Script" path="res://systems/camera/debug/iso_tall_block.gd" id="3_block"]
+[ext_resource type="Script" path="res://systems/player/occlusion/occlusion_silhouette.gd" id="4_sil"]
+
+[sub_resource type="Gradient" id="Gradient_box"]
+colors = PackedColorArray(0.2, 0.8, 0.9, 1, 0.15, 0.65, 0.8, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_box"]
+gradient = SubResource("Gradient_box")
+width = 24
+height = 40
+fill_to = Vector2(0, 1)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_player_base"]
+size = Vector2(20, 10)
+
+[node name="IsoCameraSandbox" type="Node2D"]
+script = ExtResource("1_iso_sb")
+
+[node name="GameCamera" type="Camera2D" parent="."]
+position = Vector2(480, 270)
+script = ExtResource("2_cam")
+follow_smooth_speed = 8.0
+focus_weight = 0.35
+max_focus_offset = 64.0
+
+[node name="YEntities" type="Node2D" parent="."]
+y_sort_enabled = true
+
+[node name="Block1" type="StaticBody2D" parent="YEntities"]
+position = Vector2(400, 320)
+script = ExtResource("3_block")
+block_height = 64.0
+
+[node name="Dummy" type="Node2D" parent="YEntities"]
+position = Vector2(680, 270)
+
+[node name="ColorRect" type="ColorRect" parent="YEntities/Dummy"]
+offset_left = -10.0
+offset_top = -30.0
+offset_right = 10.0
+offset_bottom = 0.0
+color = Color(0.9, 0.4, 0.3, 1)
+
+[node name="DummyLabel" type="Label" parent="YEntities/Dummy"]
+offset_left = -40.0
+offset_top = -50.0
+offset_right = 40.0
+offset_bottom = -30.0
+text = "Dummy (L)"
+horizontal_alignment = 1
+
+[node name="BoxPlayer" type="CharacterBody2D" parent="YEntities"]
+position = Vector2(400, 260)
+motion_mode = 1
+collision_layer = 2
+collision_mask = 1
+
+[node name="PlayerSprite" type="Sprite2D" parent="YEntities/BoxPlayer"]
+texture = SubResource("GradientTexture2D_box")
+offset = Vector2(0, -20)
+
+[node name="BaseCollision" type="CollisionShape2D" parent="YEntities/BoxPlayer"]
+position = Vector2(0, -5)
+shape = SubResource("RectangleShape2D_player_base")
+
+[node name="OcclusionSilhouette" type="Node2D" parent="YEntities/BoxPlayer"]
+script = ExtResource("4_sil")
+sprite_path = NodePath("../PlayerSprite")
+color = Color(0.7843, 0.7216, 1, 0.55)
+silhouette_z_index = 10
+detection_size = Vector2(26, 40)
+detection_offset = Vector2(0, -20)
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="InfoLabel" type="Label" parent="CanvasLayer"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 920.0
+offset_bottom = 120.0
+text = "ISO CAMERA SANDBOX"
