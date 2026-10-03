@@ -42,6 +42,12 @@ mouse_filter = 2
 value = 100.0
 show_percentage = false
 
+[node name="FlaskContainer" type="HBoxContainer" parent="Root/PlayerBox"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
 [node name="BossBox" type="VBoxContainer" parent="Root"]
 visible = false
 layout_mode = 1
