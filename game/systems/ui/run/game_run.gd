@@ -3,7 +3,7 @@ extends Node2D
 ## ฉากเล่นจริง (เฟส 7 · #64): ด่าน + Player + กล้อง + HUD + pause (+ เสียงถ้ามีระบบ audio)
 ## ด่าน = `level_scene` · จุดเกิด = node ในกลุ่ม "player_spawn" ของด่าน (ไม่มี = origin)
 ## ตาย: ถ้าด่านจัดการฟื้นเอง (มีกลุ่ม "respawn_handler" เช่น Dungeon ตาม dungeon-flow) รอ EventBus.player_respawn_requested
-##       ไม่งั้นฟื้นผู้เล่นที่จุดเกิดเองหลัง `respawn_delay`
+##       ไม่งั้น GameRun ส่ง EventBus.player_respawn_requested เองหลัง `respawn_delay`
 
 const PLAYER_SCENE: PackedScene = preload("res://systems/player/player.tscn")
 const HUD_SCENE: PackedScene = preload("res://systems/hud/hud.tscn")
@@ -115,7 +115,7 @@ func _on_player_died() -> void:
 		_respawn_timer.start(respawn_delay)
 
 
+## ด่านไม่มี respawn_handler → GameRun ทำหน้าที่แทน: ส่ง signal เดียวกับ dungeon (Player/กล้อง/เสียงฟังที่เดียว)
 func _respawn_here() -> void:
 	if player != null and is_instance_valid(player):
-		player.revive(find_spawn(level))
-		camera.snap_to_target()
+		EventBus.player_respawn_requested.emit(find_spawn(level))
