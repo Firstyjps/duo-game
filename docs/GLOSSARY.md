@@ -22,7 +22,7 @@
 | เซ / poise | `DamageInfo.stagger` | แรงขัดท่า — ผู้รับตัดสินเองว่าเซไหม | core/combat |
 | สไลม์ | `Slime` · `enemy_id = &"slime"` | ศัตรูตัวแรก: เด้งเข้าหา → ย่อตัว + กระพริบแดง (telegraph) → พุ่งทับ | enemy |
 | เงาตามตัว | after-image · `_spawn_afterimage()` | สำเนาสไปรต์จาง ๆ ที่ทิ้งไว้ระหว่างพุ่ง | enemy |
-| บอสมิโนทอร์ | `boss_minotaur` (ยังไม่มีคลาส) | ผู้สมัครบอส MVP: วัวถือขวานสงคราม 8 ทิศ (ยังไม่ได้ตัดสินว่าเป็นบอสตัวจริง) | enemy |
+| บอสมิโนทอร์ | `BossMinotaur` · `enemy_id = &"boss_minotaur"` | บอสวัวถือขวานสงคราม 8 ทิศ: 6 ท่าโจมตี, 2 Phase, Poise สะสม | enemy |
 | บอสสไลม์ | `boss_slime` (ยังไม่มีคลาส) | ผู้สมัครบอสร่างเก่า เก็บไว้ (ยังไม่ได้ตัดสิน) | enemy |
 | เลื่อนกล้องข้ามห้อง | `GameCamera.slide_to` | เลื่อนกล้องข้ามห้องแบบนุ่มนวล โดยไม่ follow ระหว่างเลื่อนและตั้ง bounds เมื่อจบ | camera |
 | จัดเฟรม lock-on | `GameCamera.set_focus_target` | จัดเฟรมจุดมองระหว่างผู้เล่นกับเป้าหมายตามน้ำหนักและจำกัดระยะ max_focus_offset | camera |
