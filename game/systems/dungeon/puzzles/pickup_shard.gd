@@ -5,9 +5,12 @@ extends Area2D
 
 signal collected(value: int)
 
+const ART_TEXTURE: Texture2D = preload("res://systems/dungeon/puzzles/art/gold_shard.png")
+
 @export var value: int = 1
 
 var collision_shape: CollisionShape2D
+var sprite: Sprite2D
 var _ready_done: bool = false
 var _time: float = 0.0
 
@@ -29,6 +32,19 @@ func setup() -> void:
 	collision_layer = 0
 	collision_mask = Combat.LAYER_PLAYER
 
+	sprite = get_node_or_null("Sprite2D") as Sprite2D
+	if sprite == null:
+		sprite = Sprite2D.new()
+		sprite.name = "Sprite2D"
+		sprite.texture = ART_TEXTURE
+		sprite.centered = true
+		sprite.position = Vector2(0, -10)
+		add_child(sprite)
+	else:
+		sprite.texture = ART_TEXTURE
+		sprite.centered = true
+		sprite.position = Vector2(0, -10)
+
 	collision_shape = get_node_or_null("CollisionShape2D") as CollisionShape2D
 	if collision_shape == null:
 		collision_shape = CollisionShape2D.new()
@@ -48,6 +64,9 @@ func _process(delta: float) -> void:
 
 func tick(delta: float) -> void:
 	_time += delta
+	var bob: float = sin(_time * 4.0) * 2.0
+	if sprite != null:
+		sprite.position = Vector2(0.0, -10.0 + bob)
 	queue_redraw()
 
 
@@ -65,15 +84,5 @@ func _on_body_entered(body: Node2D) -> void:
 func _draw() -> void:
 	var bob: float = sin(_time * 4.0) * 2.0
 	var center := Vector2(0.0, -10.0 + bob)
-	# Crystal polygon
-	var pts := PackedVector2Array([
-		center + Vector2(0, -8),
-		center + Vector2(6, 0),
-		center + Vector2(0, 8),
-		center + Vector2(-6, 0),
-	])
-	var gold := Color(1.0, 0.85, 0.2, 0.95)
-	var glow := Color(1.0, 0.95, 0.5, 0.4)
+	var glow := Color(1.0, 0.95, 0.5, 0.35)
 	draw_circle(center, 9.0, glow)
-	draw_colored_polygon(pts, gold)
-	draw_polyline(pts + PackedVector2Array([pts[0]]), Color(1.0, 1.0, 0.8, 1.0), 1.0)

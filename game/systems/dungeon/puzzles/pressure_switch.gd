@@ -52,6 +52,11 @@ func setup() -> void:
 		body_exited.connect(_on_body_exited)
 
 
+func reset() -> void:
+	pressing_bodies.clear()
+	_set_on(false)
+
+
 func tick(_delta: float) -> void:
 	# Deterministic tick logic if needed
 	pass

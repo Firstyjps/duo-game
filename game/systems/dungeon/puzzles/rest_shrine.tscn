@@ -1,12 +1,16 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://systems/dungeon/puzzles/rest_shrine.gd" id="1_shrine"]
+[ext_resource type="Texture2D" path="res://systems/dungeon/puzzles/art/shrine.png" id="2_art"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_col"]
-radius = 12.0
+radius = 16.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_interact"]
 radius = 32.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_safe"]
+radius = 240.0
 
 [sub_resource type="Gradient" id="Gradient_light"]
 colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
@@ -22,6 +26,11 @@ collision_layer = 1
 collision_mask = 0
 script = ExtResource("1_shrine")
 
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_art")
+centered = false
+offset = Vector2(-64, -100)
+
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_col")
 
@@ -32,11 +41,18 @@ collision_mask = 2
 [node name="CollisionShape2D" type="CollisionShape2D" parent="InteractArea"]
 shape = SubResource("CircleShape2D_interact")
 
+[node name="SafeArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 4
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="SafeArea"]
+shape = SubResource("CircleShape2D_safe")
+
 [node name="SpawnMarker" type="Marker2D" parent="."]
 position = Vector2(0, 18)
 
 [node name="PointLight2D" type="PointLight2D" parent="."]
-position = Vector2(0, -20)
+position = Vector2(0, -48)
 enabled = false
 color = Color(1, 0.85, 0.3, 1)
 energy = 1.6

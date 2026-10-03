@@ -125,7 +125,6 @@ func try_repair() -> bool:
 		repair_progress = 1.0
 		if collision_shape != null:
 			collision_shape.set_deferred(&"disabled", true)
-			collision_shape.disabled = true
 		if point_light != null:
 			point_light.enabled = true
 			point_light.energy = 1.0

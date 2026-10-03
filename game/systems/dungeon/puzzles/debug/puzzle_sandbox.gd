@@ -11,6 +11,7 @@ const GATE_SCENE: PackedScene = preload("res://systems/dungeon/puzzles/puzzle_ga
 const CRACK_SCENE: PackedScene = preload("res://systems/dungeon/puzzles/kintsugi_crack.tscn")
 const SHRINE_SCENE: PackedScene = preload("res://systems/dungeon/puzzles/rest_shrine.tscn")
 const SHARD_SCENE: PackedScene = preload("res://systems/dungeon/puzzles/pickup_shard.tscn")
+const TORII_ART: Texture2D = preload("res://systems/dungeon/puzzles/art/torii.png")
 
 var floor_layer: TileMapLayer
 var walls_layer: TileMapLayer
@@ -27,6 +28,7 @@ var shrine: RestShrine
 
 var hud_label: Label
 var status_label: Label
+var _block_initial_pos: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
@@ -144,7 +146,19 @@ func _spawn_puzzle_elements() -> void:
 	push_block = BLOCK_SCENE.instantiate()
 	push_block.name = "PushBlock"
 	push_block.grid_layer = floor_layer
-	push_block.position = floor_layer.map_to_local(Vector2i(5, 3))
+	_block_initial_pos = floor_layer.map_to_local(Vector2i(5, 3))
+	push_block.position = _block_initial_pos
+
+	# Blocked cells: prevent pushing into unrecoverable cells (perimeter cells)
+	var blocked: Array[Vector2i] = []
+	for x in range(1, 9):
+		blocked.append(Vector2i(x, 1))
+		blocked.append(Vector2i(x, 8))
+	for y in range(1, 9):
+		blocked.append(Vector2i(1, y))
+		blocked.append(Vector2i(8, y))
+	blocked.append(Vector2i(9, 5)) # Do not push into gate opening
+	push_block.blocked_cells = blocked
 	world.add_child(push_block)
 
 	# 3. StoneLantern (lit on player hit)
@@ -154,17 +168,17 @@ func _spawn_puzzle_elements() -> void:
 	lantern.position = floor_layer.map_to_local(Vector2i(7, 2))
 	world.add_child(lantern)
 
-	# 4. PuzzleGate at (9, 5) opening
+	# 4. PuzzleGate at (9, 5) opening - gate.required ตั้งก่อน add_child ตามรีวิว
 	gate = GATE_SCENE.instantiate()
 	gate.name = "PuzzleGate"
 	gate.position = floor_layer.map_to_local(Vector2i(9, 5))
+	gate.required = [
+		NodePath("../Switch1"),
+		NodePath("../Switch2"),
+		NodePath("../StoneLantern")
+	]
 	world.add_child(gate)
 
-	gate.required = [
-		gate.get_path_to(switch_1),
-		gate.get_path_to(switch_2),
-		gate.get_path_to(lantern)
-	]
 	switch_1.targets = [switch_1.get_path_to(gate)]
 	switch_2.targets = [switch_2.get_path_to(gate)]
 	lantern.targets = [lantern.get_path_to(gate)]
@@ -184,7 +198,16 @@ func _spawn_puzzle_elements() -> void:
 	crack.position = floor_layer.map_to_local(Vector2i(13, 5))
 	world.add_child(crack)
 
-	# 7. RestShrine at (17, 5)
+	# 7. Torii gate (decorative) at sanctuary entrance (14, 5)
+	var torii := Sprite2D.new()
+	torii.name = "ToriiGate"
+	torii.texture = TORII_ART
+	torii.centered = false
+	torii.offset = Vector2(-64, -118)
+	torii.position = floor_layer.map_to_local(Vector2i(14, 5))
+	world.add_child(torii)
+
+	# 8. RestShrine at (17, 5)
 	shrine = SHRINE_SCENE.instantiate()
 	shrine.name = "RestShrine"
 	shrine.position = floor_layer.map_to_local(Vector2i(17, 5))
@@ -205,6 +228,20 @@ func _spawn_player() -> void:
 	player.add_child(cam)
 
 
+func reset_puzzle() -> void:
+	if push_block != null:
+		push_block.reset_to(_block_initial_pos)
+	if switch_1 != null:
+		switch_1.reset()
+	if switch_2 != null:
+		switch_2.reset()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R:
+		reset_puzzle()
+
+
 func _build_ui() -> void:
 	var canvas := CanvasLayer.new()
 	canvas.name = "UI"
@@ -212,7 +249,7 @@ func _build_ui() -> void:
 
 	var panel := PanelContainer.new()
 	panel.position = Vector2(16, 16)
-	panel.size = Vector2(340, 220)
+	panel.size = Vector2(360, 230)
 	canvas.add_child(panel)
 
 	var vbox := VBoxContainer.new()
@@ -223,7 +260,7 @@ func _build_ui() -> void:
 	vbox.add_child(title)
 
 	var controls := Label.new()
-	controls.text = "เดิน: WASD | กลิ้ง: Space | โจมตี: J / คลิกซ้าย | คุย/ซ่อม: E"
+	controls.text = "เดิน: WASD | กลิ้ง: Space | โจมตี: J / คลิกซ้าย | คุย/ซ่อม: E | รีเซ็ต: R"
 	controls.modulate = Color(0.8, 0.9, 1.0)
 	vbox.add_child(controls)
 
@@ -255,4 +292,4 @@ func _process(_delta: float) -> void:
 6. ศาลเจ้า: %s
 """ % [s1_check, s2_check, lan_check, gate_check, crack_check, shrine_check]
 
-	status_label.text = "เศษทองที่ถือ: %d ชิ้น" % GoldShards.count
+	status_label.text = "เศษทองที่ถือ: %d ชิ้น (กด R เพื่อรีเซ็ตปริศนา)" % GoldShards.count

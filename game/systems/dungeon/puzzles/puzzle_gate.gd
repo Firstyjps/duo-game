@@ -7,7 +7,11 @@ signal opened
 signal closed
 signal toggled(on: bool)
 
-@export var required: Array[NodePath] = []
+@export var required: Array[NodePath] = []:
+	set(val):
+		required = val
+		if _ready_done and is_inside_tree():
+			_connect_required_inputs()
 
 var is_open: bool = false
 var collision_shape: CollisionShape2D
@@ -47,6 +51,10 @@ func setup() -> void:
 		collision_shape.shape = poly
 		add_child(collision_shape)
 
+	_connect_required_inputs()
+
+
+func _connect_required_inputs() -> void:
 	for path in required:
 		var node := get_node_or_null(path)
 		if node != null:
@@ -101,7 +109,6 @@ func open_gate() -> void:
 	is_open = true
 	if collision_shape != null:
 		collision_shape.set_deferred(&"disabled", true)
-		collision_shape.disabled = true
 	queue_redraw()
 	opened.emit()
 	toggled.emit(true)
@@ -111,7 +118,6 @@ func close_gate() -> void:
 	is_open = false
 	if collision_shape != null:
 		collision_shape.set_deferred(&"disabled", false)
-		collision_shape.disabled = false
 	queue_redraw()
 	closed.emit()
 	toggled.emit(false)

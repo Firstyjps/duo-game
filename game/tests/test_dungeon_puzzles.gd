@@ -1,7 +1,9 @@
 extends RefCounted
 ## เทสต์ระบบปริศนาและศาลเจ้า (issue #57)
-## ครอบคลุม: สวิตช์ latch/ไม่ latch, gate AND, push block ฟิสิกส์จริงไม่ทะลุกำแพง,
-## lantern จุดเมื่อโดน Hitbox ผู้เล่นเท่านั้น, crack ซ่อมด้วยเศษทองหักเศษ, shrine จุดเกิดใหม่
+## ครอบคลุม: สวิตช์ latch/ไม่ latch, gate AND, push block ทิศทาง snap และ blocked_cells,
+## lantern จุดเมื่อโดน Hitbox ผู้เล่น + ปลด lock-on ถาวร, crack ซ่อมด้วยเศษทอง,
+## shrine จุดเกิดใหม่ + enemy safe radius + cooldown
+## หมายเหตุ: เทสต์ physics จริง (กำแพง + เดิน 8 ทิศ) อยู่ใน res://systems/dungeon/puzzles/debug/puzzle_physics_runner.gd
 
 const SWITCH_SCENE: PackedScene = preload("res://systems/dungeon/puzzles/pressure_switch.tscn")
 const BLOCK_SCENE: PackedScene = preload("res://systems/dungeon/puzzles/push_block.tscn")
@@ -39,6 +41,7 @@ func test_switch_non_latch_and_latch() -> bool:
 
 	sw.free()
 	dummy.free()
+	GoldShards.reset()
 
 	return on_after_press and off_after_release and on_after_latch_press and still_on_after_release and toggled_values == [true, false, true]
 
@@ -66,19 +69,20 @@ func test_gate_and_logic() -> bool:
 	gate.activate(s1)
 	var only_s1_closed: bool = not gate.is_open
 
-	# s2 เปิดด้วย -> ครบทั้งสองตัว -> gate เปิด
+	# s2 เปิดด้วย -> ครบทั้งสองตัว -> gate เปิด (เช็ค is_open ตามรีวิว)
 	gate.activate(s2)
-	var both_opened: bool = gate.is_open and gate.collision_shape.disabled
+	var both_opened: bool = gate.is_open
 
 	# s1 ดับ (input ไม่ค้าง) -> gate ต้องปิดกลับ
 	gate.deactivate(s1)
-	var s1_off_closed: bool = not gate.is_open and not gate.collision_shape.disabled
+	var s1_off_closed: bool = not gate.is_open
 
 	# s1 เปิดอีกครั้ง -> เปิดใหม่
 	gate.activate(s1)
-	var reopened: bool = gate.is_open and gate.collision_shape.disabled
+	var reopened: bool = gate.is_open
 
 	container.free()
+	GoldShards.reset()
 
 	return only_s1_closed and both_opened and s1_off_closed and reopened and open_events == [true, false, true]
 
@@ -90,57 +94,49 @@ func test_push_block_direction_mapping() -> bool:
 	var ul: Vector2i = PushBlock.direction_to_cell_step(Vector2(-2.0, -1.0))
 	var ur: Vector2i = PushBlock.direction_to_cell_step(Vector2(2.0, -1.0))
 
+	GoldShards.reset()
 	return dr == Vector2i(1, 0) and dl == Vector2i(0, 1) and ul == Vector2i(-1, 0) and ur == Vector2i(0, -1)
 
 
-func test_push_block_not_penetrate_wall() -> bool:
-	var root: Window = Engine.get_main_loop().root
+func test_push_block_snap_and_tie_breaking() -> bool:
+	# บล็อกหินหาทิศดันจากตำแหน่ง (บล็อก - ผู้เล่น) snap เป็นแกน cell
+	# และกรณีทิศเสมอกัน เลือกตามทิศที่ผู้เล่นขยับล่าสุด (รีวิวข้อ 1)
+	# ผู้เล่นอยู่ใต้บล็อก (South): to_block ชี้ขึ้นเหนือ (0, -1)
+	var to_block := Vector2(0.0, -50.0)
 
-	# สร้างกำแพงบน world layer
-	var wall := StaticBody2D.new()
-	wall.collision_layer = Combat.LAYER_WORLD
-	var wcol := CollisionShape2D.new()
-	var wpoly := ConvexPolygonShape2D.new()
-	wpoly.points = PackedVector2Array([
-		Vector2(0, -16), Vector2(32, 0), Vector2(0, 16), Vector2(-32, 0)
-	])
-	wcol.shape = wpoly
-	wall.add_child(wcol)
+	# ถ้าผู้เล่นเดินเฉียงขึ้น-ขวา (W+D): เสมอกันระหว่าง up-left กับ up-right -> ต้องเลือก up-right (0, -1)
+	var step_wd: Vector2i = PushBlock.snap_to_cell_step(to_block, Vector2(1.0, -1.0))
 
-	# สร้าง PushBlock
+	# ถ้าผู้เล่นเดินเฉียงขึ้น-ซ้าย (W+A): ต้องเลือก up-left (-1, 0)
+	var step_wa: Vector2i = PushBlock.snap_to_cell_step(to_block, Vector2(-1.0, -1.0))
+
+	# ผู้เล่นอยู่เหนือบล็อก (North): to_block ชี้ลงใต้ (0, 1)
+	var to_block_south := Vector2(0.0, 50.0)
+	# ผู้เล่นเดินเฉียงลง-ขวา (S+D) -> down-right (1, 0)
+	var step_sd: Vector2i = PushBlock.snap_to_cell_step(to_block_south, Vector2(1.0, 1.0))
+	# ผู้เล่นเดินเฉียงลง-ซ้าย (S+A) -> down-left (0, 1)
+	var step_sa: Vector2i = PushBlock.snap_to_cell_step(to_block_south, Vector2(-1.0, 1.0))
+
+	GoldShards.reset()
+	return step_wd == Vector2i(0, -1) and step_wa == Vector2i(-1, 0) and step_sd == Vector2i(1, 0) and step_sa == Vector2i(0, 1)
+
+
+func test_push_block_blocked_cells() -> bool:
+	# ทดสอบว่า blocked_cells กันบล็อกดันเข้าเซลล์ที่ห้ามไว้ (รีวิวข้อ 6)
 	var block: PushBlock = BLOCK_SCENE.instantiate()
 	block.setup()
+	block.current_cell = Vector2i(5, 3)
+	block.blocked_cells = [Vector2i(5, 2), Vector2i(5, 4)]
 
-	root.add_child(wall)
-	root.add_child(block)
+	# พยายามดันไป cell (0, 1) ซึ่งคือ cell (5, 4) -> ติด blocked_cells
+	var push_blocked: bool = block.try_push_step(Vector2i(0, 1))
 
-	var origin_pos := Vector2(100, 100)
-	block.global_position = origin_pos
-	# กำแพงอยู่ที่ตำแหน่ง cell (1, 0) ลง-ขวา: (100 + 32, 100 + 16)
-	var wall_pos := origin_pos + Vector2(32, 16)
-	wall.global_position = wall_pos
+	# ดันไป cell (1, 0) ซึ่งคือ cell (6, 3) -> ทางโล่ง ดันผ่าน
+	var push_allowed: bool = block.try_push_step(Vector2i(1, 0))
 
-	var space: RID = root.get_world_2d().space
-	PhysicsServer2D.body_set_space(wall.get_rid(), space)
-	PhysicsServer2D.body_set_state(wall.get_rid(), PhysicsServer2D.BODY_STATE_TRANSFORM, wall.global_transform)
-	PhysicsServer2D.body_set_space(block.get_rid(), space)
-	PhysicsServer2D.body_set_state(block.get_rid(), PhysicsServer2D.BODY_STATE_TRANSFORM, block.global_transform)
-
-	# ดันบล็อกไปทางกำแพง cell (1, 0) -> ต้องติด ไม่เลื่อน
-	var pushed_into_wall: bool = block.try_push_step(Vector2i(1, 0))
-	var pos_unchanged: bool = block.global_position == origin_pos
-
-	# ดันบล็อกไปทางโล่ง cell (-1, 0) ขึ้น-ซ้าย -> ต้องเลื่อนสำเร็จ
-	var pushed_into_empty: bool = block.try_push_step(Vector2i(-1, 0))
-	var target_pos := origin_pos + Vector2(-32, -16)
-	var pos_moved: bool = block.global_position == target_pos
-
-	root.remove_child(wall)
-	root.remove_child(block)
-	wall.free()
 	block.free()
-
-	return not pushed_into_wall and pos_unchanged and pushed_into_empty and pos_moved
+	GoldShards.reset()
+	return (not push_blocked) and push_allowed
 
 
 func test_lantern_ignites_on_player_hitbox_only() -> bool:
@@ -168,8 +164,18 @@ func test_lantern_ignites_on_player_hitbox_only() -> bool:
 	lantern.tick(0.25)
 	var extinguished_after_time: bool = not lantern.is_lit and not lantern.point_light.enabled
 
+	# ทดสอบโคมติดถาวร (lit_time = 0.0) -> hurtbox.set_deferred("monitorable", false) (รีวิวข้อ 7)
+	var permanent_lantern: StoneLantern = LANTERN_SCENE.instantiate()
+	permanent_lantern.lit_time = 0.0
+	permanent_lantern.setup()
+	permanent_lantern.hurtbox.receive(player_hit)
+	var perm_lit: bool = permanent_lantern.is_lit
+
 	lantern.free()
-	return not_lit_by_enemy and lit_by_player and still_lit and extinguished_after_time
+	permanent_lantern.free()
+	GoldShards.reset()
+
+	return not_lit_by_enemy and lit_by_player and still_lit and extinguished_after_time and perm_lit
 
 
 func test_kintsugi_crack_repair_shards() -> bool:
@@ -181,17 +187,18 @@ func test_kintsugi_crack_repair_shards() -> bool:
 	var repaired_events: Array[int] = []
 	crack.repaired.connect(func() -> void: repaired_events.append(1))
 
-	# เศษไม่พอ (มี 2 ต้องใช้ 3) -> ซ่อมไม่ผ่าน กำแพงยังกั้นอยู่
+	# เศษไม่พอ (มี 2 ต้องใช้ 3) -> ซ่อมไม่ผ่าน (เช็ค is_repaired ตามรีวิว)
 	GoldShards.count = 2
 	var failed_repair: bool = not crack.try_repair()
-	var still_cracked: bool = not crack.is_repaired and not crack.collision_shape.disabled
+	var still_cracked: bool = not crack.is_repaired
 
-	# เศษพอ (เก็บเพิ่มอีก 2 เป็น 4) -> ซ่อมผ่าน หักเศษเหลือ 1 กำแพงเปิด
+	# เศษพอ (เก็บเพิ่มอีก 2 เป็น 4) -> ซ่อมผ่าน หักเศษเหลือ 1
 	GoldShards.add(2)
 	var success_repair: bool = crack.try_repair()
-	var now_repaired: bool = crack.is_repaired and crack.collision_shape.disabled and GoldShards.count == 1
+	var now_repaired: bool = crack.is_repaired and GoldShards.count == 1
 
 	crack.free()
+	GoldShards.reset()
 	return failed_repair and still_cracked and success_repair and now_repaired and repaired_events == [1]
 
 
@@ -206,6 +213,8 @@ func test_pickup_shard_collect() -> bool:
 
 	shard.collect()
 	var ok: bool = GoldShards.count == 2 and collected_amount == [2]
+
+	GoldShards.reset()
 	return ok
 
 
@@ -226,15 +235,54 @@ func test_rest_shrine_checkpoint_and_respawn_signal() -> bool:
 		checkpoint_positions.append(pos)
 	shrine.checkpoint_set.connect(cp_cb)
 
-	shrine.rest()
+	var rest_ok: bool = shrine.rest()
 
 	EventBus.player_respawn_requested.disconnect(respawn_cb)
 	shrine.checkpoint_set.disconnect(cp_cb)
 
-	var ok: bool = respawn_positions == [expected_spawn] \
+	var ok: bool = rest_ok \
+		and respawn_positions == [expected_spawn] \
 		and checkpoint_positions == [expected_spawn] \
 		and shrine.is_active \
 		and shrine.point_light.enabled
 
 	shrine.free()
+	GoldShards.reset()
 	return ok
+
+
+func test_rest_shrine_cooldown_and_safe_radius() -> bool:
+	# ทดสอบ cooldown ~3s และ safe radius ไม่ให้พักเมื่อมีศัตรูอยู่ใกล้ (รีวิวข้อ 8)
+	var shrine: RestShrine = SHRINE_SCENE.instantiate()
+	shrine.rest_cooldown = 3.0
+	shrine.rest_safe_radius = 240.0
+	shrine.setup()
+
+	# 1. พักครั้งแรกสำเร็จ
+	var first_rest: bool = shrine.rest()
+
+	# 2. กดพักทันที -> ติด cooldown 3.0s ต้องพักไม่ได้
+	var cooldown_blocked: bool = not shrine.rest()
+	var cannot_rest_on_cd: bool = not shrine.can_rest()
+
+	# 3. เวลาผ่านไป 3.1s -> พ้น cooldown กลับมาพักได้
+	shrine.tick(3.1)
+	var can_rest_after_cd: bool = shrine.can_rest()
+
+	# 4. มีศัตรูเข้ามาใน safe radius -> พักไม่ได้
+	var enemy := Node2D.new()
+	enemy.add_to_group(&"enemy")
+	shrine._on_enemy_entered(enemy)
+
+	var enemy_blocked: bool = not shrine.can_rest()
+	var enemy_rest_failed: bool = not shrine.rest()
+
+	# 5. ศัตรูออกไป -> พักได้
+	shrine._on_enemy_exited(enemy)
+	var safe_again: bool = shrine.can_rest()
+
+	enemy.free()
+	shrine.free()
+	GoldShards.reset()
+
+	return first_rest and cooldown_blocked and cannot_rest_on_cd and can_rest_after_cd and enemy_blocked and enemy_rest_failed and safe_again
