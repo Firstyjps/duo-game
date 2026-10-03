@@ -35,6 +35,13 @@
 | ตัวเอก Kintsugi (ทดสอบ) | `kintsugi_hero` | สาวยักษ์ผมขาวม่วง ชุดน้ำเงินลายทอง 64 px 8 ทิศ (PixelLab อิง Merakintsugi — ยังไม่ใช่ตัวจริง) | player |
 | พุ่งหลบ | `dodge` | ท่าหลบแบบพุ่งต่ำ (ไม่กลิ้ง/ไม่หมุนตัว) | player |
 | เป้า lock-on | `lock_target` · `LockMarker` | เครื่องหมายบอกเป้าหมายที่กำลังล็อก แสดงเหนือตัวศัตรูตามตำแหน่งโลก | hud |
+| สวิตช์เหยียบ | `PressureSwitch` | สวิตช์บนพื้น เปิดเมื่อผู้เล่นหรือบล็อกเหยียบ รองรับแบบค้าง (latch) หรือไม่ค้าง | dungeon/puzzles |
+| บล็อกดัน | `PushBlock` | บล็อกหินที่ผู้เล่นดันค้าง 4 ทิศทางแกน isometric grid เลื่อนทีละ 1 cell ถ้าทางว่าง | dungeon/puzzles |
+| โคมหิน | `StoneLantern` | โคมหินปริศนา จุดไฟเมื่อถูกโจมตีโดย Hitbox ของทีมผู้เล่น | dungeon/puzzles |
+| ประตูหินปริศนา | `PuzzleGate` | ประตูหินเปิดเมื่อเงื่อนไขอินพุตทุกตัวใน required ทำงานครบ (AND logic) | dungeon/puzzles |
+| รอยแตกคินสึงิ | `KintsugiCrack` | สิ่งกีดขวางแตกหัก ซ่อมแซมด้วยการกด interact ค้างและใช้เศษทองจนกลับมาสมบูรณ์ | dungeon/puzzles |
+| ศาลเจ้าพักผ่อน | `RestShrine` | จุดฟื้นฟู HP และบันทึกจุดเกิดใหม่ของผู้เล่นผ่าน `EventBus.player_respawn_requested` | dungeon/puzzles |
+| เศษทอง | `GoldShards` · `PickupShard` | วัตถุดิบ/ค่าเงินชั่วคราวสำหรับซ่อมแซมรอยแตกคินสึงิ | dungeon/puzzles |
 | เมนูหน้าเริ่ม / Title Screen | `TitleScreen` | หน้าจอหลักก่อนเข้าเล่นเกม (เริ่ม/ตั้งค่า/ออก) | ui |
 | เมนูหยุดเกม / Pause Menu | `PauseMenu` | หน้าต่างหยุดเกมขณะเล่น คุมผ่าน `ui_pause` (Esc / จอย Start) | ui |
 | เมนูตั้งค่า / Settings Menu | `SettingsMenu` | หน้าต่างปรับเสียง Master/Music/SFX, เต็มจอ, ภาษา และปุ่ม | ui |
