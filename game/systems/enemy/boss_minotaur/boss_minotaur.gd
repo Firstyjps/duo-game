@@ -101,6 +101,8 @@ const FLASH_WINDUP := Color(1.8, 0.65, 0.6)
 @export var stomp_knockback: float = 300.0
 @export var stomp_stagger: float = 45.0
 @export var stomp_radius: float = 120.0
+## เผื่อระยะ Hurtbox ผู้เล่นที่อยู่สูงกว่าเท้า (~22 px) — รัศมีจริงไม่น้อยกว่า mid_attack_range + ค่านี้
+@export var stomp_reach_margin: float = 20.0
 
 @export_group("Leap Attack")
 @export var leap_damage: int = 22
@@ -195,9 +197,6 @@ func setup() -> void:
 		_hit_poly = ConvexPolygonShape2D.new()
 	hitbox_shape.shape = _hit_circle
 
-	var sq: float = telegraph_marker.squash if telegraph_marker != null else 0.55
-	if stomp_radius * sq < mid_attack_range + 10.0:
-		stomp_radius = (mid_attack_range + 10.0) / sq
 	var charge_hit_reach: float = 18.0 + 26.0
 	if charge_speed * charge_duration + charge_hit_reach < far_attack_range:
 		charge_speed = (far_attack_range - charge_hit_reach) / maxf(charge_duration, 0.01)
@@ -264,6 +263,11 @@ func get_attack_candidates(dist: float, offset: Vector2 = Vector2.ZERO) -> Array
 	return []
 
 
+## รัศมีกระทืบจริง (หน่วยระยะวงรีเดียวกับที่ AI ใช้เลือกท่า) — ไม่เขียนทับค่า @export
+func stomp_reach() -> float:
+	return maxf(stomp_radius, mid_attack_range + stomp_reach_margin)
+
+
 func get_attack_reach(atk: AttackType) -> float:
 	var sq: float = telegraph_marker.squash if telegraph_marker != null else 0.55
 	match atk:
@@ -274,7 +278,7 @@ func get_attack_reach(atk: AttackType) -> float:
 		AttackType.RISING:
 			return 36.0 + 34.0
 		AttackType.STOMP:
-			return stomp_radius * sq
+			return stomp_reach()
 		AttackType.CHARGE:
 			return charge_speed * charge_duration + 18.0 + 26.0
 		AttackType.LEAP:
@@ -597,7 +601,7 @@ func _setup_hitbox_for_attack(atk: AttackType, facing: Vector2) -> void:
 			hitbox.knockback_force = stomp_knockback
 			hitbox.stagger = stomp_stagger
 			hitbox_shape.position = Vector2.ZERO
-			_hit_circle.radius = stomp_radius
+			_hit_circle.radius = stomp_reach()
 		AttackType.LEAP:
 			hitbox_shape.shape = _hit_circle
 			hitbox_shape.scale = Vector2(1.0, marker_squash)
@@ -662,7 +666,7 @@ func _enter(next: State) -> void:
 					telegraph_marker.show_at(_leap_to)
 			elif current_attack == AttackType.STOMP:
 				if telegraph_marker:
-					telegraph_marker.radius = stomp_radius
+					telegraph_marker.radius = stomp_reach()
 					telegraph_marker.show_at(global_position)
 
 			var tele_col: int = ATTACK_COLS[current_attack]["tele"]

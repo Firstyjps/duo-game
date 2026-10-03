@@ -841,3 +841,14 @@ func test_hitbox_deflected_parry_behavior() -> bool:
 	boss.free()
 	def_hurtbox.free()
 	return ok
+
+
+## setup() ไม่เขียนทับ stomp_radius · รัศมีจริงครอบระยะที่ AI เลือกกระทืบ + เผื่อ hurtbox · แต่ไม่ใหญ่จนถึงระยะไกล
+func test_stomp_reach_not_inflated() -> bool:
+	var boss: BossMinotaur = _spawn()
+	var export_kept: bool = is_equal_approx(boss.stomp_radius, 120.0)
+	var reach: float = boss.stomp_reach()
+	var covers: bool = reach >= boss.mid_attack_range + boss.stomp_reach_margin
+	var not_huge: bool = reach < 200.0 and boss.get_attack_reach(BossMinotaur.AttackType.STOMP) == reach
+	boss.free()
+	return export_kept and covers and not_huge
