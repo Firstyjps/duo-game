@@ -532,3 +532,312 @@ func test_leap_clamp_wall_safe_fallback() -> bool:
 	var ok: bool = pos.is_equal_approx(Vector2(100, 0))
 	boss.free()
 	return ok
+
+
+func _make_player_dummy() -> CharacterBody2D:
+	var dummy := CharacterBody2D.new()
+	var hb := Hurtbox.new()
+	hb.name = "Hurtbox"
+	hb.team = Combat.Team.PLAYER
+	var col := CollisionShape2D.new()
+	var c := CircleShape2D.new()
+	c.radius = 10.0
+	col.shape = c
+	col.position = Vector2(0, -16)
+	hb.add_child(col)
+	dummy.add_child(hb)
+	return dummy
+
+
+## STOMP โดนทุกทิศ 8 ทิศที่ระยะที่ AI เลือก ด้วย physics จริง (Hurtbox รัศมี 10 ที่ y -16)
+func test_stomp_hits_all_8_directions_real_physics() -> bool:
+	var root: Window = Engine.get_main_loop().root
+	var boss: BossMinotaur = _spawn()
+	boss.global_position = Vector2(400, 400)
+	root.add_child(boss)
+
+	var dummy: CharacterBody2D = _make_player_dummy()
+	root.add_child(dummy)
+
+	await (Engine.get_main_loop() as SceneTree).physics_frame
+	await (Engine.get_main_loop() as SceneTree).physics_frame
+
+	var hurtbox: Hurtbox = dummy.get_node("Hurtbox") as Hurtbox
+	var hit_count: Array[int] = [0]
+	hurtbox.hurt.connect(func(_i: DamageInfo) -> void: hit_count[0] += 1)
+
+	var sq: float = boss.telegraph_marker.squash
+	var test_ground_dist: float = 90.0
+	var all_hit: bool = true
+
+	var dir_angles: Array[float] = [
+		0.0,
+		PI * 0.25,
+		PI * 0.5,
+		PI * 0.75,
+		PI,
+		-PI * 0.75,
+		-PI * 0.5,
+		-PI * 0.25,
+	]
+
+	for angle: float in dir_angles:
+		hit_count[0] = 0
+		boss.consecutive_attack_count = 0
+		boss.last_attack = BossMinotaur.AttackType.CLEAVE
+		var dx: float = cos(angle) * test_ground_dist
+		var dy: float = sin(angle) * (test_ground_dist * sq)
+		dummy.global_position = boss.global_position + Vector2(dx, dy)
+		boss.set_target(dummy)
+
+		var chosen: BossMinotaur.AttackType = boss.choose_attack(Vector2(dx, dy))
+		if chosen != BossMinotaur.AttackType.STOMP:
+			all_hit = false
+			break
+
+		boss.start_attack(BossMinotaur.AttackType.STOMP)
+		boss.tick(boss.get_windup_time(BossMinotaur.AttackType.STOMP) + 0.01)
+
+		await (Engine.get_main_loop() as SceneTree).physics_frame
+		await (Engine.get_main_loop() as SceneTree).physics_frame
+		await (Engine.get_main_loop() as SceneTree).physics_frame
+
+		if hit_count[0] == 0:
+			all_hit = false
+			break
+
+		boss._enter(BossMinotaur.State.IDLE)
+
+	root.remove_child(boss)
+	root.remove_child(dummy)
+	boss.free()
+	dummy.free()
+	return all_hit
+
+
+## LEAP โดนทุกทิศ 8 ทิศที่ระยะที่ AI เลือก ด้วย physics จริง
+func test_leap_hits_all_8_directions_real_physics() -> bool:
+	var root: Window = Engine.get_main_loop().root
+	var boss: BossMinotaur = _spawn()
+	boss.global_position = Vector2(400, 400)
+	root.add_child(boss)
+
+	var dummy: CharacterBody2D = _make_player_dummy()
+	root.add_child(dummy)
+
+	await (Engine.get_main_loop() as SceneTree).physics_frame
+	await (Engine.get_main_loop() as SceneTree).physics_frame
+
+	var hurtbox: Hurtbox = dummy.get_node("Hurtbox") as Hurtbox
+	var hit_count: Array[int] = [0]
+	hurtbox.hurt.connect(func(_i: DamageInfo) -> void: hit_count[0] += 1)
+
+	var sq: float = boss.telegraph_marker.squash
+	var test_ground_dist: float = 160.0
+	var all_hit: bool = true
+
+	var dir_angles: Array[float] = [
+		0.0,
+		PI * 0.25,
+		PI * 0.5,
+		PI * 0.75,
+		PI,
+		-PI * 0.75,
+		-PI * 0.5,
+		-PI * 0.25,
+	]
+
+	for angle: float in dir_angles:
+		hit_count[0] = 0
+		boss.global_position = Vector2(400, 400)
+		boss.consecutive_attack_count = 0
+		boss.last_attack = BossMinotaur.AttackType.CLEAVE
+
+		var dx: float = cos(angle) * test_ground_dist
+		var dy: float = sin(angle) * (test_ground_dist * sq)
+		dummy.global_position = boss.global_position + Vector2(dx, dy)
+		boss.set_target(dummy)
+
+		var candidates: Array[BossMinotaur.AttackType] = boss.get_attack_candidates(test_ground_dist, Vector2(dx, dy))
+		if not candidates.has(BossMinotaur.AttackType.LEAP):
+			all_hit = false
+			break
+
+		boss.start_attack(BossMinotaur.AttackType.LEAP)
+		boss.tick(boss.get_windup_time(BossMinotaur.AttackType.LEAP))
+		boss.tick(boss.leap_time)
+
+		await (Engine.get_main_loop() as SceneTree).physics_frame
+		await (Engine.get_main_loop() as SceneTree).physics_frame
+		await (Engine.get_main_loop() as SceneTree).physics_frame
+
+		if hit_count[0] == 0:
+			all_hit = false
+			break
+
+		boss._enter(BossMinotaur.State.IDLE)
+		await (Engine.get_main_loop() as SceneTree).physics_frame
+
+	root.remove_child(boss)
+	root.remove_child(dummy)
+	boss.free()
+	dummy.free()
+	return all_hit
+
+
+## จุดตก LEAP: ตรวจด้วย shape วงกลมรัศมีตัวบอส มีกำแพง StaticBody2D จริง
+func test_leap_clamp_with_real_static_body_wall() -> bool:
+	var root: Window = Engine.get_main_loop().root
+	var boss: BossMinotaur = _spawn()
+	boss.global_position = Vector2(100, 300)
+	root.add_child(boss)
+
+	var wall := StaticBody2D.new()
+	wall.collision_layer = Combat.LAYER_WORLD
+	var wcol := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(100, 100)
+	wcol.shape = rect
+	wall.add_child(wcol)
+	wall.position = Vector2(300, 300)
+	root.add_child(wall)
+
+	await (Engine.get_main_loop() as SceneTree).physics_frame
+	await (Engine.get_main_loop() as SceneTree).physics_frame
+
+	var inside_wall_target: Vector2 = Vector2(300, 300)
+	var clamped: Vector2 = boss._clamp_leap_position(inside_wall_target, boss.global_position)
+
+	var space_state: PhysicsDirectSpaceState2D = root.get_world_2d().direct_space_state
+	var query := PhysicsShapeQueryParameters2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = 16.0
+	query.shape = circle
+	query.collision_mask = Combat.LAYER_WORLD
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+	query.transform = Transform2D(0.0, clamped + Vector2(0, -10))
+
+	var hits: Array[Dictionary] = space_state.intersect_shape(query, 1)
+	var ok: bool = hits.is_empty() and clamped.x < 250.0
+
+	root.remove_child(boss)
+	root.remove_child(wall)
+	boss.free()
+	wall.free()
+	return ok
+
+
+## Screen shake contract: กระทืบ 0.5, กระโดดทุบลงพื้น 0.6, เดินคอลัมน์ 4/8 0.12, เข่ากระแทกตาย 0.3
+func test_screen_shake_requested_emits() -> bool:
+	var boss: BossMinotaur = _spawn()
+	var shakes: Array[Dictionary] = []
+	var cb := func(strength: float, pos: Vector2) -> void:
+		shakes.append({"strength": strength, "pos": pos})
+	EventBus.screen_shake_requested.connect(cb)
+
+	# 1. กระทืบเข้า ACTIVE: 0.5
+	boss.start_attack(BossMinotaur.AttackType.STOMP)
+	boss.tick(boss.get_windup_time(BossMinotaur.AttackType.STOMP) + 0.01)
+	var stomp_ok: bool = shakes.size() == 1 \
+		and is_equal_approx(shakes[0]["strength"], boss.stomp_screen_shake)
+
+	# 2. กระโดดทุบลงพื้น: 0.6
+	boss._enter(BossMinotaur.State.IDLE)
+	boss.start_attack(BossMinotaur.AttackType.LEAP)
+	boss.tick(boss.get_windup_time(BossMinotaur.AttackType.LEAP) + 0.01)
+	var before_land_count: int = shakes.size()
+	boss.tick(boss.leap_time + 0.01) # ลงพื้น
+	var leap_ok: bool = shakes.size() == before_land_count + 1 \
+		and is_equal_approx(shakes[shakes.size() - 1]["strength"], boss.leap_screen_shake)
+
+	# 3. เดิน: เท้ากระแทกตอนคอลัมน์ 4 และ 8
+	var dummy := Node2D.new()
+	dummy.position = boss.global_position + Vector2(300, 0)
+	boss._enter(BossMinotaur.State.IDLE)
+	boss.set_target(dummy)
+	shakes.clear()
+	# จำลองเดิน 1 รอบเต็ม (0.8 วินาที)
+	for _i: int in 20:
+		boss.tick(0.05)
+	var walk_shakes: Array[float] = []
+	for s: Dictionary in shakes:
+		walk_shakes.append(s["strength"])
+	var walk_ok: bool = walk_shakes.size() >= 2 and is_equal_approx(walk_shakes[0], boss.footstep_screen_shake)
+
+	# 4. เข่ากระแทกตอนตาย (เฟรม 54): 0.3
+	shakes.clear()
+	boss._on_died() # เข้า State.DEAD
+	boss.tick(0.1) # frame 52
+	var death_not_yet: bool = shakes.is_empty()
+	boss.tick(0.2) # frame 54
+	var death_ok: bool = death_not_yet and shakes.size() == 1 \
+		and is_equal_approx(shakes[0]["strength"], boss.death_knee_screen_shake)
+
+	EventBus.screen_shake_requested.disconnect(cb)
+	boss.free()
+	dummy.free()
+	return stomp_ok and leap_ok and walk_ok and death_ok
+
+
+## Parry deflect: ท่าประชิดและพุ่งชนโดนปัดแล้วเซเข้า State.HURT + ถอยหลัง, กระทืบ/กระโดดทุบไม่เซ
+func test_hitbox_deflected_parry_behavior() -> bool:
+	var boss: BossMinotaur = _spawn()
+	var def_hurtbox := Hurtbox.new()
+	def_hurtbox.team = Combat.Team.PLAYER
+	def_hurtbox.deflecting = true
+
+	var ok: bool = true
+
+	# 1. ท่าประชิด CLEAVE โดน deflect -> HURT + velocity ถอยหลัง
+	boss.start_attack(BossMinotaur.AttackType.CLEAVE)
+	boss.tick(boss.get_windup_time(BossMinotaur.AttackType.CLEAVE))
+	boss.hitbox.try_hit(def_hurtbox)
+	var cleave_staggered: bool = boss.state == BossMinotaur.State.HURT \
+		and is_equal_approx(boss._current_hurt_duration, boss.parried_stagger_time) \
+		and boss.velocity.length() > 0.0
+	ok = ok and cleave_staggered
+
+	# 2. SWEEP
+	boss._enter(BossMinotaur.State.IDLE)
+	boss.start_attack(BossMinotaur.AttackType.SWEEP)
+	boss.tick(boss.get_windup_time(BossMinotaur.AttackType.SWEEP))
+	boss.hitbox.try_hit(def_hurtbox)
+	ok = ok and (boss.state == BossMinotaur.State.HURT)
+
+	# 3. RISING
+	boss._enter(BossMinotaur.State.IDLE)
+	boss.start_attack(BossMinotaur.AttackType.RISING)
+	boss.tick(boss.get_windup_time(BossMinotaur.AttackType.RISING))
+	boss.hitbox.try_hit(def_hurtbox)
+	ok = ok and (boss.state == BossMinotaur.State.HURT)
+
+	# 4. CHARGE โดน deflect -> HURT + velocity ถอยหลัง
+	boss._enter(BossMinotaur.State.IDLE)
+	boss.start_attack(BossMinotaur.AttackType.CHARGE)
+	boss.tick(boss.get_windup_time(BossMinotaur.AttackType.CHARGE))
+	boss.hitbox.try_hit(def_hurtbox)
+	var charge_staggered: bool = boss.state == BossMinotaur.State.HURT \
+		and boss.velocity.dot(boss._charge_dir) < 0.0 # velocity ถอยหลัง
+	ok = ok and charge_staggered
+
+	# 5. STOMP โดน deflect -> ไม่เซ (ยังคงเป็น ACTIVE)
+	boss._enter(BossMinotaur.State.IDLE)
+	boss.start_attack(BossMinotaur.AttackType.STOMP)
+	boss.tick(boss.get_windup_time(BossMinotaur.AttackType.STOMP))
+	boss.hitbox.try_hit(def_hurtbox)
+	var stomp_not_staggered: bool = boss.state == BossMinotaur.State.ACTIVE
+	ok = ok and stomp_not_staggered
+
+	# 6. LEAP โดน deflect -> ไม่เซ (ยังคงเป็น ACTIVE)
+	boss._enter(BossMinotaur.State.IDLE)
+	boss.start_attack(BossMinotaur.AttackType.LEAP)
+	boss.tick(boss.get_windup_time(BossMinotaur.AttackType.LEAP))
+	boss.tick(boss.leap_time) # landing
+	boss.hitbox.try_hit(def_hurtbox)
+	var leap_not_staggered: bool = boss.state == BossMinotaur.State.ACTIVE
+	ok = ok and leap_not_staggered
+
+	boss.free()
+	def_hurtbox.free()
+	return ok

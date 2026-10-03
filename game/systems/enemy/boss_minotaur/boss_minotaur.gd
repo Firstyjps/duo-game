@@ -115,6 +115,16 @@ const FLASH_WINDUP := Color(1.8, 0.65, 0.6)
 @export var hurt_time: float = 0.35
 @export var corpse_time: float = 2.0
 
+@export_group("Screen Shake")
+@export var stomp_screen_shake: float = 0.5
+@export var leap_screen_shake: float = 0.6
+@export var footstep_screen_shake: float = 0.12
+@export var death_knee_screen_shake: float = 0.3
+
+@export_group("Parry / Deflect")
+@export var parried_stagger_time: float = 0.6
+@export var parried_knockback: float = 180.0
+
 var state: State = State.IDLE
 var target: Node2D = null
 var current_attack: AttackType = AttackType.CLEAVE
@@ -131,6 +141,9 @@ var _flash_t: float = 0.0
 var _engaged_emitted: bool = false
 var _died_emitted: bool = false
 var _combo_pending: bool = false
+var _current_hurt_duration: float = 0.0
+var _last_walk_col: int = -1
+var _knee_shake_emitted: bool = false
 
 var _charge_dir: Vector2 = Vector2.DOWN
 var _leap_from: Vector2 = Vector2.ZERO
@@ -176,23 +189,32 @@ func setup() -> void:
 	hitbox.team = Combat.Team.ENEMY
 	hurtbox.team = Combat.Team.ENEMY
 
-	_hit_circle = CircleShape2D.new()
-	_hit_poly = ConvexPolygonShape2D.new()
+	if _hit_circle == null:
+		_hit_circle = CircleShape2D.new()
+	if _hit_poly == null:
+		_hit_poly = ConvexPolygonShape2D.new()
 	hitbox_shape.shape = _hit_circle
 
-	if stomp_radius < mid_attack_range + 10.0:
-		stomp_radius = mid_attack_range + 10.0
+	var sq: float = telegraph_marker.squash if telegraph_marker != null else 0.55
+	if stomp_radius * sq < mid_attack_range + 10.0:
+		stomp_radius = (mid_attack_range + 10.0) / sq
 	var charge_hit_reach: float = 18.0 + 26.0
 	if charge_speed * charge_duration + charge_hit_reach < far_attack_range:
 		charge_speed = (far_attack_range - charge_hit_reach) / maxf(charge_duration, 0.01)
 
-	hurtbox.hurt.connect(_on_hurt)
-	health.died.connect(_on_died)
+	if not hurtbox.hurt.is_connected(_on_hurt):
+		hurtbox.hurt.connect(_on_hurt)
+	if not health.died.is_connected(_on_died):
+		health.died.connect(_on_died)
+	if not hitbox.deflected.is_connected(_on_hitbox_deflected):
+		hitbox.deflected.connect(_on_hitbox_deflected)
 
 	detect.collision_layer = 0
 	detect.collision_mask = Combat.LAYER_PLAYER
-	detect.body_entered.connect(_on_body_entered)
-	detect.body_exited.connect(_on_body_exited)
+	if not detect.body_entered.is_connected(_on_body_entered):
+		detect.body_entered.connect(_on_body_entered)
+	if not detect.body_exited.is_connected(_on_body_exited):
+		detect.body_exited.connect(_on_body_exited)
 
 	_update_sprite_frame(COL_IDLE_START)
 
@@ -224,17 +246,26 @@ func get_recover_time(atk: AttackType) -> float:
 		_: return recover_time
 
 
-func get_attack_candidates(dist: float) -> Array[AttackType]:
-	if dist <= near_attack_range:
+func get_attack_candidates(dist: float, offset: Vector2 = Vector2.ZERO) -> Array[AttackType]:
+	var sq: float = telegraph_marker.squash if telegraph_marker != null else 0.55
+	var ground_dist: float = dist
+	if offset != Vector2.ZERO:
+		ground_dist = sqrt(offset.x * offset.x + (offset.y / sq) * (offset.y / sq))
+	elif _has_target() and is_equal_approx(dist, (target.global_position - global_position).length()):
+		var to_t: Vector2 = target.global_position - global_position
+		ground_dist = sqrt(to_t.x * to_t.x + (to_t.y / sq) * (to_t.y / sq))
+
+	if ground_dist <= near_attack_range:
 		return [AttackType.CLEAVE, AttackType.SWEEP, AttackType.RISING]
-	elif dist <= mid_attack_range:
+	elif ground_dist <= mid_attack_range:
 		return [AttackType.STOMP]
-	elif dist <= far_attack_range:
+	elif ground_dist <= far_attack_range:
 		return [AttackType.CHARGE, AttackType.LEAP]
 	return []
 
 
 func get_attack_reach(atk: AttackType) -> float:
+	var sq: float = telegraph_marker.squash if telegraph_marker != null else 0.55
 	match atk:
 		AttackType.CLEAVE:
 			return 38.0 + 32.0
@@ -243,17 +274,27 @@ func get_attack_reach(atk: AttackType) -> float:
 		AttackType.RISING:
 			return 36.0 + 34.0
 		AttackType.STOMP:
-			return stomp_radius
+			return stomp_radius * sq
 		AttackType.CHARGE:
 			return charge_speed * charge_duration + 18.0 + 26.0
 		AttackType.LEAP:
-			return far_attack_range + leap_radius
+			return far_attack_range + leap_radius * sq
 		_:
 			return 0.0
 
 
-func choose_attack(dist: float, record: bool = false) -> AttackType:
-	var candidates: Array[AttackType] = get_attack_candidates(dist)
+func choose_attack(dist_or_offset: Variant = 0.0, record: bool = false, offset_override: Vector2 = Vector2.ZERO) -> AttackType:
+	var dist: float = 0.0
+	var offset: Vector2 = offset_override
+	if dist_or_offset is Vector2:
+		offset = dist_or_offset
+		dist = offset.length()
+	elif dist_or_offset is float or dist_or_offset is int:
+		dist = float(dist_or_offset)
+	if offset == Vector2.ZERO and _has_target():
+		offset = target.global_position - global_position
+
+	var candidates: Array[AttackType] = get_attack_candidates(dist, offset)
 	if candidates.is_empty():
 		candidates = [AttackType.CHARGE, AttackType.LEAP]
 
@@ -349,13 +390,19 @@ func tick(delta: float) -> void:
 			velocity = velocity.move_toward(Vector2.ZERO, knockback_friction * delta)
 			var hurt_idx: int = mini(int(_state_t * 10.0), COL_HURT_COUNT - 1)
 			_update_sprite_frame(COL_HURT_START + hurt_idx)
-			if _state_t >= hurt_time:
+			var dur: float = _current_hurt_duration if _current_hurt_duration > 0.0 else hurt_time
+			if _state_t >= dur:
+				_current_hurt_duration = 0.0
 				_enter(State.CHASE if _has_target() else State.IDLE)
 
 		State.DEAD:
 			velocity = velocity.move_toward(Vector2.ZERO, knockback_friction * delta)
 			var death_idx: int = mini(int(_state_t * 8.0), COL_DEATH_COUNT - 1)
-			_update_sprite_frame(COL_DEATH_START + death_idx)
+			var death_col: int = COL_DEATH_START + death_idx
+			_update_sprite_frame(death_col)
+			if death_col >= 54 and not _knee_shake_emitted:
+				_knee_shake_emitted = true
+				EventBus.screen_shake_requested.emit(death_knee_screen_shake, global_position)
 			var fade_t: float = _state_t - 1.0
 			if fade_t > 0.0:
 				var a: float = clampf(1.0 - fade_t / corpse_time, 0.0, 1.0)
@@ -387,9 +434,13 @@ func _tick_chase(delta: float) -> void:
 
 	var walk_col: int = COL_WALK_START + int(fmod(_state_t * 10.0, float(COL_WALK_COUNT)))
 	_update_sprite_frame(walk_col)
+	if walk_col != _last_walk_col:
+		if walk_col == 4 or walk_col == 8:
+			EventBus.screen_shake_requested.emit(footstep_screen_shake, global_position)
+		_last_walk_col = walk_col
 
 	if _attack_cooldown_t <= 0.0 and dist <= far_attack_range:
-		var atk: AttackType = choose_attack(dist)
+		var atk: AttackType = choose_attack(dist, false, to_target)
 		start_attack(atk)
 		return
 
@@ -418,6 +469,7 @@ func _tick_active(delta: float) -> void:
 					is_attack_active = true
 					_setup_hitbox_for_attack(AttackType.LEAP, _attack_facing_vec)
 					hitbox.activate()
+					EventBus.screen_shake_requested.emit(leap_screen_shake, global_position)
 				global_position = _leap_to
 				sprite.offset = Vector2(0, -46.0)
 				_update_sprite_frame(ATTACK_COLS[AttackType.LEAP]["hit"])
@@ -467,14 +519,26 @@ func _clamp_leap_position(target_pos: Vector2, from_pos: Vector2) -> Vector2:
 	var step_dir: Vector2 = to_boss / total_dist
 	var max_steps: int = int(total_dist / 8.0)
 
-	var query := PhysicsPointQueryParameters2D.new()
+	var body_radius: float = 16.0
+	var body_offset: Vector2 = Vector2(0, -10)
+	if has_node("Body"):
+		var col: CollisionShape2D = $Body as CollisionShape2D
+		if col != null:
+			body_offset = col.position
+			if col.shape is CircleShape2D:
+				body_radius = (col.shape as CircleShape2D).radius
+
+	var query := PhysicsShapeQueryParameters2D.new()
+	var test_shape := CircleShape2D.new()
+	test_shape.radius = body_radius
+	query.shape = test_shape
 	query.collision_mask = Combat.LAYER_WORLD
 	query.collide_with_bodies = true
 	query.collide_with_areas = false
 
 	for _i: int in max_steps:
-		query.position = curr_pos
-		var hits: Array[Dictionary] = space_state.intersect_point(query, 1)
+		query.transform = Transform2D(0.0, curr_pos + body_offset)
+		var hits: Array[Dictionary] = space_state.intersect_shape(query, 1)
 		if hits.is_empty():
 			break
 		curr_pos += step_dir * 8.0
@@ -532,7 +596,7 @@ func _setup_hitbox_for_attack(atk: AttackType, facing: Vector2) -> void:
 			hitbox.damage = stomp_damage
 			hitbox.knockback_force = stomp_knockback
 			hitbox.stagger = stomp_stagger
-			hitbox_shape.position = Vector2(0, -6)
+			hitbox_shape.position = Vector2.ZERO
 			_hit_circle.radius = stomp_radius
 		AttackType.LEAP:
 			hitbox_shape.shape = _hit_circle
@@ -540,7 +604,7 @@ func _setup_hitbox_for_attack(atk: AttackType, facing: Vector2) -> void:
 			hitbox.damage = leap_damage
 			hitbox.knockback_force = leap_knockback
 			hitbox.stagger = leap_stagger
-			hitbox_shape.position = Vector2(0, -6)
+			hitbox_shape.position = Vector2.ZERO
 			_hit_circle.radius = leap_radius
 
 
@@ -565,6 +629,7 @@ func _enter(next: State) -> void:
 			_update_sprite_frame(COL_IDLE_START)
 
 		State.CHASE:
+			_last_walk_col = -1
 			_update_sprite_frame(COL_WALK_START)
 
 		State.WINDUP:
@@ -617,6 +682,9 @@ func _enter(next: State) -> void:
 			else:
 				velocity = Vector2.ZERO
 
+			if current_attack == AttackType.STOMP:
+				EventBus.screen_shake_requested.emit(stomp_screen_shake, global_position)
+
 			var hit_col: int = 44 if current_attack == AttackType.LEAP else ATTACK_COLS[current_attack]["hit"]
 			_update_sprite_frame(hit_col)
 
@@ -648,6 +716,7 @@ func _enter(next: State) -> void:
 				telegraph_marker.visible = false
 			sprite.offset = Vector2(0, -46)
 			_combo_pending = false
+			_knee_shake_emitted = false
 			hurtbox.set_deferred(&"monitorable", false)
 			set_deferred(&"collision_layer", 0)
 			if not _died_emitted:
@@ -671,8 +740,30 @@ func _on_hurt(info: DamageInfo) -> void:
 	accumulated_stagger += info.stagger
 	if accumulated_stagger >= poise:
 		accumulated_stagger = 0.0
+		_current_hurt_duration = hurt_time
 		_enter(State.HURT)
 		velocity = info.knockback * 0.5
+
+
+func _on_hitbox_deflected(hurtbox_target: Hurtbox, _info: DamageInfo) -> void:
+	if state == State.DEAD:
+		return
+	match current_attack:
+		AttackType.CLEAVE, AttackType.SWEEP, AttackType.RISING, AttackType.CHARGE:
+			_current_hurt_duration = parried_stagger_time
+			_enter(State.HURT)
+			var back_dir: Vector2 = -_attack_facing_vec
+			if current_attack == AttackType.CHARGE:
+				back_dir = -_charge_dir
+			elif hurtbox_target != null and is_instance_valid(hurtbox_target):
+				var away: Vector2 = global_position - hurtbox_target.global_position
+				if away.length_squared() > 0.001:
+					back_dir = away.normalized()
+			if back_dir.length_squared() < 0.001:
+				back_dir = -Dir8.to_vector(facing_dir)
+			velocity = back_dir.normalized() * parried_knockback
+		AttackType.STOMP, AttackType.LEAP:
+			pass
 
 
 func _on_died() -> void:

@@ -18,7 +18,12 @@ func _initialize() -> void:
 			var name: String = m["name"]
 			if not name.begins_with("test_"):
 				continue
-			if suite.call(name) == true:
+			var res: Variant = suite.call(name)
+			if res is Object and res.has_signal("completed"):
+				res = await res.completed
+			elif res is Signal:
+				res = await res
+			if res == true:
 				passed += 1
 			else:
 				failed.append("%s::%s" % [file, name])
