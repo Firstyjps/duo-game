@@ -69,6 +69,9 @@ var _fade_timer: float = 0.0
 var _fade_duration: float = 1.5
 var _fade_start_active_linear: float = 0.0
 
+var _active_combat_rooms: Dictionary = {}
+var _current_frame: int = 0
+
 
 func _enter_tree() -> void:
 	_connect_event_bus()
@@ -194,6 +197,15 @@ func _disconnect_event_bus() -> void:
 
 ## อัปเดตสถานะ crossfade และ fade out — แยกให้เทสต์เรียกแบบ deterministic ได้
 func tick(delta: float) -> void:
+	_current_frame += 1
+	if _active_music_player != null:
+		var cur_pos: float = float(_active_music_player.get_meta(&"playback_position", 0.0))
+		_active_music_player.set_meta(&"playback_position", cur_pos + delta)
+	for entry: Dictionary in _fading_entries:
+		var p: AudioStreamPlayer = entry["player"]
+		var cur_pos: float = float(p.get_meta(&"playback_position", 0.0))
+		p.set_meta(&"playback_position", cur_pos + delta)
+
 	if _is_crossfading:
 		_fade_timer += delta
 		var progress: float = clampf(_fade_timer / maxf(0.001, _fade_duration), 0.0, 1.0)
@@ -306,43 +318,73 @@ func play_sfx(sfx_name: StringName, position: Vector2 = Vector2.INF) -> void:
 
 ## เล่นหรือ crossfade เพลงตามชื่อ หาก fade < 0 จะใช้ค่า music_crossfade_duration
 func play_music(music_name: StringName, fade: float = -1.0) -> void:
-	if music_name == current_music_name and not _is_fading_out:
-		return
-
 	var stream: AudioStream = get_music_stream(music_name)
 	if stream == null:
 		return
 
+	# play_music ชื่อเดียวกับที่เล่นอยู่ (และไม่ได้กำลัง fade out) = ไม่ทำอะไร
+	if (music_name == current_music_name or (_active_music_player != null and _active_music_player.stream == stream)) and not _is_fading_out:
+		return
+
 	var duration: float = music_crossfade_duration if fade < 0.0 else fade
 
-	# ถ้าเพลงเดิมกำลัง fade out ให้ reverse fade กลับขึ้นมาจากระดับเสียงปัจจุบัน
-	if music_name == current_music_name and _is_fading_out:
-		var resume_player: AudioStreamPlayer = null
-		var resume_lin: float = 0.0
-		for i in range(_fading_entries.size() - 1, -1, -1):
-			var entry: Dictionary = _fading_entries[i]
-			if entry["player"].stream == stream:
-				resume_player = entry["player"]
-				resume_lin = _db_to_linear_safe(resume_player.volume_db)
-				_fading_entries.remove_at(i)
-				break
-		if resume_player != null:
-			_active_music_player = resume_player
-			_fade_start_active_linear = resume_lin
-			if duration <= 0.0:
-				_is_fading_out = false
-				_is_crossfading = false
-				_active_music_player.volume_db = DEFAULT_MUSIC_VOLUME_DB
-				if _active_music_player.is_inside_tree():
-					_active_music_player.play()
-			else:
-				_is_fading_out = false
-				_is_crossfading = true
-				_fade_timer = 0.0
-				_fade_duration = duration
-			return
+	# ถ้า stream ปลายทางอยู่ใน _fading_entries ให้ดึง player ตัวนั้นกลับเป็น active (fade ขึ้นจากระดับปัจจุบัน) ไม่เริ่มใหม่
+	var resume_player: AudioStreamPlayer = null
+	var resume_lin: float = 0.0
+	for i in range(_fading_entries.size() - 1, -1, -1):
+		var entry: Dictionary = _fading_entries[i]
+		if entry["player"].stream == stream:
+			resume_player = entry["player"]
+			resume_lin = _db_to_linear_safe(resume_player.volume_db)
+			_fading_entries.remove_at(i)
+			break
 
-	# เปลี่ยนเพลง: active player ปัจจุบันย้ายเข้า _fading_entries โดยจำระดับเสียงปัจจุบันไว้
+	if resume_player != null:
+		if _active_music_player != null and _active_music_player != resume_player:
+			var act_lin: float = _db_to_linear_safe(_active_music_player.volume_db)
+			if act_lin > 0.0001:
+				_fading_entries.append({ "player": _active_music_player, "start_linear": act_lin })
+			else:
+				if _active_music_player.is_inside_tree():
+					_active_music_player.stop()
+				_active_music_player.volume_db = SILENCE_DB
+
+		for entry: Dictionary in _fading_entries:
+			var p: AudioStreamPlayer = entry["player"]
+			entry["start_linear"] = _db_to_linear_safe(p.volume_db)
+
+		_active_music_player = resume_player
+		_fade_start_active_linear = resume_lin
+		current_music_name = music_name
+
+		if not _fading_entries.is_empty():
+			_fading_music_player = _fading_entries[-1]["player"]
+		else:
+			_fading_music_player = null
+
+		if duration <= 0.0 or (_fading_entries.is_empty() and resume_lin >= 0.999):
+			_is_fading_out = false
+			_is_crossfading = false
+			for entry: Dictionary in _fading_entries:
+				var p: AudioStreamPlayer = entry["player"]
+				if p.is_inside_tree():
+					p.stop()
+				p.volume_db = SILENCE_DB
+			_fading_entries.clear()
+			_fading_music_player = null
+			_active_music_player.volume_db = DEFAULT_MUSIC_VOLUME_DB
+			if _active_music_player.is_inside_tree() and not _active_music_player.playing:
+				_active_music_player.play()
+		else:
+			_is_fading_out = false
+			_is_crossfading = true
+			_fade_timer = 0.0
+			_fade_duration = duration
+			if _active_music_player.is_inside_tree() and not _active_music_player.playing:
+				_active_music_player.play()
+		return
+
+	# เปลี่ยนเพลงปกติ: active player ปัจจุบันย้ายเข้า _fading_entries โดยจำระดับเสียงปัจจุบันไว้
 	if _active_music_player != null:
 		var act_lin: float = _db_to_linear_safe(_active_music_player.volume_db)
 		if act_lin > 0.0001:
@@ -366,6 +408,7 @@ func play_music(music_name: StringName, fade: float = -1.0) -> void:
 
 	incoming_player.stream = stream
 	incoming_player.bus = &"Music"
+	incoming_player.set_meta(&"playback_position", 0.0)
 
 	if not _fading_entries.is_empty():
 		_fading_music_player = _fading_entries[-1]["player"]
@@ -391,6 +434,24 @@ func play_music(music_name: StringName, fade: float = -1.0) -> void:
 		incoming_player.volume_db = SILENCE_DB
 		if incoming_player.is_inside_tree():
 			incoming_player.play()
+
+
+## ตำแหน่งเล่นปัจจุบันของเพลง (วินาที)
+func get_music_playback_position() -> float:
+	if _active_music_player == null:
+		return 0.0
+	var pos: float = _active_music_player.get_playback_position()
+	if pos > 0.0:
+		return pos
+	return float(_active_music_player.get_meta(&"playback_position", 0.0))
+
+
+## กำหนดตำแหน่งเล่นของเพลง (วินาที)
+func seek_music(position: float) -> void:
+	if _active_music_player != null:
+		_active_music_player.set_meta(&"playback_position", position)
+		if _active_music_player.is_inside_tree():
+			_active_music_player.seek(position)
 
 
 ## ค่อย ๆ ลดเสียงเพลงจนเงียบ (fade out) ทั้ง active และ fading player
@@ -686,10 +747,12 @@ func _on_enemy_died(_enemy: Node, _enemy_id: StringName, position: Vector2) -> v
 
 
 func _on_player_died() -> void:
+	_active_combat_rooms.clear()
 	stop_music()
 
 
 func _on_player_respawn_requested(_position: Vector2) -> void:
+	_active_combat_rooms.clear()
 	if not autoplay_music.is_empty():
 		play_music(autoplay_music)
 
@@ -702,13 +765,41 @@ func _on_boss_engaged(boss: Node, _health: Health, _display_name: String) -> voi
 	play_music(select_music_for_boss_engaged())
 
 
-func _on_room_started(_room: Node, _room_rect: Rect2) -> void:
-	play_music(select_music_for_room_started())
+func _is_room_combat_candidate(room: Node) -> bool:
+	if room == null:
+		return true
+	if room.get("state") != null and int(room.get("state")) == 2:
+		return false
+	if room.get("total_enemies") != null and int(room.get("total_enemies")) == 0:
+		var spawned = room.get("spawned_enemies")
+		if spawned == null or (spawned is Array and (spawned as Array).is_empty()):
+			return false
+	if room.get("is_cleared") != null and bool(room.get("is_cleared")):
+		return false
+	if room.has_method("is_cleared") and room.call("is_cleared"):
+		return false
+	return true
 
 
-func _on_room_cleared(_room: Node) -> void:
+func _on_room_started(room: Node, _room_rect: Rect2) -> void:
+	var room_key: int = room.get_instance_id() if (room != null and is_instance_valid(room)) else 0
+	if _is_room_combat_candidate(room):
+		_active_combat_rooms[room_key] = _current_frame
+		play_music(select_music_for_room_started())
+
+
+func _on_room_cleared(room: Node) -> void:
+	var room_key: int = room.get_instance_id() if (room != null and is_instance_valid(room)) else 0
+	var was_in_combat: bool = false
+	if _active_combat_rooms.has(room_key):
+		var start_frame: int = _active_combat_rooms[room_key]
+		_active_combat_rooms.erase(room_key)
+		if start_frame != _current_frame:
+			was_in_combat = true
+
 	play_music(select_music_for_room_cleared())
-	play_sfx(select_sfx_for_room_cleared())
+	if was_in_combat:
+		play_sfx(select_sfx_for_room_cleared())
 
 
 func _on_screen_shake_requested(strength: float, position: Vector2) -> void:

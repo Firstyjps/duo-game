@@ -552,19 +552,30 @@ NOTES = {
 
 def render_seamless_loop(duration, render_func):
     """
-    Renders 2 * duration with duplicated pattern into the 2nd loop,
+    Renders 2 * duration + 20ms with duplicated pattern into the 2nd loop,
     then extracts the slice [duration, 2 * duration) without folding.
-    This ensures that steady-state decays naturally enter the start of the loop
-    without doubling notes or energy at the beginning.
+    Applies a 20ms smooth crossfade at the loop boundary so s[0] and s[-1]
+    connect seamlessly without click or seam jump.
     """
-    total_dur = 2.0 * duration
+    crossfade_sec = 0.020
+    fade_samples = int(crossfade_sec * SAMPLE_RATE)
+    total_dur = 2.0 * duration + crossfade_sec
     left, right = render_func(total_dur)
 
     loop_samples = int(duration * SAMPLE_RATE)
     end_samples = int(2.0 * duration * SAMPLE_RATE)
 
-    final_l = left[loop_samples:end_samples]
-    final_r = right[loop_samples:end_samples]
+    final_l = list(left[loop_samples:end_samples])
+    final_r = list(right[loop_samples:end_samples])
+
+    tail_l = left[end_samples:end_samples + fade_samples]
+    tail_r = right[end_samples:end_samples + fade_samples]
+
+    for i in range(fade_samples):
+        # smooth cosine crossfade
+        t = 0.5 * (1.0 - math.cos(math.pi * i / fade_samples))
+        final_l[i] = (1.0 - t) * tail_l[i] + t * final_l[i]
+        final_r[i] = (1.0 - t) * tail_r[i] + t * final_r[i]
 
     return final_l, final_r
 
@@ -581,12 +592,18 @@ def gen_music_explore():
         right = [0.0] * n_samples
 
         # 1. Warm temple bowl / ambient drone on D2 (73.4 Hz)
+        # Round drone frequencies to exact integer number of cycles in 1 loop (16.0s)
+        cycles_d2 = round(NOTES['D2'] * loop_dur)
+        freq_d2 = cycles_d2 / loop_dur
+        cycles_a2 = round(NOTES['A2'] * loop_dur)
+        freq_a2 = cycles_a2 / loop_dur
+
         p_drone = 0.0
         p_drone_5th = 0.0
         for i in range(n_samples):
             t = i / SAMPLE_RATE
-            p_drone += 2.0 * math.pi * NOTES['D2'] / SAMPLE_RATE
-            p_drone_5th += 2.0 * math.pi * NOTES['A2'] / SAMPLE_RATE
+            p_drone += 2.0 * math.pi * freq_d2 / SAMPLE_RATE
+            p_drone_5th += 2.0 * math.pi * freq_a2 / SAMPLE_RATE
             shimmer = 0.15 * math.sin(2.0 * math.pi * 0.25 * t)
             drone_val = (math.sin(p_drone) * 0.25 + math.sin(p_drone_5th) * 0.12) * (0.85 + shimmer)
             left[i] += drone_val * 0.65
@@ -604,18 +621,21 @@ def gen_music_explore():
             # Bar 4 (12..16s)
             (12.00, 'G3', 0.7), (13.50, 'Eb3', 0.6), (14.50, 'D3', 0.75), (15.25, 'A2', 0.5),
         ]
-        # Duplicate pattern into tail if total_duration > 16.0
-        extended_score = list(koto_score)
-        for t_note, note_name, amp in koto_score:
+        # Duplicate pattern into tail if total_duration > 16.0, preserving note index for deterministic reseeding
+        extended_score = []
+        for idx, (t_note, note_name, amp) in enumerate(koto_score):
+            extended_score.append((idx, t_note, note_name, amp))
             if t_note + loop_dur < total_duration:
-                extended_score.append((t_note + loop_dur, note_name, amp))
+                extended_score.append((idx, t_note + loop_dur, note_name, amp))
 
-        for t_note, note_name, amp in extended_score:
+        for idx, t_note, note_name, amp in extended_score:
             start_i = int(t_note * SAMPLE_RATE)
             f = NOTES[note_name]
             note_dur = 2.8
-            # Double string Karplus-Strong with slight stereo detuning
+            # Reseed random per note based on index within loop (tail of loop 1 == tail of loop 2)
+            random.seed(2100 + idx * 37)
             s_l = karplus_strong(f, note_dur, decay=0.988, pluck_brightness=0.75)
+            random.seed(2200 + idx * 37)
             s_r = karplus_strong(f * 1.002, note_dur, decay=0.988, pluck_brightness=0.75)
             for j in range(len(s_l)):
                 if start_i + j < n_samples:
@@ -633,14 +653,16 @@ def gen_music_explore():
             (11.8, 'G4', 1.6),
             (13.5, 'D4', 2.2),
         ]
-        extended_flute = list(flute_score)
-        for t_flute, note_name, dur in flute_score:
+        extended_flute = []
+        for idx, (t_flute, note_name, dur) in enumerate(flute_score):
+            extended_flute.append((idx, t_flute, note_name, dur))
             if t_flute + loop_dur < total_duration:
-                extended_flute.append((t_flute + loop_dur, note_name, dur))
+                extended_flute.append((idx, t_flute + loop_dur, note_name, dur))
 
-        for t_flute, note_name, dur in extended_flute:
+        for idx, t_flute, note_name, dur in extended_flute:
             start_i = int(t_flute * SAMPLE_RATE)
             f = NOTES[note_name]
+            random.seed(2300 + idx * 43)
             flute_samples = synth_shakuhachi_note(f, dur)
             for j, s in enumerate(flute_samples):
                 if start_i + j < n_samples:
@@ -667,16 +689,19 @@ def gen_music_combat():
 
         beat_dur = 0.5  # 120 bpm
         total_beats = int(total_duration / beat_dur)
+        beats_per_loop = int(loop_dur / beat_dur)
 
         # 1. Taiko Drum Patterns
         # O-daiko (deep) on beat 0, 2 (beat 1, 3 of bar) and syncopated beat 3.5
         # Shime-daiko (snappy) driving 8th and 16th rhythms
         for beat in range(total_beats):
+            beat_in_loop = beat % beats_per_loop
             t_beat = beat * beat_dur
             bar_beat = beat % 4
 
             # O-daiko
             if bar_beat in (0, 2):
+                random.seed(2400 + beat_in_loop * 19 + 1)
                 hit = synth_taiko(140.0, 48.0, 0.45, rim=False)
                 start_i = int(t_beat * SAMPLE_RATE)
                 for j, s in enumerate(hit):
@@ -687,6 +712,7 @@ def gen_music_combat():
             # Syncopated off-beat O-daiko
             if bar_beat == 3:
                 t_sub = t_beat + 0.25
+                random.seed(2400 + beat_in_loop * 19 + 2)
                 hit = synth_taiko(150.0, 52.0, 0.35, rim=False)
                 start_i = int(t_sub * SAMPLE_RATE)
                 for j, s in enumerate(hit):
@@ -697,6 +723,7 @@ def gen_music_combat():
             # Shime-daiko crisp accents (panned slightly left/right)
             for sub_i in (0, 1):
                 t_shime = t_beat + sub_i * 0.25
+                random.seed(2400 + beat_in_loop * 19 + 10 + sub_i)
                 rim_hit = synth_taiko(220.0, 110.0, 0.18, rim=True)
                 start_i = int(t_shime * SAMPLE_RATE)
                 pan = 0.7 if sub_i == 0 else 0.3
@@ -715,13 +742,17 @@ def gen_music_combat():
         ]
         step_dur = 0.125  # 16th note at 120 bpm
         total_steps = int(total_duration / step_dur)
+        steps_per_loop = int(loop_dur / step_dur)
         for step in range(total_steps):
+            step_in_loop = step % steps_per_loop
             t_step = step * step_dur
-            note_name = koto_pattern[step % len(koto_pattern)]
+            note_name = koto_pattern[step_in_loop % len(koto_pattern)]
             f = NOTES[note_name]
+            random.seed(2600 + step_in_loop * 17)
             koto_note = karplus_strong(f, 0.4, decay=0.965, pluck_brightness=0.85)
             start_i = int(t_step * SAMPLE_RATE)
-            pan = 0.4 + 0.2 * math.sin(step)
+            # Periodic pan over the loop (8 full periods across 128 steps, exactly 1 cycle per 16 steps/bar)
+            pan = 0.4 + 0.2 * math.sin(2.0 * math.pi * 8.0 * step_in_loop / steps_per_loop)
             for j, s in enumerate(koto_note):
                 if start_i + j < n_samples:
                     left[start_i + j] += s * 0.28 * pan
@@ -744,14 +775,16 @@ def gen_music_combat():
         hi_notes = dict(NOTES)
         hi_notes['Bb5'] = 932.33
 
-        extended_accents = list(flute_accents)
-        for t_acc, n_name, d_acc in flute_accents:
+        extended_accents = []
+        for idx, (t_acc, n_name, d_acc) in enumerate(flute_accents):
+            extended_accents.append((idx, t_acc, n_name, d_acc))
             if t_acc + loop_dur < total_duration:
-                extended_accents.append((t_acc + loop_dur, n_name, d_acc))
+                extended_accents.append((idx, t_acc + loop_dur, n_name, d_acc))
 
-        for t_acc, n_name, d_acc in extended_accents:
+        for idx, t_acc, n_name, d_acc in extended_accents:
             start_i = int(t_acc * SAMPLE_RATE)
             f = hi_notes.get(n_name, 880.0)
+            random.seed(2800 + idx * 31)
             flute_s = synth_shakuhachi_note(f, d_acc, vibrato_start=0.08, vibrato_speed=6.0)
             for j, s in enumerate(flute_s):
                 if start_i + j < n_samples:

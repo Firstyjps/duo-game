@@ -407,3 +407,92 @@ func test_pool_eviction_steals_oldest_player() -> bool:
 	director.free()
 	return stole_oldest_p1
 
+
+func test_room_started_and_cleared_same_frame() -> bool:
+	var director := AudioDirector.new()
+	director.music_crossfade_duration = 1.0
+	director.setup()
+
+	# Start playing music_explore and seek/advance to 4.5s
+	director.play_music(&"music_explore", 0.0)
+	var p_explore: AudioStreamPlayer = director._active_music_player
+	director.seek_music(4.5)
+	var pos_before: float = director.get_music_playback_position()
+	var sfx_count_before: int = director._sfx_play_counter
+
+	# Simulate entering already cleared room: room_started + room_cleared in the exact same frame
+	var mock_room := Node.new()
+	EventBus.room_started.emit(mock_room, Rect2(0, 0, 960, 540))
+	EventBus.room_cleared.emit(mock_room)
+
+	# 1. explore music did not restart: same player, active, current_music_name unchanged
+	var music_is_explore: bool = director.current_music_name == &"music_explore"
+	var same_player: bool = director._active_music_player == p_explore
+	var pos_after: float = director.get_music_playback_position()
+	# Playback position must not reset to 0
+	var pos_did_not_reset: bool = pos_after >= 4.0 and is_equal_approx(pos_after, pos_before)
+	# 2. door_open must NOT play for same-frame clear
+	var no_door_open: bool = director._sfx_play_counter == sfx_count_before
+
+	# 3. Conversely, when room has real combat (tick between started and cleared) -> door_open plays!
+	EventBus.room_started.emit(mock_room, Rect2(0, 0, 960, 540))
+	director.tick(0.5) # combat active over time
+	EventBus.room_cleared.emit(mock_room)
+	var door_open_played_after_combat: bool = director._sfx_play_counter > sfx_count_before
+
+	mock_room.free()
+	director.free()
+
+	return music_is_explore and same_player and pos_did_not_reset and no_door_open and door_open_played_after_combat
+
+
+func test_music_seam_jump_less_than_five_times_average() -> bool:
+	for music_name: StringName in AudioDirector.MUSIC_PATHS:
+		var path: String = AudioDirector.MUSIC_PATHS[music_name]
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			printerr("Cannot open wav: ", path)
+			return false
+		var data: PackedByteArray = file.get_buffer(file.get_length())
+		file.close()
+
+		# Standard WAV format: find 'data' chunk
+		var pcm_offset: int = 44
+		for i in range(12, min(100, data.size() - 4)):
+			if data[i] == 0x64 and data[i+1] == 0x61 and data[i+2] == 0x74 and data[i+3] == 0x61: # 'data'
+				pcm_offset = i + 8
+				break
+
+		var num_samples: int = (data.size() - pcm_offset) / 4 # 2 bytes * 2 channels
+		if num_samples <= 100:
+			return false
+
+		var left_samples: PackedInt32Array = PackedInt32Array()
+		var right_samples: PackedInt32Array = PackedInt32Array()
+		left_samples.resize(num_samples)
+		right_samples.resize(num_samples)
+
+		for i in range(num_samples):
+			var idx: int = pcm_offset + i * 4
+			var vl: int = data[idx] | (data[idx + 1] << 8)
+			if vl >= 32768:
+				vl -= 65536
+			var vr: int = data[idx + 2] | (data[idx + 3] << 8)
+			if vr >= 32768:
+				vr -= 65536
+			left_samples[i] = vl
+			right_samples[i] = vr
+
+		for ch_samples: PackedInt32Array in [left_samples, right_samples]:
+			var jump: float = absf(float(ch_samples[0] - ch_samples[num_samples - 1]))
+			var total_step: float = 0.0
+			for i in range(1, num_samples):
+				total_step += absf(float(ch_samples[i] - ch_samples[i - 1]))
+			var avg_step: float = total_step / float(num_samples - 1)
+			var ratio: float = jump / avg_step if avg_step > 0.0 else 0.0
+			if ratio >= 5.0:
+				printerr("Seam jump ratio too high in ", path, ": ratio=", ratio)
+				return false
+
+	return true
+
