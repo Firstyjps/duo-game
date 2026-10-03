@@ -11,6 +11,20 @@ const DEFAULT_HITSTOP_SCALE: float = 0.05
 @export var follow_smooth_speed: float = 8.0
 ## ขอบเขตการเคลื่อนที่ของกล้อง (Rect2() = ไม่จำกัด)
 @export var bounds: Rect2 = Rect2()
+## เวลาเลื่อนกล้องไปห้องใหม่เมื่อได้ EventBus.room_started (0 = ตัดภาพ)
+@export var room_slide_duration: float = 0.5
+
+@export_group("Focus Target")
+## เป้าหมายที่สองสำหรับจัดเฟรมแบบ lock-on (framing ระหว่าง target กับ focus_target)
+@export var focus_target: Node2D = null
+## น้ำหนักการให้น้ำหนักไปทาง focus_target (0.0 = อยู่ที่ผู้เล่น, 1.0 = อยู่ที่เป้าหมาย)
+@export var focus_weight: float = 0.35
+## ระยะขยับสูงสุดของเฟรมกล้องจากผู้เล่น (pixel)
+@export var max_focus_offset: float = 64.0
+
+@export_group("Slide")
+## เกิดเมื่อ slide_to ดำเนินการจนเสร็จสิ้น
+signal slide_completed
 
 @export_group("Trauma & Shake")
 ## อัตราการลด trauma ต่อวินาที
@@ -34,8 +48,18 @@ const DEFAULT_HITSTOP_SCALE: float = 0.05
 
 var trauma: float = 0.0
 var _internal_pos: Vector2 = Vector2.ZERO
+var _is_sliding: bool = false
+var _slide_start_pos: Vector2 = Vector2.ZERO
+var _slide_target_pos: Vector2 = Vector2.ZERO
+var _slide_target_rect: Rect2 = Rect2()
+var _slide_duration: float = 0.0
+var _slide_elapsed: float = 0.0
 
 static var _hitstop_count: int = 0
+
+
+func _enter_tree() -> void:
+	_connect_bus()
 
 
 func _ready() -> void:
@@ -43,15 +67,13 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
-	if EventBus != null and is_instance_valid(EventBus) and EventBus.damage_dealt.is_connected(_on_damage_dealt):
-		EventBus.damage_dealt.disconnect(_on_damage_dealt)
+	_disconnect_bus()
 	reset_hitstop()
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
-		if EventBus != null and is_instance_valid(EventBus) and EventBus.damage_dealt.is_connected(_on_damage_dealt):
-			EventBus.damage_dealt.disconnect(_on_damage_dealt)
+		_disconnect_bus()
 
 
 ## กำหนดค่าเริ่มต้นและผูก signal — แยกจาก _ready ให้เทสต์เรียกได้โดยไม่ต้องอยู่ใน scene tree
@@ -59,8 +81,35 @@ func setup() -> void:
 	_internal_pos = position
 	if bounds.size != Vector2.ZERO:
 		set_bounds(bounds)
-	if EventBus != null and is_instance_valid(EventBus) and not EventBus.damage_dealt.is_connected(_on_damage_dealt):
-		EventBus.damage_dealt.connect(_on_damage_dealt)
+	_connect_bus()
+
+
+## signal ที่กล้องฟัง (contract damage · feedback · dungeon-flow) — ต่อใน _enter_tree/setup, ตัดใน _exit_tree/PREDELETE
+func _bus_links() -> Array[Array]:
+	return [
+		[EventBus.damage_dealt, _on_damage_dealt],
+		[EventBus.screen_shake_requested, _on_screen_shake_requested],
+		[EventBus.room_started, _on_room_started],
+		[EventBus.player_respawn_requested, _on_player_respawn_requested],
+	]
+
+
+func _connect_bus() -> void:
+	if EventBus == null or not is_instance_valid(EventBus):
+		return
+	for link: Array in _bus_links():
+		var sig: Signal = link[0]
+		if not sig.is_connected(link[1]):
+			sig.connect(link[1])
+
+
+func _disconnect_bus() -> void:
+	if EventBus == null or not is_instance_valid(EventBus):
+		return
+	for link: Array in _bus_links():
+		var sig: Signal = link[0]
+		if sig.is_connected(link[1]):
+			sig.disconnect(link[1])
 
 
 ## กำหนดเป้าหมายที่กล้องจะติดตาม
@@ -73,8 +122,74 @@ func follow(new_target: Node2D, snap: bool = false) -> void:
 ## วาร์ปตำแหน่งกล้องไปยังเป้าหมายทันทีโดยไม่ lerp
 func snap_to_target() -> void:
 	if target != null and is_instance_valid(target):
-		_internal_pos = clamp_to_bounds(target.global_position, bounds)
+		var target_pos: Vector2 = target.global_position
+		if focus_target != null and is_instance_valid(focus_target):
+			target_pos = compute_focus_point(target.global_position, focus_target.global_position, focus_weight, max_focus_offset)
+		_internal_pos = clamp_to_bounds(target_pos, bounds)
 		position = _internal_pos.round()
+
+
+## กำหนดเป้าหมายโฟกัสร่วม (framing ระหว่าง target กับ focus_target) — ส่ง null เพื่อเลิก
+func set_focus_target(node: Node2D) -> void:
+	focus_target = node
+
+
+## เริ่มเลื่อนกล้องไปยังห้องใหม่ (rect) แบบนุ่มนวล โดยระหว่างเลื่อนจะไม่ follow ผู้เล่น
+## เมื่อเลื่อนถึงปลายทางแล้ว จะตั้ง set_bounds(rect)
+func slide_to(rect: Rect2, duration: float) -> void:
+	if duration <= 0.0:
+		_is_sliding = false
+		_internal_pos = rect.get_center()
+		position = _internal_pos.round()
+		set_bounds(rect)
+		slide_completed.emit()
+		return
+
+	if _is_camera_in_tree():
+		force_update_scroll()
+		_slide_start_pos = (self as Variant).get_screen_center_position()
+	else:
+		_slide_start_pos = _internal_pos
+
+	_internal_pos = _slide_start_pos
+	_slide_target_pos = rect.get_center()
+	_slide_target_rect = rect
+	_slide_duration = duration
+	_slide_elapsed = 0.0
+	_is_sliding = true
+
+	var union_rect: Rect2 = Rect2()
+	if bounds.size != Vector2.ZERO:
+		union_rect = bounds.merge(rect)
+	_apply_limits(union_rect)
+
+
+## คืนค่าตำแหน่งกึ่งกลางหน้าจอของกล้องใน global coordinate (คำนวณ clamp ขอบเขต limit)
+@warning_ignore("native_method_override")
+func get_screen_center_position() -> Vector2:
+	if is_inside_tree() and get_viewport() != null:
+		var sc: Vector2 = super.get_screen_center_position()
+		if sc != Vector2.ZERO:
+			return sc
+	var min_x: float = float(limit_left)
+	var max_x: float = float(limit_right)
+	var min_y: float = float(limit_top)
+	var max_y: float = float(limit_bottom)
+	var p: Vector2 = position
+	if limit_left != -10000000 and limit_right != 10000000 and max_x >= min_x:
+		p.x = clampf(p.x, min_x, max_x)
+	if limit_top != -10000000 and limit_bottom != 10000000 and max_y >= min_y:
+		p.y = clampf(p.y, min_y, max_y)
+	return p
+
+
+func _is_camera_in_tree() -> bool:
+	return is_inside_tree() or get_parent() != null
+
+
+## คืนค่า true หากกล้องกำลังอยู่ในระหว่าง slide_to
+func is_sliding() -> bool:
+	return _is_sliding
 
 
 ## กำหนดตำแหน่งกล้องโดยตรง (คำนวณ clamp ขอบ และ round ให้)
@@ -86,6 +201,12 @@ func set_camera_position(pos: Vector2) -> void:
 ## กำหนดขอบเขตกล้อง (Rect2)
 func set_bounds(rect: Rect2) -> void:
 	bounds = rect
+	_apply_limits(bounds)
+	_internal_pos = clamp_to_bounds(_internal_pos, bounds)
+	position = _internal_pos.round()
+
+
+func _apply_limits(rect: Rect2) -> void:
 	if rect.size == Vector2.ZERO:
 		limit_left = -10000000
 		limit_top = -10000000
@@ -96,8 +217,6 @@ func set_bounds(rect: Rect2) -> void:
 		limit_top = int(minf(rect.position.y, rect.end.y))
 		limit_right = int(maxf(rect.position.x, rect.end.x))
 		limit_bottom = int(maxf(rect.position.y, rect.end.y))
-	_internal_pos = clamp_to_bounds(_internal_pos, bounds)
-	position = _internal_pos.round()
 
 
 ## เพิ่มค่า trauma สำหรับสั่น (clamp ที่ 0.0 ถึง 1.0)
@@ -124,17 +243,57 @@ func _physics_process(delta: float) -> void:
 
 ## อัปเดตตรรกะกล้อง 1 เฟรม (follow lerp, clamp bounds, pixel round, trauma decay, shake offset) — เทสต์เรียกตรงได้
 func tick(delta: float) -> void:
-	if target != null and is_instance_valid(target):
-		_internal_pos = compute_follow_position(_internal_pos, target.global_position, follow_smooth_speed, delta)
+	if _is_sliding:
+		_slide_elapsed += delta
+		var t: float = clampf(_slide_elapsed / _slide_duration, 0.0, 1.0) if _slide_duration > 0.0 else 1.0
+		_internal_pos = compute_slide_position(_slide_start_pos, _slide_target_pos, t)
+		position = _internal_pos.round()
+		if _slide_elapsed >= _slide_duration:
+			_is_sliding = false
+			_internal_pos = _slide_target_pos
+			set_bounds(_slide_target_rect)
+			position = _internal_pos.round()
+			slide_completed.emit()
+	else:
+		var has_target: bool = target != null and is_instance_valid(target)
+		var has_focus: bool = focus_target != null and is_instance_valid(focus_target)
 
-	_internal_pos = clamp_to_bounds(_internal_pos, bounds)
-	position = _internal_pos.round()
+		if has_target:
+			var target_pos: Vector2 = target.global_position
+			if has_focus:
+				target_pos = compute_focus_point(target.global_position, focus_target.global_position, focus_weight, max_focus_offset)
+			_internal_pos = compute_follow_position(_internal_pos, target_pos, follow_smooth_speed, delta)
+		elif has_focus:
+			_internal_pos = compute_follow_position(_internal_pos, focus_target.global_position, follow_smooth_speed, delta)
+
+		_internal_pos = clamp_to_bounds(_internal_pos, bounds)
+		position = _internal_pos.round()
 
 	trauma = decay_trauma(trauma, trauma_decay, delta)
 	offset = calculate_shake_offset(trauma, max_shake_offset).round()
 
 
 # ── Static Logic ที่เทสต์ได้โดยไม่ต้องพึ่ง scene tree ──
+
+## คำนวณตำแหน่งเลื่อนกล้องระหว่างเปลี่ยนห้อง (smooth interpolation)
+static func compute_slide_position(start_pos: Vector2, end_pos: Vector2, t: float) -> Vector2:
+	var clamped_t: float = clampf(t, 0.0, 1.0)
+	var weight: float = smoothstep(0.0, 1.0, clamped_t)
+	return start_pos.lerp(end_pos, weight)
+
+
+## คำนวณ offset จุดโฟกัสระหว่างผู้เล่นกับเป้าหมาย lock-on
+static func compute_focus_offset(player_pos: Vector2, target_pos: Vector2, weight: float, max_offset: float) -> Vector2:
+	var diff: Vector2 = target_pos - player_pos
+	var offset: Vector2 = diff * weight
+	if max_offset > 0.0 and offset.length() > max_offset:
+		offset = offset.limit_length(max_offset)
+	return offset
+
+
+## คำนวณจุดโฟกัสระหว่างผู้เล่นกับเป้าหมาย lock-on
+static func compute_focus_point(player_pos: Vector2, target_pos: Vector2, weight: float, max_offset: float) -> Vector2:
+	return player_pos + compute_focus_offset(player_pos, target_pos, weight, max_offset)
 
 ## คำนวณการลด trauma ตามเวลา
 static func decay_trauma(current_trauma: float, decay_rate: float, delta: float) -> float:
@@ -216,3 +375,25 @@ func _on_damage_dealt(damaged_target: Node, _info: DamageInfo, _final_amount: in
 	if hitstop_enabled:
 		var duration: float = hitstop_player_hit_duration if is_player else hitstop_other_hit_duration
 		hitstop(duration, get_tree() if is_inside_tree() else null, hitstop_time_scale)
+
+
+## เข้าห้องใหม่: ห้องแรก (ยังไม่มี bounds) = ตั้งทันที · ห้องต่อไป = เลื่อนกล้องไปห้องนั้น
+func _on_room_started(_room: Node, room_rect: Rect2) -> void:
+	if room_rect.size == Vector2.ZERO:
+		return
+	if bounds.size == Vector2.ZERO or room_slide_duration <= 0.0:
+		set_bounds(room_rect)
+		snap_to_target()
+	else:
+		slide_to(room_rect, room_slide_duration)
+
+
+## ฟื้นที่จุดเกิด: เลิก bounds เดิม แล้ววาร์ปไปหาผู้เล่น (dungeon จะส่ง room_started ของห้องใหม่ตามมา)
+func _on_player_respawn_requested(_position: Vector2) -> void:
+	set_bounds(Rect2())
+	snap_to_target.call_deferred()
+
+
+func _on_screen_shake_requested(strength: float, _position: Vector2) -> void:
+	add_trauma(clampf(strength, 0.0, 1.0))
+

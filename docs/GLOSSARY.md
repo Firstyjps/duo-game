@@ -24,6 +24,9 @@
 | เงาตามตัว | after-image · `_spawn_afterimage()` | สำเนาสไปรต์จาง ๆ ที่ทิ้งไว้ระหว่างพุ่ง | enemy |
 | บอสมิโนทอร์ | `boss_minotaur` (ยังไม่มีคลาส) | ผู้สมัครบอส MVP: วัวถือขวานสงคราม 8 ทิศ (ยังไม่ได้ตัดสินว่าเป็นบอสตัวจริง) | enemy |
 | บอสสไลม์ | `boss_slime` (ยังไม่มีคลาส) | ผู้สมัครบอสร่างเก่า เก็บไว้ (ยังไม่ได้ตัดสิน) | enemy |
+| เลื่อนกล้องข้ามห้อง | `GameCamera.slide_to` | เลื่อนกล้องข้ามห้องแบบนุ่มนวล โดยไม่ follow ระหว่างเลื่อนและตั้ง bounds เมื่อจบ | camera |
+| จัดเฟรม lock-on | `GameCamera.set_focus_target` | จัดเฟรมจุดมองระหว่างผู้เล่นกับเป้าหมายตามน้ำหนักและจำกัดระยะ max_focus_offset | camera |
+| ซิลูเอตเมื่อถูกบัง | `OcclusionSilhouette` | สำเนาสไปรต์สีม่วงอ่อนวาดทับเมื่อตัวละครถูกวัตถุข้างหน้าบังในมุมมอง isometric | player/occlusion |
 | ทิศ 8 ทิศ | `Dir8` | ทิศของสไปรต์บนจอ ชื่อตาม PixelLab (south, south-east, …) ลำดับ = แถวใน atlas | player/iso |
 | สไปรต์ 8 ทิศ | `DirSprite` | AnimatedSprite2D เล่นท่า `"<ท่า>_<ทิศ>"` · `set_facing()` + `play_action()` | player/iso |
 | ตัวเอก Kintsugi (ทดสอบ) | `kintsugi_hero` | สาวยักษ์ผมขาวม่วง ชุดน้ำเงินลายทอง 64 px 8 ทิศ (PixelLab อิง Merakintsugi — ยังไม่ใช่ตัวจริง) | player |
