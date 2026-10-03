@@ -1,0 +1,28 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://systems/enemy/ink_archer/ink_arrow.gd" id="1_arrow"]
+[ext_resource type="Script" path="res://core/combat/hitbox.gd" id="2_hitbox"]
+
+[sub_resource type="CircleShape2D" id="Shape_arrow"]
+radius = 4.0
+
+[sub_resource type="CircleShape2D" id="Shape_hit"]
+radius = 6.0
+
+[node name="InkArrow" type="Area2D"]
+collision_layer = 0
+collision_mask = 1
+script = ExtResource("1_arrow")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("Shape_arrow")
+
+[node name="Hitbox" type="Area2D" parent="."]
+script = ExtResource("2_hitbox")
+team = 1
+damage = 2
+knockback_force = 140.0
+stagger = 8.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hitbox"]
+shape = SubResource("Shape_hit")
