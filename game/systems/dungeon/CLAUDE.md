@@ -10,15 +10,15 @@
 | ไฟล์ | หน้าที่ |
 |---|---|
 | `puzzles/pressure_switch.gd` | สวิตช์เหยียบ isometric (ผู้เล่น/PushBlock) · latch/ไม่ latch · reset() |
-| `puzzles/push_block.gd` | บล็อกหินดันได้ 4 แกน isometric grid จากตำแหน่งผู้เล่น · grace 0.12s · blocked_cells |
+| `puzzles/push_block.gd` | บล็อกหินดันได้ 4 แกน isometric grid ตาม input ผู้เล่น (`move_dir`) · กันไถล · grace 0.12s · blocked_cells · reset_to kill tween |
 | `puzzles/stone_lantern.gd` | โคมหินรับ hit ทีม PLAYER จุดไฟ PointLight2D · ติดถาวรปิด monitorable |
 | `puzzles/puzzle_gate.gd` | ประตูหินเปิดเมื่อ required inputs ครบ (AND logic) · set_deferred disabled |
 | `puzzles/kintsugi_crack.gd` | สะพาน/ประตูแตก ซ่อมด้วยทอง (interact ค้าง + ใช้ GoldShards) |
-| `puzzles/rest_shrine.gd` | ศาลเจ้าพักผ่อน จุดเกิดใหม่ · safe radius กันศัตรู + cooldown 3s · emit respawn |
+| `puzzles/rest_shrine.gd` | ศาลเจ้าพักผ่อน จุดเกิดใหม่ · safe radius กันศัตรู (duplicate shape) + cooldown 3s · emit respawn |
 | `puzzles/pickup_shard.gd` | เศษทองเก็บได้ เพิ่มจำนวนใน `GoldShards` |
 | `puzzles/gold_shards.gd` | ตัวนับเศษทองชั่วคราว (static var) · ต้อง reset ทุกเริ่มรัน |
-| `puzzles/debug/puzzle_sandbox.tscn` | sandbox รวมปริศนาและศาลเจ้าทั้งหมด (ปุ่ม R รีเซ็ตปริศนา) |
-| `puzzles/debug/puzzle_physics_runner.gd` | runner ทดสอบฟิสิกส์จริง (กำแพง + เดิน 8 ทิศ) |
+| `puzzles/debug/puzzle_sandbox.tscn` | sandbox รวมปริศนาและศาลเจ้าทั้งหมด (ปุ่ม T รีเซ็ตปริศนา) |
+| `puzzles/debug/puzzle_physics_runner.gd` | runner ทดสอบฟิสิกส์จริงด้วย player.tscn (กำแพงผ่าน tick + เดิน 8 ทิศ × เยื้อง 0/±6/±12 px + grace + reset_to kill tween) |
 
 ## ส่ง / รับ ข้ามระบบ
 - `EventBus.player_respawn_requested(position)`: emit เมื่อผู้เล่นพักผ่อนที่ `RestShrine` เพื่อฟื้น HP/ขวด และตั้งจุดเกิดใหม่ตาม contract `dungeon-flow`
@@ -29,10 +29,10 @@
 - ใช้ y-sort + แสง 2D (`CanvasModulate` + `PointLight2D`) ตาม DESIGN
 - เท้าของทุก element อยู่ที่ origin (0, 0)
 - เชื่อมต่อภายใน puzzles ด้วย `@export var targets: Array[NodePath]` + `activate(source)` / `deactivate(source)`
-- `PushBlock` หาแกนดันจากตำแหน่ง `(บล็อก - ผู้เล่น)` snap เข้า 4 แกน isometric (down-right, down-left, up-left, up-right) ไม่ใช้ velocity · นับเวลาดันเมื่อ dot > 0.2 มี grace timer 0.12s · ป้องกัน soft-lock ด้วย `@export var blocked_cells`
+- `PushBlock` ใช้ input intent ของผู้เล่น (`move_dir`) เป็นเกณฑ์หลัก (dot กับทิศเข้าบล็อก > 0.5 ขณะแตะบล็อก/ใน DetectArea) · ป้องกันการไถลขณะออกแรงดัน · ทิศดัน snap เข้าแกน cell isometric ที่ใกล้ move_dir ที่สุด (ไม่ใช่ทิศตำแหน่ง) · grace timer 0.12s · `reset_to()` kill tween ที่กำลังเลื่อน · ป้องกัน soft-lock ด้วย `@export var blocked_cells`
 - `StoneLantern` มี `Hurtbox` team `NEUTRAL` กรองเฉพาะ `info.team == Combat.Team.PLAYER` ใน `_on_hurt` · เมื่อติดถาวร (`lit_time == 0.0`) จะ `hurtbox.set_deferred("monitorable", false)` ไม่ให้ lock-on ค้าง
 - `PuzzleGate` และ `KintsugiCrack` ปิด/เปิด collision ด้วย `set_deferred("disabled", ...)` เท่านั้น
-- `RestShrine` พักได้เมื่อไม่มีศัตรูในรัศมี `@export rest_safe_radius` (~240, Area2D mask enemy) และคูลดาวน์ `@export rest_cooldown` (~3s)
+- `RestShrine` พักได้เมื่อไม่มีศัตรูในรัศมี `@export rest_safe_radius` (~240, Area2D mask enemy, duplicate shape ตอน setup) และคูลดาวน์ `@export rest_cooldown` (~3s)
 - `KintsugiCrack` และ `RestShrine` ใช้ `InteractAction.ensure_registered()` เพื่อลงทะเบียน action `interact` (E / Joypad A) ตอน runtime โดยไม่แตะ `project.godot`
 - `run_tests.gd` เป็น synchronous runner (`suite.call(name) == true`) ใน `_initialize` จึงห้ามใช้ `await` และห้าม hack `body_set_space`
 
