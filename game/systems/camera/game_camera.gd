@@ -11,6 +11,8 @@ const DEFAULT_HITSTOP_SCALE: float = 0.05
 @export var follow_smooth_speed: float = 8.0
 ## ขอบเขตการเคลื่อนที่ของกล้อง (Rect2() = ไม่จำกัด)
 @export var bounds: Rect2 = Rect2()
+## เวลาเลื่อนกล้องไปห้องใหม่เมื่อได้ EventBus.room_started (0 = ตัดภาพ)
+@export var room_slide_duration: float = 0.5
 
 @export_group("Focus Target")
 ## เป้าหมายที่สองสำหรับจัดเฟรมแบบ lock-on (framing ระหว่าง target กับ focus_target)
@@ -57,9 +59,7 @@ static var _hitstop_count: int = 0
 
 
 func _enter_tree() -> void:
-	if EventBus != null and is_instance_valid(EventBus):
-		if not EventBus.screen_shake_requested.is_connected(_on_screen_shake_requested):
-			EventBus.screen_shake_requested.connect(_on_screen_shake_requested)
+	_connect_bus()
 
 
 func _ready() -> void:
@@ -67,21 +67,13 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
-	if EventBus != null and is_instance_valid(EventBus):
-		if EventBus.damage_dealt.is_connected(_on_damage_dealt):
-			EventBus.damage_dealt.disconnect(_on_damage_dealt)
-		if EventBus.screen_shake_requested.is_connected(_on_screen_shake_requested):
-			EventBus.screen_shake_requested.disconnect(_on_screen_shake_requested)
+	_disconnect_bus()
 	reset_hitstop()
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
-		if EventBus != null and is_instance_valid(EventBus):
-			if EventBus.damage_dealt.is_connected(_on_damage_dealt):
-				EventBus.damage_dealt.disconnect(_on_damage_dealt)
-			if EventBus.screen_shake_requested.is_connected(_on_screen_shake_requested):
-				EventBus.screen_shake_requested.disconnect(_on_screen_shake_requested)
+		_disconnect_bus()
 
 
 ## กำหนดค่าเริ่มต้นและผูก signal — แยกจาก _ready ให้เทสต์เรียกได้โดยไม่ต้องอยู่ใน scene tree
@@ -89,11 +81,35 @@ func setup() -> void:
 	_internal_pos = position
 	if bounds.size != Vector2.ZERO:
 		set_bounds(bounds)
-	if EventBus != null and is_instance_valid(EventBus):
-		if not EventBus.damage_dealt.is_connected(_on_damage_dealt):
-			EventBus.damage_dealt.connect(_on_damage_dealt)
-		if not EventBus.screen_shake_requested.is_connected(_on_screen_shake_requested):
-			EventBus.screen_shake_requested.connect(_on_screen_shake_requested)
+	_connect_bus()
+
+
+## signal ที่กล้องฟัง (contract damage · feedback · dungeon-flow) — ต่อใน _enter_tree/setup, ตัดใน _exit_tree/PREDELETE
+func _bus_links() -> Array[Array]:
+	return [
+		[EventBus.damage_dealt, _on_damage_dealt],
+		[EventBus.screen_shake_requested, _on_screen_shake_requested],
+		[EventBus.room_started, _on_room_started],
+		[EventBus.player_respawn_requested, _on_player_respawn_requested],
+	]
+
+
+func _connect_bus() -> void:
+	if EventBus == null or not is_instance_valid(EventBus):
+		return
+	for link: Array in _bus_links():
+		var sig: Signal = link[0]
+		if not sig.is_connected(link[1]):
+			sig.connect(link[1])
+
+
+func _disconnect_bus() -> void:
+	if EventBus == null or not is_instance_valid(EventBus):
+		return
+	for link: Array in _bus_links():
+		var sig: Signal = link[0]
+		if sig.is_connected(link[1]):
+			sig.disconnect(link[1])
 
 
 ## กำหนดเป้าหมายที่กล้องจะติดตาม
@@ -359,6 +375,23 @@ func _on_damage_dealt(damaged_target: Node, _info: DamageInfo, _final_amount: in
 	if hitstop_enabled:
 		var duration: float = hitstop_player_hit_duration if is_player else hitstop_other_hit_duration
 		hitstop(duration, get_tree() if is_inside_tree() else null, hitstop_time_scale)
+
+
+## เข้าห้องใหม่: ห้องแรก (ยังไม่มี bounds) = ตั้งทันที · ห้องต่อไป = เลื่อนกล้องไปห้องนั้น
+func _on_room_started(_room: Node, room_rect: Rect2) -> void:
+	if room_rect.size == Vector2.ZERO:
+		return
+	if bounds.size == Vector2.ZERO or room_slide_duration <= 0.0:
+		set_bounds(room_rect)
+		snap_to_target()
+	else:
+		slide_to(room_rect, room_slide_duration)
+
+
+## ฟื้นที่จุดเกิด: เลิก bounds เดิม แล้ววาร์ปไปหาผู้เล่น (dungeon จะส่ง room_started ของห้องใหม่ตามมา)
+func _on_player_respawn_requested(_position: Vector2) -> void:
+	set_bounds(Rect2())
+	snap_to_target.call_deferred()
 
 
 func _on_screen_shake_requested(strength: float, _position: Vector2) -> void:

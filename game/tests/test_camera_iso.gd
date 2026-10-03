@@ -581,3 +581,33 @@ func test_camera_screen_shake_requested() -> bool:
 	return initial_trauma_zero and trauma_06 and trauma_clamped_max and trauma_clamped_min and disconnected_ok
 
 
+
+
+## EventBus.room_started: ห้องแรก = ตั้ง bounds ทันที · ห้องถัดไป = slide · respawn = เลิก bounds
+func test_room_started_sets_bounds_then_slides() -> bool:
+	var cam := GameCamera.new()
+	cam.setup()
+	var r1 := Rect2(0, 0, 960, 540)
+	var r2 := Rect2(960, 0, 960, 540)
+	EventBus.room_started.emit(null, r1)
+	var first_ok: bool = cam.bounds == r1
+	EventBus.room_started.emit(null, r2)
+	var sliding: bool = cam._is_sliding and cam._slide_target_rect == r2
+	EventBus.player_respawn_requested.emit(Vector2.ZERO)
+	var cleared: bool = cam.bounds.size == Vector2.ZERO
+	cam._disconnect_bus()
+	cam.free()
+	return first_ok and sliding and cleared
+
+
+## remove/add กล้องกลับเข้า tree แล้วยังฟัง damage_dealt
+func test_reenter_tree_reconnects_damage() -> bool:
+	var cam := GameCamera.new()
+	cam.setup()
+	cam._exit_tree()
+	var off: bool = not EventBus.damage_dealt.is_connected(cam._on_damage_dealt)
+	cam._enter_tree()
+	var on: bool = EventBus.damage_dealt.is_connected(cam._on_damage_dealt)
+	cam._disconnect_bus()
+	cam.free()
+	return off and on
