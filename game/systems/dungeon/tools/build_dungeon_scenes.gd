@@ -18,7 +18,7 @@ func _initialize() -> void:
 	var dungeon_script: GDScript = load("res://systems/dungeon/dungeon.gd")
 	
 	# 1. สร้าง room.tscn (Standalone base room)
-	var base_room: Node2D = _build_room("Room", &"base_room", 2, Vector2i(10, 5), false, Vector2i(0, 5), false, ts, door_scene, room_script)
+	var base_room: Node2D = _build_room("Room", &"base_room", 2, Vector2i(10, 5), false, Vector2i(0, 5), true, false, true, ts, door_scene, room_script)
 	var packed_room: PackedScene = PackedScene.new()
 	var err: Error = packed_room.pack(base_room)
 	if err == OK:
@@ -32,6 +32,7 @@ func _initialize() -> void:
 	var dungeon: Node2D = dungeon_script.new()
 	dungeon.name = "Dungeon"
 	dungeon.y_sort_enabled = true
+	dungeon.add_to_group(&"respawn_handler", true)
 	
 	# CanvasModulate ตัวเดียวที่ Dungeon
 	var modulate: CanvasModulate = CanvasModulate.new()
@@ -41,19 +42,19 @@ func _initialize() -> void:
 	modulate.owner = dungeon
 	
 	# Room 1: starting room (2 slimes), connects to Room 2 via corridor
-	var r1: Node2D = _build_room("Room1", &"room_1", 2, Vector2i(10, 5), false, Vector2i(0, 5), true, ts, door_scene, room_script)
+	var r1: Node2D = _build_room("Room1", &"room_1", 2, Vector2i(10, 5), false, Vector2i(0, 5), true, true, true, ts, door_scene, room_script)
 	r1.position = Vector2(0, 0)
 	dungeon.add_child(r1)
 	_set_owner_recursive(r1, dungeon)
 	
 	# Room 2: middle battle room (4 slimes), entrance from Room 1, exit to Room 3 via corridor
-	var r2: Node2D = _build_room("Room2", &"room_2", 4, Vector2i(10, 5), true, Vector2i(0, 5), true, ts, door_scene, room_script)
+	var r2: Node2D = _build_room("Room2", &"room_2", 4, Vector2i(10, 5), true, Vector2i(0, 5), true, true, false, ts, door_scene, room_script)
 	r2.position = Vector2(416, 208)
 	dungeon.add_child(r2)
 	_set_owner_recursive(r2, dungeon)
 	
-	# Room 3: final room (0 slimes), entrance from Room 2, exit door
-	var r3: Node2D = _build_room("Room3", &"room_3", 0, Vector2i(10, 5), true, Vector2i(0, 5), false, ts, door_scene, room_script)
+	# Room 3: final room (0 slimes), entrance from Room 2, completion trigger (no open exit door to void)
+	var r3: Node2D = _build_room("Room3", &"room_3", 0, Vector2i(10, 5), true, Vector2i(0, 5), false, false, false, ts, door_scene, room_script)
 	r3.position = Vector2(832, 416)
 	dungeon.add_child(r3)
 	_set_owner_recursive(r3, dungeon)
@@ -79,7 +80,9 @@ func _build_room(
 	exit_door_pos: Vector2i,
 	has_entrance: bool,
 	entrance_door_pos: Vector2i,
+	has_exit_door: bool,
 	has_corridor: bool,
+	is_first_room: bool,
 	ts: TileSet,
 	door_scene: PackedScene,
 	room_script: GDScript
@@ -111,7 +114,8 @@ func _build_room(
 			floor_layer.set_cell(Vector2i(x, y), 0, tile_coord)
 	
 	# Door threshold tiles
-	floor_layer.set_cell(exit_door_pos, 0, Vector2i(6, 0))
+	if has_exit_door:
+		floor_layer.set_cell(exit_door_pos, 0, Vector2i(6, 0))
 	if has_entrance:
 		floor_layer.set_cell(entrance_door_pos, 0, Vector2i(6, 0))
 	
@@ -133,10 +137,10 @@ func _build_room(
 			var is_edge: bool = (x == 0 or x == 10 or y == 0 or y == 10)
 			if not is_edge:
 				continue
-			# Skip exit doorway cell
-			if x == exit_door_pos.x and y == exit_door_pos.y:
+			# Skip exit doorway cell only if room has exit door
+			if has_exit_door and x == exit_door_pos.x and y == exit_door_pos.y:
 				continue
-			# Skip entrance doorway cell
+			# Skip entrance doorway cell only if room has entrance door
 			if has_entrance and x == entrance_door_pos.x and y == entrance_door_pos.y:
 				continue
 			
@@ -145,6 +149,8 @@ func _build_room(
 				wall_tile = Vector2i(1, 1) # kintsugi gold wall
 			elif (x == 2 and y == 0) or (x == 8 and y == 0) or (x == 0 and y == 2) or (x == 0 and y == 8):
 				wall_tile = Vector2i(6, 1) # stone lantern pillar
+			elif not has_exit_door and x == exit_door_pos.x and y == exit_door_pos.y:
+				wall_tile = Vector2i(7, 1) # altar pillar closing the exit of Room 3
 			
 			wall_layer.set_cell(Vector2i(x, y), 0, wall_tile)
 	
@@ -161,11 +167,26 @@ func _build_room(
 	doors_container.y_sort_enabled = true
 	room.add_child(doors_container)
 	
-	var exit_door: Node2D = door_scene.instantiate()
-	exit_door.name = "ExitDoor"
-	exit_door.set("door_name", &"exit")
-	exit_door.position = floor_layer.map_to_local(exit_door_pos)
-	doors_container.add_child(exit_door)
+	if has_exit_door:
+		var exit_door: Node2D = door_scene.instantiate()
+		exit_door.name = "ExitDoor"
+		exit_door.set("door_name", &"exit")
+		exit_door.position = floor_layer.map_to_local(exit_door_pos)
+		doors_container.add_child(exit_door)
+	else:
+		# Trigger จบด่านสำหรับห้องสุดท้าย (ไม่เปิดทางออกไปที่ว่าง)
+		var trigger: Area2D = Area2D.new()
+		trigger.name = "RunCompleteTrigger"
+		trigger.collision_layer = 0
+		trigger.collision_mask = Combat.LAYER_PLAYER
+		var trigger_shape: CollisionShape2D = CollisionShape2D.new()
+		trigger_shape.name = "CollisionShape2D"
+		var circle := CircleShape2D.new()
+		circle.radius = 24.0
+		trigger_shape.shape = circle
+		trigger.add_child(trigger_shape)
+		trigger.position = floor_layer.map_to_local(Vector2i(9, 5))
+		room.add_child(trigger)
 	
 	if has_entrance:
 		var entrance_door: Node2D = door_scene.instantiate()
@@ -175,19 +196,14 @@ func _build_room(
 		doors_container.add_child(entrance_door)
 	
 	# Player Detector Area2D
-	# Diamond shape covering inner room, set back from doorways so standing in doorway does not trigger room start
+	# คำนวณจาก floor cells จริง — ครอบคลุมพื้นห้องเกือบทั้งหมด (ช่องว่างถึงกำแพง < 8 px) บากรอบ cell ประตูไว้
 	var detector: Area2D = Area2D.new()
 	detector.name = "PlayerDetector"
 	detector.collision_layer = 0
 	detector.collision_mask = Combat.LAYER_PLAYER
 	var det_shape: CollisionPolygon2D = CollisionPolygon2D.new()
 	det_shape.name = "CollisionPolygon2D"
-	det_shape.polygon = PackedVector2Array([
-		Vector2(32, 64),
-		Vector2(256, 176),
-		Vector2(32, 288),
-		Vector2(-160, 176)
-	])
+	det_shape.polygon = _compute_detector_polygon(floor_layer, has_entrance, entrance_door_pos, has_exit_door, exit_door_pos)
 	detector.add_child(det_shape)
 	room.add_child(detector)
 	
@@ -200,13 +216,13 @@ func _build_room(
 		var sp1: Marker2D = Marker2D.new()
 		sp1.name = "Spawn1"
 		sp1.position = floor_layer.map_to_local(Vector2i(4, 4))
-		sp1.add_to_group(&"spawn_points")
+		sp1.add_to_group(&"spawn_points", true)
 		spawn_container.add_child(sp1)
 		
 		var sp2: Marker2D = Marker2D.new()
 		sp2.name = "Spawn2"
 		sp2.position = floor_layer.map_to_local(Vector2i(6, 6))
-		sp2.add_to_group(&"spawn_points")
+		sp2.add_to_group(&"spawn_points", true)
 		spawn_container.add_child(sp2)
 	elif spawn_count == 4:
 		var coords: Array[Vector2i] = [Vector2i(3, 3), Vector2i(7, 3), Vector2i(3, 7), Vector2i(7, 7)]
@@ -214,7 +230,7 @@ func _build_room(
 			var sp: Marker2D = Marker2D.new()
 			sp.name = "Spawn%d" % (i + 1)
 			sp.position = floor_layer.map_to_local(coords[i])
-			sp.add_to_group(&"spawn_points")
+			sp.add_to_group(&"spawn_points", true)
 			spawn_container.add_child(sp)
 	
 	# Enemy Container
@@ -227,6 +243,8 @@ func _build_room(
 	var p_spawn: Marker2D = Marker2D.new()
 	p_spawn.name = "PlayerSpawnPoint"
 	p_spawn.position = floor_layer.map_to_local(Vector2i(2, 5))
+	if is_first_room:
+		p_spawn.add_to_group(&"player_spawn", true)
 	room.add_child(p_spawn)
 	
 	# Lighting: PointLight2D lanterns
@@ -248,6 +266,41 @@ func _build_room(
 	
 	_set_owner_recursive(room, room)
 	return room
+
+
+func _compute_detector_polygon(
+	floor_layer: TileMapLayer,
+	has_entrance: bool,
+	entrance_door_pos: Vector2i,
+	has_exit_door: bool,
+	exit_door_pos: Vector2i
+) -> PackedVector2Array:
+	var poly: PackedVector2Array = []
+	# 1. Top vertex of (1, 1)
+	poly.append(floor_layer.map_to_local(Vector2i(1, 1)) + Vector2(0, -16))
+	# 2. Right vertex of (9, 1)
+	poly.append(floor_layer.map_to_local(Vector2i(9, 1)) + Vector2(32, 0))
+	
+	# If has exit door, notch inward around doorway
+	if has_exit_door:
+		var inner_exit: Vector2i = exit_door_pos - Vector2i(1, 0)
+		poly.append(floor_layer.map_to_local(inner_exit) + Vector2(32, 0))
+		poly.append(floor_layer.map_to_local(inner_exit) + Vector2(4, 0))
+		poly.append(floor_layer.map_to_local(inner_exit) + Vector2(0, 16))
+	
+	# 3. Bottom vertex of (9, 9)
+	poly.append(floor_layer.map_to_local(Vector2i(9, 9)) + Vector2(0, 16))
+	# 4. Left vertex of (1, 9)
+	poly.append(floor_layer.map_to_local(Vector2i(1, 9)) + Vector2(-32, 0))
+	
+	# If has entrance door, notch inward around doorway
+	if has_entrance:
+		var inner_entrance: Vector2i = entrance_door_pos + Vector2i(1, 0)
+		poly.append(floor_layer.map_to_local(inner_entrance) + Vector2(-32, 0))
+		poly.append(floor_layer.map_to_local(inner_entrance) + Vector2(-4, 0))
+		poly.append(floor_layer.map_to_local(inner_entrance) + Vector2(0, -16))
+	
+	return poly
 
 
 func _create_lantern_light_texture() -> GradientTexture2D:
@@ -273,7 +326,6 @@ func _create_lantern_light_texture() -> GradientTexture2D:
 func _set_owner_recursive(node: Node, new_owner: Node) -> void:
 	if node != new_owner:
 		node.owner = new_owner
-		# ไม่ตั้ง owner ให้ลูกของ node ที่มาจาก scene อื่น (เช่น Door ที่มี scene_file_path != "")
 		if node.scene_file_path != "":
 			return
 	for child: Node in node.get_children():

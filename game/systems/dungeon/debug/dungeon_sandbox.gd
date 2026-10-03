@@ -17,6 +17,7 @@ func _ready() -> void:
 		dungeon.room_changed.connect(_on_room_changed)
 		dungeon.dungeon_reset.connect(_on_dungeon_reset)
 		dungeon.dungeon_completed.connect(_on_dungeon_completed)
+		dungeon.run_completed.connect(_on_dungeon_completed)
 		
 		for r: Room in dungeon.rooms:
 			r.room_started.connect(_on_room_state_changed)
@@ -124,9 +125,7 @@ func _update_hud() -> void:
 	]
 
 
-func _on_event_bus_room_started(_room: Node, room_rect: Rect2) -> void:
-	if camera != null:
-		camera.set_bounds(room_rect)
+func _on_event_bus_room_started(_room: Node, _room_rect: Rect2) -> void:
 	_update_hud()
 
 

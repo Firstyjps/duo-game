@@ -212,6 +212,9 @@ func test_enemy_freed_without_signal_clears_from_waiting_list() -> bool:
 	dummy.tree_exiting.emit()
 	dummy.free()
 	
+	# ประมวลผล deferred check
+	room._check_clear_deferred()
+	
 	var cleared_ok: bool = room.get_remaining_enemies_count() == 0 and room.state == Room.State.CLEARED
 	
 	_safe_free(room)
@@ -348,30 +351,34 @@ func test_door_entered_signal_chain_real_objects() -> bool:
 		if d.door_name == &"exit":
 			r0_door = d
 			break
-	var r_last_door: Door = null
-	for d: Door in r_last.doors:
-		if d.door_name == &"exit":
-			r_last_door = d
-			break
-	
 	var r0_door_entered_fired: Array[bool] = [false]
 	r0.door_entered.connect(func(_room: Room, _door: Door) -> void:
 		r0_door_entered_fired[0] = true
 	)
 	
 	var dungeon_completed_fired: Array[bool] = [false]
+	var run_completed_fired: Array[bool] = [false]
 	dungeon.dungeon_completed.connect(func() -> void:
 		dungeon_completed_fired[0] = true
 	)
+	dungeon.run_completed.connect(func() -> void:
+		run_completed_fired[0] = true
+	)
 	
-	# ยิงผ่าน Door.entered จริง ไม่ emit signal ภายในตรงๆ
+	# ห้องแรก: ยิงผ่าน Door.entered จริง
 	r0_door.open_door()
 	r0_door.entered.emit(r0_door)
 	var r0_chain_ok: bool = r0_door_entered_fired[0]
 	
-	r_last_door.open_door()
-	r_last_door.entered.emit(r_last_door)
-	var completed_ok: bool = dungeon_completed_fired[0]
+	# ห้องสุดท้าย: trigger จบด่าน (RunCompleteTrigger) ยิงสัญญาณ run_completed และ dungeon_completed
+	var dummy_p: CharacterBody2D = CharacterBody2D.new()
+	dummy_p.add_to_group(&"player")
+	dummy_p.collision_layer = Combat.LAYER_PLAYER
+	r_last.add_child(dummy_p)
+	r_last._on_run_complete_trigger_body_entered(dummy_p)
+	dummy_p.free()
+	
+	var completed_ok: bool = dungeon_completed_fired[0] and run_completed_fired[0]
 	
 	_safe_free(dungeon)
 	return r0_chain_ok and completed_ok
@@ -514,6 +521,248 @@ func test_cleared_room_reentry_emits_started_and_cleared_without_locking() -> bo
 	EventBus.room_cleared.disconnect(on_cleared)
 	_safe_free(room)
 	return ok
+
+
+func test_wall_hugging_body_overlaps_detector_and_door_notches() -> bool:
+	var dungeon: Dungeon = DUNGEON_SCENE.instantiate()
+	dungeon.setup()
+	
+	var r2: Room = dungeon.rooms[1]
+	var det: Area2D = r2.player_detector
+	var poly_node: CollisionPolygon2D = det.get_node("CollisionPolygon2D") as CollisionPolygon2D
+	var poly: PackedVector2Array = poly_node.polygon
+	
+	var check_circle_overlap := func(center: Vector2, radius: float) -> bool:
+		if Geometry2D.is_point_in_polygon(center, poly):
+			return true
+		for angle_deg in range(0, 360, 30):
+			var rad: float = deg_to_rad(angle_deg)
+			var pt: Vector2 = center + Vector2(cos(rad), sin(rad)) * radius
+			if Geometry2D.is_point_in_polygon(pt, poly):
+				return true
+		return false
+	
+	var l: TileMapLayer = r2.floor_layer
+	var p_0_5: Vector2 = l.map_to_local(Vector2i(0, 5))
+	var p_1_5: Vector2 = l.map_to_local(Vector2i(1, 5))
+	var p_1_1: Vector2 = l.map_to_local(Vector2i(1, 1))
+	var p_9_1: Vector2 = l.map_to_local(Vector2i(9, 1))
+	var p_9_5: Vector2 = l.map_to_local(Vector2i(9, 5))
+	var p_10_5: Vector2 = l.map_to_local(Vector2i(10, 5))
+	
+	# ประตูไม่ปิดทับ: ยืนใน cell ประตู (0, 5) และ (10, 5) ต้องไม่ overlap detector
+	var door_in_no_overlap: bool = not check_circle_overlap.call(p_0_5, 8.0)
+	var door_out_no_overlap: bool = not check_circle_overlap.call(p_10_5, 8.0)
+	
+	# เดินเลียบกำแพงตามทาง (0,5)→(1,5)→(1,1)→(9,1)→(9,5)→(10,5) ต้อง overlap detector
+	var path_overlap_1_5: bool = check_circle_overlap.call(p_1_5, 8.0)
+	var path_overlap_1_1: bool = check_circle_overlap.call(p_1_1, 8.0)
+	var path_overlap_9_1: bool = check_circle_overlap.call(p_9_1, 8.0)
+	var path_overlap_9_5: bool = check_circle_overlap.call(p_9_5, 8.0)
+	
+	# ช่องว่างถึงกำแพง < 8 px
+	var top_vertex: Vector2 = l.map_to_local(Vector2i(1, 1)) + Vector2(0, -16)
+	var right_vertex: Vector2 = l.map_to_local(Vector2i(9, 1)) + Vector2(32, 0)
+	var bottom_vertex: Vector2 = l.map_to_local(Vector2i(9, 9)) + Vector2(0, 16)
+	var left_vertex: Vector2 = l.map_to_local(Vector2i(1, 9)) + Vector2(-32, 0)
+	
+	var gap_ok: bool = poly.has(top_vertex) and poly.has(right_vertex) and poly.has(bottom_vertex) and poly.has(left_vertex)
+	
+	var ok: bool = door_in_no_overlap and door_out_no_overlap and path_overlap_1_5 and path_overlap_1_1 and path_overlap_9_1 and path_overlap_9_5 and gap_ok
+	
+	_safe_free(dungeon)
+	return ok
+
+
+func test_game_run_dungeon_level_and_spawn_point() -> bool:
+	var run: GameRun = (load("res://systems/ui/run/game_run.tscn") as PackedScene).instantiate()
+	run.level_scene = DUNGEON_SCENE
+	run.setup()
+	
+	var d: Dungeon = run.level as Dungeon
+	var handles_respawn: bool = GameRun.level_handles_respawn(run.level)
+	
+	var r1_spawn: Marker2D = d.get_node("Room1/PlayerSpawnPoint") as Marker2D
+	var r2_spawn: Marker2D = d.get_node("Room2/PlayerSpawnPoint") as Marker2D
+	var r3_spawn: Marker2D = d.get_node("Room3/PlayerSpawnPoint") as Marker2D
+	
+	var player_at_spawn1: bool = run.player != null and run.player.position == r1_spawn.position
+	
+	# เฉพาะ Room1/PlayerSpawnPoint เท่านั้นที่อยู่ในกลุ่ม player_spawn
+	var r1_has_group: bool = r1_spawn != null and r1_spawn.is_in_group(&"player_spawn")
+	var r2_no_group: bool = r2_spawn != null and not r2_spawn.is_in_group(&"player_spawn")
+	var r3_no_group: bool = r3_spawn != null and not r3_spawn.is_in_group(&"player_spawn")
+	
+	# Dungeon.setup() -> add_to_group(&"respawn_handler")
+	d.setup()
+	var d_in_group: bool = d.is_in_group(&"respawn_handler")
+	
+	var ok: bool = handles_respawn and player_at_spawn1 and r1_has_group and r2_no_group and r3_no_group and d_in_group
+	run.free()
+	return ok
+
+
+func test_teardown_locked_dungeon_no_fake_room_cleared() -> bool:
+	var dungeon: Dungeon = DUNGEON_SCENE.instantiate()
+	dungeon.setup()
+	
+	var r0: Room = dungeon.rooms[0]
+	r0.start_room()
+	var locked_ok: bool = r0.state == Room.State.LOCKED and r0.get_remaining_enemies_count() == 2
+	
+	var cleared_emitted: Array[bool] = [false]
+	var on_cleared := func(_r: Variant = null) -> void:
+		cleared_emitted[0] = true
+	
+	r0.room_cleared.connect(on_cleared)
+	EventBus.room_cleared.connect(on_cleared)
+	
+	dungeon.free()
+	
+	EventBus.room_cleared.disconnect(on_cleared)
+	return locked_ok and cleared_emitted[0] == false
+
+
+func test_no_duplicate_room_started_cleared_in_same_room() -> bool:
+	var dungeon: Dungeon = DUNGEON_SCENE.instantiate()
+	dungeon.setup()
+	
+	var started_events: Array = []
+	var cleared_events: Array = []
+	var on_started := func(r: Node, rect: Rect2) -> void:
+		started_events.append([r, rect])
+	var on_cleared := func(r: Node) -> void:
+		cleared_events.append(r)
+	
+	EventBus.room_started.connect(on_started)
+	EventBus.room_cleared.connect(on_cleared)
+	
+	# เริ่มและเคลียร์ห้อง 1
+	var r0: Room = dungeon.rooms[0]
+	r0.start_room()
+	for e: Node in r0.spawned_enemies.duplicate():
+		EventBus.enemy_died.emit(e, &"slime", Vector2.ZERO)
+	
+	var r0_cleared_ok: bool = r0.state == Room.State.CLEARED
+	started_events.clear()
+	cleared_events.clear()
+	
+	# ผู้เล่นเดินไปมาในห้องเดิม (ห้อง 1 เคลียร์แล้ว) -> ต้องไม่ emit ซ้ำ
+	var dummy_p: CharacterBody2D = CharacterBody2D.new()
+	dummy_p.add_to_group(&"player")
+	dummy_p.collision_layer = Combat.LAYER_PLAYER
+	r0.add_child(dummy_p)
+	dummy_p.position = r0.player_spawn_point.position
+	
+	r0._on_player_detector_body_entered(dummy_p)
+	r0.check_player_inside(dummy_p)
+	
+	var no_duplicate_ok: bool = started_events.is_empty() and cleared_events.is_empty()
+	
+	# ผู้เล่นเปลี่ยนห้องไปห้อง 2 -> ส่ง room_started ของห้อง 2
+	var r1: Room = dungeon.rooms[1]
+	r1.start_room()
+	var room2_started_ok: bool = started_events.size() == 1 and started_events[0][0] == r1
+	started_events.clear()
+	cleared_events.clear()
+	
+	# ผู้เล่นเดินกลับมาห้อง 1 (ซึ่งเคลียร์แล้ว) -> เปลี่ยนห้องจริง ส่ง room_started และ room_cleared ของห้อง 1 อีก 1 ครั้ง
+	r0._on_player_detector_body_entered(dummy_p)
+	r0.start_room()
+	var reentered_ok: bool = started_events.size() == 1 and started_events[0][0] == r0 \
+		and cleared_events.size() == 1 and cleared_events[0] == r0
+	started_events.clear()
+	cleared_events.clear()
+	
+	# เดินวนในห้อง 1 ต่อ -> ไม่ส่งซ้ำ
+	r0._on_player_detector_body_entered(dummy_p)
+	r0.check_player_inside(dummy_p)
+	var no_reentry_dup_ok: bool = started_events.is_empty() and cleared_events.is_empty()
+	
+	EventBus.room_started.disconnect(on_started)
+	EventBus.room_cleared.disconnect(on_cleared)
+	dummy_p.free()
+	_safe_free(dungeon)
+	return r0_cleared_ok and no_duplicate_ok and room2_started_ok and reentered_ok and no_reentry_dup_ok
+
+
+func test_respawn_emits_room_started_once_for_revived_room() -> bool:
+	var dungeon: Dungeon = DUNGEON_SCENE.instantiate()
+	dungeon.setup()
+	
+	var started_events: Array = []
+	var on_started := func(r: Node, rect: Rect2) -> void:
+		started_events.append([r, rect])
+	EventBus.room_started.connect(on_started)
+	
+	# ผู้เล่นตายและฟื้น
+	dungeon._do_respawn()
+	
+	var dummy_p: CharacterBody2D = CharacterBody2D.new()
+	dummy_p.add_to_group(&"player")
+	dummy_p.collision_layer = Combat.LAYER_PLAYER
+	dungeon.rooms[0].add_child(dummy_p)
+	dummy_p.global_position = dungeon.rooms[0].player_spawn_point.global_position
+	
+	# ตรวจสอบผู้เล่นในห้องหลังฟื้น
+	dungeon.rooms[0].check_player_inside(dummy_p)
+	
+	var once_ok: bool = started_events.size() == 1 and started_events[0][0] == dungeon.rooms[0]
+	
+	# ตรวจซ้ำในห้องเดิม -> ไม่ส่งเพิ่ม
+	dungeon.rooms[0]._on_player_detector_body_entered(dummy_p)
+	dungeon.rooms[0].check_player_inside(dummy_p)
+	var still_once: bool = started_events.size() == 1
+	
+	EventBus.room_started.disconnect(on_started)
+	dummy_p.free()
+	_safe_free(dungeon)
+	return once_ok and still_once
+
+
+func test_room3_completion_trigger_and_solid_wall() -> bool:
+	var dungeon: Dungeon = DUNGEON_SCENE.instantiate()
+	dungeon.setup()
+	
+	var r3: Room = dungeon.rooms[2]
+	
+	# ไม่มี ExitDoor เปิดไปที่ว่าง
+	var has_exit_door: bool = false
+	for d: Door in r3.doors:
+		if d.door_name == &"exit":
+			has_exit_door = true
+			break
+	var no_exit_door: bool = not has_exit_door
+	
+	# ปิด cell ทางออก (10, 5) ด้วยกำแพง
+	var wall_tile: Vector2i = r3.wall_layer.get_cell_atlas_coords(Vector2i(10, 5))
+	var wall_closed: bool = wall_tile != Vector2i(-1, -1)
+	
+	# มี RunCompleteTrigger
+	var trigger: Area2D = r3.get_node_or_null("RunCompleteTrigger") as Area2D
+	var has_trigger: bool = trigger != null and (trigger.collision_mask & Combat.LAYER_PLAYER) != 0
+	
+	# เมื่อ trigger เข้าทำงาน emit signal run_completed และ dungeon_completed
+	var run_completed_fired: Array[bool] = [false]
+	var dungeon_completed_fired: Array[bool] = [false]
+	dungeon.run_completed.connect(func() -> void:
+		run_completed_fired[0] = true
+	)
+	dungeon.dungeon_completed.connect(func() -> void:
+		dungeon_completed_fired[0] = true
+	)
+	
+	var dummy_p: CharacterBody2D = CharacterBody2D.new()
+	dummy_p.add_to_group(&"player")
+	dummy_p.collision_layer = Combat.LAYER_PLAYER
+	r3.add_child(dummy_p)
+	r3._on_run_complete_trigger_body_entered(dummy_p)
+	
+	var signals_ok: bool = run_completed_fired[0] and dungeon_completed_fired[0]
+	
+	dummy_p.free()
+	_safe_free(dungeon)
+	return no_exit_door and wall_closed and has_trigger and signals_ok
 
 
 static func _safe_free(node: Node) -> void:

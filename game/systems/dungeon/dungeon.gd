@@ -6,6 +6,7 @@ extends Node2D
 signal room_changed(from_index: int, to_index: int, new_room: Room)
 signal dungeon_reset
 signal dungeon_completed
+signal run_completed
 
 @export var rooms: Array[Room] = []
 @export var respawn_delay: float = 1.2
@@ -40,6 +41,8 @@ func _cleanup_event_bus() -> void:
 
 
 func setup() -> void:
+	add_to_group(&"respawn_handler")
+	
 	if rooms.is_empty():
 		for child: Node in get_children():
 			if child is Room:
@@ -52,6 +55,8 @@ func setup() -> void:
 			r.door_entered.connect(_on_room_door_entered)
 		if not r.room_started.is_connected(_on_room_started):
 			r.room_started.connect(_on_room_started)
+		if not r.run_completed.is_connected(_on_room_run_completed):
+			r.run_completed.connect(_on_room_run_completed)
 	
 	if EventBus != null and is_instance_valid(EventBus):
 		if not EventBus.player_died.is_connected(_on_player_died):
@@ -142,7 +147,13 @@ func _on_room_door_entered(room: Room, door: Door) -> void:
 	if rooms.is_empty():
 		return
 	if room == rooms.back() and door != null and door.door_name == &"exit":
+		run_completed.emit()
 		dungeon_completed.emit()
+
+
+func _on_room_run_completed(_room: Room) -> void:
+	run_completed.emit()
+	dungeon_completed.emit()
 
 
 func tick(_delta: float) -> void:

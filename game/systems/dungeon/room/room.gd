@@ -6,6 +6,7 @@ extends Node2D
 signal room_started(room: Room)
 signal room_cleared(room: Room)
 signal door_entered(room: Room, door: Door)
+signal run_completed(room: Room)
 
 enum State { IDLE, LOCKED, CLEARED }
 
@@ -26,6 +27,7 @@ var doors_container: Node2D
 var spawn_points_container: Node2D
 var enemy_container: Node2D
 var player_spawn_point: Marker2D
+var run_complete_trigger: Area2D
 
 
 var _is_teardown: bool = false
@@ -72,6 +74,14 @@ func setup() -> void:
 	spawn_points_container = get_node_or_null("SpawnPoints") as Node2D
 	enemy_container = get_node_or_null("EnemyContainer") as Node2D
 	player_spawn_point = get_node_or_null("PlayerSpawnPoint") as Marker2D
+	run_complete_trigger = get_node_or_null("RunCompleteTrigger") as Area2D
+	if run_complete_trigger == null:
+		run_complete_trigger = get_node_or_null("ExitTrigger") as Area2D
+	if run_complete_trigger != null:
+		run_complete_trigger.collision_layer = 0
+		run_complete_trigger.collision_mask = Combat.LAYER_PLAYER
+		if not run_complete_trigger.body_entered.is_connected(_on_run_complete_trigger_body_entered):
+			run_complete_trigger.body_entered.connect(_on_run_complete_trigger_body_entered)
 	
 	if player_detector != null:
 		player_detector.collision_layer = 0
@@ -234,8 +244,14 @@ func _on_enemy_tree_exiting(enemy: Node) -> void:
 		return
 	if enemy in spawned_enemies:
 		spawned_enemies.erase(enemy)
-		if state == State.LOCKED and spawned_enemies.is_empty():
-			clear_room()
+	_check_clear_deferred.call_deferred()
+
+
+func _check_clear_deferred() -> void:
+	if _is_teardown or is_queued_for_deletion() or (_was_in_tree and not is_inside_tree()):
+		return
+	if state == State.LOCKED and spawned_enemies.is_empty():
+		clear_room()
 
 
 func _on_enemy_died(enemy: Node, _enemy_id: StringName, _pos: Vector2) -> void:
@@ -303,12 +319,29 @@ func tick(_delta: float) -> void:
 	pass
 
 
-func _on_player_detector_body_entered(body: Node2D) -> void:
+func _can_start_on_player_enter() -> bool:
 	if not auto_start_on_player_enter:
+		return false
+	if state == State.IDLE:
+		return true
+	if state == State.CLEARED:
+		var dungeon: Dungeon = get_parent() as Dungeon
+		if dungeon != null:
+			var idx: int = dungeon.rooms.find(self)
+			return idx != -1 and idx != dungeon.current_room_index
+	return false
+
+
+func _on_player_detector_body_entered(body: Node2D) -> void:
+	if not _can_start_on_player_enter():
 		return
 	if (body.is_in_group(&"player") or (body.collision_layer & Combat.LAYER_PLAYER) != 0):
-		if state == State.IDLE or state == State.CLEARED:
-			start_room.call_deferred()
+		start_room.call_deferred()
+
+
+func _on_run_complete_trigger_body_entered(body: Node2D) -> void:
+	if body.is_in_group(&"player") or (body.collision_layer & Combat.LAYER_PLAYER) != 0:
+		run_completed.emit(self)
 
 
 func _on_door_entered(door: Door) -> void:
@@ -326,7 +359,7 @@ func is_point_inside_detector(world_point: Vector2) -> bool:
 
 
 func check_player_inside(target: Node2D = null) -> void:
-	if not auto_start_on_player_enter or (state != State.IDLE and state != State.CLEARED):
+	if not _can_start_on_player_enter():
 		return
 	if player_detector != null:
 		for body: Node2D in player_detector.get_overlapping_bodies():
