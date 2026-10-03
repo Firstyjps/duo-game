@@ -28,6 +28,7 @@ var _last_player_pos: Vector2 = Vector2.ZERO
 var _last_player_move_dir: Vector2 = Vector2.ZERO
 var _has_last_player_pos: bool = false
 var _ready_done: bool = false
+var _move_tween: Tween = null
 
 
 func _init() -> void:
@@ -83,10 +84,10 @@ func setup() -> void:
 		var dcol := CollisionShape2D.new()
 		var dpoly := ConvexPolygonShape2D.new()
 		dpoly.points = PackedVector2Array([
-			Vector2(0, -16),
-			Vector2(32, 0),
-			Vector2(0, 16),
-			Vector2(-32, 0),
+			Vector2(0, -20),
+			Vector2(36, 0),
+			Vector2(0, 20),
+			Vector2(-36, 0),
 		])
 		dcol.shape = dpoly
 		detect_area.add_child(dcol)
@@ -106,6 +107,9 @@ func is_push_block() -> bool:
 
 
 func reset_to(pos: Vector2) -> void:
+	if _move_tween != null and _move_tween.is_valid():
+		_move_tween.kill()
+		_move_tween = null
 	is_moving = false
 	_push_timer = 0.0
 	_grace_timer = 0.0
@@ -130,6 +134,14 @@ func tick(delta: float) -> void:
 				set_pushing_player(b)
 				break
 
+	if _pushing_player == null and is_inside_tree():
+		var tree := get_tree()
+		if tree != null:
+			for p in tree.get_nodes_in_group(&"player"):
+				if p is Node2D and is_in_detect_area((p as Node2D).global_position):
+					set_pushing_player(p as Node2D)
+					break
+
 	if _pushing_player != null and is_instance_valid(_pushing_player):
 		if not is_in_detect_area(_pushing_player.global_position):
 			set_pushing_player(null)
@@ -146,26 +158,29 @@ func tick(delta: float) -> void:
 		var to_block: Vector2 = global_position - cur_pos
 		var is_pushing: bool = false
 
-		if p_delta.length_squared() > 0.0001:
-			_last_player_move_dir = p_delta.normalized()
-			if to_block.length_squared() > 0.0001:
-				var dot: float = _last_player_move_dir.dot(to_block.normalized())
-				if dot > 0.2:
-					is_pushing = true
-		else:
-			# If player is pressing against block collision and stopped
-			var fallback_dir: Vector2 = Vector2.ZERO
-			if "move_dir" in _pushing_player and (_pushing_player.move_dir as Vector2).length_squared() > 0.01:
-				fallback_dir = (_pushing_player.move_dir as Vector2).normalized()
-			elif "velocity" in _pushing_player and (_pushing_player.velocity as Vector2).length_squared() > 0.01:
-				fallback_dir = (_pushing_player.velocity as Vector2).normalized()
+		# Input ผู้เล่นเป็นเกณฑ์หลัก: อ่าน move_dir ของ body ที่ชน
+		# p_delta เป็น fallback เท่านั้น
+		var input_dir: Vector2 = Vector2.ZERO
+		if "move_dir" in _pushing_player and (_pushing_player.move_dir as Vector2).length_squared() > 0.01:
+			input_dir = (_pushing_player.move_dir as Vector2).normalized()
+		elif p_delta.length_squared() > 0.0001:
+			input_dir = p_delta.normalized()
+		elif "velocity" in _pushing_player and (_pushing_player.velocity as Vector2).length_squared() > 0.01:
+			input_dir = (_pushing_player.velocity as Vector2).normalized()
 
-			if fallback_dir != Vector2.ZERO:
-				_last_player_move_dir = fallback_dir
-				if to_block.length_squared() > 0.0001 and fallback_dir.dot(to_block.normalized()) > 0.2:
+		if input_dir != Vector2.ZERO:
+			_last_player_move_dir = input_dir
+			if to_block.length_squared() > 0.0001:
+				var dot: float = input_dir.dot(to_block.normalized())
+				if dot > 0.5:
 					is_pushing = true
 
 		if is_pushing:
+			# ป้องกันการไถลตามผิวข้าวหลามตัดขณะผู้เล่นออกแรงดันบล็อก
+			if p_delta.length_squared() > 0.0001:
+				_pushing_player.global_position -= p_delta
+				_last_player_pos = _pushing_player.global_position
+
 			_grace_timer = 0.0
 			_push_timer += delta
 			if _push_timer >= push_time:
@@ -189,13 +204,19 @@ func get_push_cell_step() -> Vector2i:
 	if _pushing_player == null or not is_instance_valid(_pushing_player):
 		return Vector2i.ZERO
 	var to_block: Vector2 = global_position - _pushing_player.global_position
-	return snap_to_cell_step(to_block, _last_player_move_dir, grid_layer)
+	var push_vec: Vector2 = _last_player_move_dir
+	if push_vec.length_squared() < 0.0001:
+		push_vec = to_block
+	return snap_to_cell_step(push_vec, to_block, grid_layer)
 
 
-static func snap_to_cell_step(to_block: Vector2, fallback_move_dir: Vector2 = Vector2.ZERO, layer: TileMapLayer = null) -> Vector2i:
-	if to_block.length_squared() < 0.0001:
-		return Vector2i.ZERO
-	var norm_to_block: Vector2 = to_block.normalized()
+static func snap_to_cell_step(push_dir: Vector2, fallback_dir: Vector2 = Vector2.ZERO, layer: TileMapLayer = null) -> Vector2i:
+	if push_dir.length_squared() < 0.0001:
+		if fallback_dir.length_squared() < 0.0001:
+			return Vector2i.ZERO
+		push_dir = fallback_dir
+		fallback_dir = Vector2.ZERO
+	var norm_dir: Vector2 = push_dir.normalized()
 	var candidates: Array[Vector2i] = [
 		Vector2i(1, 0),   # down-right
 		Vector2i(0, 1),   # down-left
@@ -217,31 +238,32 @@ static func snap_to_cell_step(to_block: Vector2, fallback_move_dir: Vector2 = Ve
 
 	var max_dot: float = -2.0
 	for i: int in range(candidates.size()):
-		var d: float = norm_to_block.dot(candidate_vectors[i])
+		var d: float = norm_dir.dot(candidate_vectors[i])
 		if d > max_dot:
 			max_dot = d
 
-	# Find candidates tied within small tolerance (0.04)
+	# Find candidates tied within tolerance (0.04)
 	var tied_indices: Array[int] = []
 	for i: int in range(candidates.size()):
-		var d: float = norm_to_block.dot(candidate_vectors[i])
+		var d: float = norm_dir.dot(candidate_vectors[i])
 		if absf(d - max_dot) <= 0.04:
 			tied_indices.append(i)
 
-	if tied_indices.size() == 1 or fallback_move_dir.length_squared() < 0.0001:
+	if tied_indices.size() == 1 or fallback_dir.length_squared() < 0.0001:
 		return candidates[tied_indices[0]]
 
-	# Break tie using player's movement direction
+	# Break tie using fallback direction
 	var best_idx: int = tied_indices[0]
-	var best_move_dot: float = -2.0
-	var norm_move: Vector2 = fallback_move_dir.normalized()
+	var best_fallback_dot: float = -2.0
+	var norm_fallback: Vector2 = fallback_dir.normalized()
 	for idx in tied_indices:
-		var md: float = norm_move.dot(candidate_vectors[idx])
-		if md > best_move_dot:
-			best_move_dot = md
+		var fd: float = norm_fallback.dot(candidate_vectors[idx])
+		if fd > best_fallback_dot:
+			best_fallback_dot = fd
 			best_idx = idx
 
 	return candidates[best_idx]
+
 
 
 static func direction_to_cell_step(dir: Vector2, layer: TileMapLayer = null) -> Vector2i:
@@ -328,13 +350,17 @@ func try_push_step(step: Vector2i) -> bool:
 
 
 func _start_move(target_pos: Vector2, step: Vector2i = Vector2i.ZERO) -> void:
+	if _move_tween != null and _move_tween.is_valid():
+		_move_tween.kill()
+		_move_tween = null
 	is_moving = true
 	if is_inside_tree():
-		var tween := create_tween()
-		if tween != null:
-			tween.tween_property(self, "global_position", target_pos, move_duration)
-			tween.finished.connect(func() -> void:
+		_move_tween = create_tween()
+		if _move_tween != null:
+			_move_tween.tween_property(self, "global_position", target_pos, move_duration)
+			_move_tween.finished.connect(func() -> void:
 				is_moving = false
+				_move_tween = null
 				current_cell += step
 				moved.emit(global_position)
 			)
@@ -346,11 +372,16 @@ func _start_move(target_pos: Vector2, step: Vector2i = Vector2i.ZERO) -> void:
 
 
 func is_in_detect_area(pos: Vector2) -> bool:
-	if _pushing_player != null and detect_area != null and detect_area.is_inside_tree():
-		if detect_area.overlaps_body(_pushing_player):
+	if _pushing_player != null and is_instance_valid(_pushing_player):
+		if detect_area != null and detect_area.is_inside_tree() and detect_area.overlaps_body(_pushing_player):
 			return true
+		if _pushing_player is CharacterBody2D:
+			for i in range((_pushing_player as CharacterBody2D).get_slide_collision_count()):
+				var col: KinematicCollision2D = (_pushing_player as CharacterBody2D).get_slide_collision(i)
+				if col != null and col.get_collider() == self:
+					return true
 	var local_p: Vector2 = to_local(pos)
-	return (absf(local_p.x) / 48.0 + absf(local_p.y) / 28.0) <= 1.0
+	return (absf(local_p.x) / 56.0 + absf(local_p.y) / 30.0) <= 1.0
 
 
 func set_pushing_player(body: Node2D) -> void:
@@ -372,4 +403,6 @@ func _on_detect_body_entered(body: Node2D) -> void:
 
 func _on_detect_body_exited(body: Node2D) -> void:
 	if body == _pushing_player:
-		set_pushing_player(null)
+		if not is_in_detect_area(body.global_position):
+			set_pushing_player(null)
+

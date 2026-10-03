@@ -286,3 +286,55 @@ func test_rest_shrine_cooldown_and_safe_radius() -> bool:
 	GoldShards.reset()
 
 	return first_rest and cooldown_blocked and cannot_rest_on_cd and can_rest_after_cd and enemy_blocked and enemy_rest_failed and safe_again
+
+
+func test_push_block_reset_to_kills_tween() -> bool:
+	var block: PushBlock = BLOCK_SCENE.instantiate()
+	block.setup()
+	var origin := Vector2(100, 100)
+	block.global_position = origin
+
+	var tree := Engine.get_main_loop() as SceneTree
+	tree.root.add_child(block)
+
+	# จำลองสถานะกำลังเลื่อนพร้อม Tween
+	block.is_moving = true
+	var tw := tree.create_tween()
+	block._move_tween = tw
+	var tween_valid_before: bool = tw.is_valid()
+
+	# เรียก reset_to ต้อง kill tween ทันที และ is_moving กลายเป็น false
+	block.reset_to(origin)
+	var tween_killed: bool = not tw.is_valid()
+	var stopped_moving: bool = not block.is_moving
+	var pos_reset: bool = block.global_position == origin
+
+	tree.root.remove_child(block)
+	block.free()
+	GoldShards.reset()
+	return tween_valid_before and tween_killed and stopped_moving and pos_reset
+
+
+
+func test_rest_shrine_safe_radius_duplicate_shape() -> bool:
+	var shrine1: RestShrine = SHRINE_SCENE.instantiate()
+	shrine1.rest_safe_radius = 180.0
+	shrine1.setup()
+
+	var shrine2: RestShrine = SHRINE_SCENE.instantiate()
+	shrine2.rest_safe_radius = 320.0
+	shrine2.setup()
+
+	var shape1 = shrine1.safe_area.get_node("CollisionShape2D").shape
+	var shape2 = shrine2.safe_area.get_node("CollisionShape2D").shape
+
+	# ต้องไม่เป็น reference เดียวกัน (duplicate shape) และรัศมีตรงตามที่ตั้ง
+	var not_same_ref: bool = shape1 != shape2
+	var r1_ok: bool = absf(shape1.radius - 180.0) < 0.1
+	var r2_ok: bool = absf(shape2.radius - 320.0) < 0.1
+
+	shrine1.free()
+	shrine2.free()
+	GoldShards.reset()
+	return not_same_ref and r1_ok and r2_ok
+

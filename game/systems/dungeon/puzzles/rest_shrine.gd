@@ -9,7 +9,10 @@ signal rested
 
 const ART_TEXTURE: Texture2D = preload("res://systems/dungeon/puzzles/art/shrine.png")
 
-@export var rest_safe_radius: float = 240.0
+@export var rest_safe_radius: float = 240.0:
+	set(val):
+		rest_safe_radius = val
+		_apply_safe_radius()
 @export var rest_cooldown: float = 3.0
 @export var spawn_marker: Marker2D = null
 
@@ -95,6 +98,7 @@ func setup() -> void:
 		safe_area.collision_layer = 0
 		safe_area.collision_mask = Combat.LAYER_ENEMY
 		var scol := CollisionShape2D.new()
+		scol.name = "CollisionShape2D"
 		var scircle := CircleShape2D.new()
 		scircle.radius = rest_safe_radius
 		scol.shape = scircle
@@ -103,6 +107,7 @@ func setup() -> void:
 	else:
 		safe_area.collision_layer = 0
 		safe_area.collision_mask = Combat.LAYER_ENEMY
+		_apply_safe_radius()
 
 	if not safe_area.body_entered.is_connected(_on_enemy_entered):
 		safe_area.body_entered.connect(_on_enemy_entered)
@@ -131,6 +136,27 @@ func setup() -> void:
 	else:
 		point_light.position = Vector2(0, -48)
 		point_light.enabled = is_active
+
+
+func _apply_safe_radius() -> void:
+	if safe_area != null:
+		var scol := safe_area.get_node_or_null("CollisionShape2D") as CollisionShape2D
+		if scol != null:
+			if scol.shape != null:
+				scol.shape = scol.shape.duplicate()
+				if scol.shape is CircleShape2D:
+					(scol.shape as CircleShape2D).radius = rest_safe_radius
+			else:
+				var scircle := CircleShape2D.new()
+				scircle.radius = rest_safe_radius
+				scol.shape = scircle
+		else:
+			scol = CollisionShape2D.new()
+			scol.name = "CollisionShape2D"
+			var scircle := CircleShape2D.new()
+			scircle.radius = rest_safe_radius
+			scol.shape = scircle
+			safe_area.add_child(scol)
 
 
 func _process(delta: float) -> void:

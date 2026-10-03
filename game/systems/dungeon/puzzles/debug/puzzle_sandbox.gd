@@ -238,7 +238,7 @@ func reset_puzzle() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_T:
 		reset_puzzle()
 
 
@@ -260,7 +260,7 @@ func _build_ui() -> void:
 	vbox.add_child(title)
 
 	var controls := Label.new()
-	controls.text = "เดิน: WASD | กลิ้ง: Space | โจมตี: J / คลิกซ้าย | คุย/ซ่อม: E | รีเซ็ต: R"
+	controls.text = "เดิน: WASD | กลิ้ง: Space | โจมตี: J / คลิกซ้าย | คุย/ซ่อม: E | รีเซ็ต: T"
 	controls.modulate = Color(0.8, 0.9, 1.0)
 	vbox.add_child(controls)
 
@@ -292,4 +292,4 @@ func _process(_delta: float) -> void:
 6. ศาลเจ้า: %s
 """ % [s1_check, s2_check, lan_check, gate_check, crack_check, shrine_check]
 
-	status_label.text = "เศษทองที่ถือ: %d ชิ้น (กด R เพื่อรีเซ็ตปริศนา)" % GoldShards.count
+	status_label.text = "เศษทองที่ถือ: %d ชิ้น (กด T เพื่อรีเซ็ตปริศนา)" % GoldShards.count
