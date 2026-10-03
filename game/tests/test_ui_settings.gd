@@ -787,7 +787,7 @@ func test_key_rebind_skips_mismatched_event_types() -> bool:
 
 	# ส่ง InputEventJoypadButton ที่ถูกต้อง -> ต้องยอมรับและจบ listening
 	var joy_a := InputEventJoypadButton.new()
-	joy_a.button_index = JOY_BUTTON_A
+	joy_a.button_index = JOY_BUTTON_RIGHT_STICK  # ปุ่มที่ยังว่าง (A = interact)
 	joy_a.pressed = true
 	rebind_ctrl._input(joy_a)
 
