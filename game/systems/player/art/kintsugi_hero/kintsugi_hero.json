@@ -58,6 +58,30 @@
    "loop": false,
    "row": 40,
    "frames": 7
+  },
+  {
+   "name": "attack1",
+   "src": "attack1",
+   "fps": 18.0,
+   "loop": false,
+   "row": 48,
+   "frames": 7
+  },
+  {
+   "name": "attack2",
+   "src": "attack2",
+   "fps": 18.0,
+   "loop": false,
+   "row": 56,
+   "frames": 7
+  },
+  {
+   "name": "attack3",
+   "src": "attack3",
+   "fps": 14.0,
+   "loop": false,
+   "row": 64,
+   "frames": 7
   }
  ]
 }
