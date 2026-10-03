@@ -1,0 +1,25 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://systems/dungeon/puzzles/push_block.gd" id="1_block"]
+
+[sub_resource type="ConvexPolygonShape2D" id="ConvexPolygonShape2D_col"]
+points = PackedVector2Array(0, -12, 24, 0, 0, 12, -24, 0)
+
+[sub_resource type="ConvexPolygonShape2D" id="ConvexPolygonShape2D_detect"]
+points = PackedVector2Array(0, -16, 32, 0, 0, 16, -32, 0)
+
+[node name="PushBlock" type="CharacterBody2D"]
+collision_layer = 1
+collision_mask = 1
+motion_mode = 1
+script = ExtResource("1_block")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("ConvexPolygonShape2D_col")
+
+[node name="DetectArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DetectArea"]
+shape = SubResource("ConvexPolygonShape2D_detect")
