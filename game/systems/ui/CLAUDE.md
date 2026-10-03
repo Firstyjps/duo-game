@@ -46,3 +46,8 @@
 
 ## เพิ่ม action ใหม่
 - action ใหม่ของ Player (เช่น `heal`) ต้องเพิ่มใน `InputConfig.ACTIONS` + `get_default_events()` ให้ตรงกับ `Player.ensure_input_actions()` — รายการปิดตาย ไม่สแกน InputMap (กัน action debug ของ sandbox)
+
+## GameRun (เฟส 7 · #64)
+- `run/game_run.tscn` = ฉากเล่นจริง: `level_scene` (@export) + Player + GameCamera + GameHud + PauseMenu + AudioDirector (ถ้ามี `res://systems/audio/audio_director.tscn`) · TitleScreen เริ่มที่ฉากนี้
+- ด่าน: Marker2D กลุ่ม `player_spawn` = จุดเกิด · มี node กลุ่ม `respawn_handler` (เช่น Dungeon) = ด่านจัดการฟื้นเองผ่าน `EventBus.player_respawn_requested` ไม่งั้น GameRun ฟื้นผู้เล่นที่จุดเกิดหลัง `respawn_delay`
+- ด่านทดสอบตอนนี้ `run/levels/courtyard_level.tscn` (ลานวัด + สไลม์ 3) → สลับเป็น dungeon จริงเมื่อ #39 merge

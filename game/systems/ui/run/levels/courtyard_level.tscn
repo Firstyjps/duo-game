@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://systems/player/debug/iso/iso_courtyard.tscn" id="1"]
+[ext_resource type="PackedScene" path="res://systems/enemy/slime/slime.tscn" id="2"]
+
+[node name="CourtyardLevel" instance=ExtResource("1")]
+spawn_test_hero = false
+
+[node name="PlayerSpawn" type="Marker2D" parent="." groups=["player_spawn"]]
+position = Vector2(32, 272)
+
+[node name="Slime1" parent="." instance=ExtResource("2")]
+position = Vector2(-96, 352)
+
+[node name="Slime2" parent="." instance=ExtResource("2")]
+position = Vector2(160, 336)
+
+[node name="Slime3" parent="." instance=ExtResource("2")]
+position = Vector2(32, 400)

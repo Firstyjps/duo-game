@@ -3,7 +3,7 @@ extends Control
 ## หน้าจอเริ่มเกม (Title Screen): ชื่อเกม "Kintsugi", ปุ่มเริ่มเกม, ตั้งค่า, ออก
 ## ออกแบบสำหรับความละเอียด 960x540 integer scale
 
-@export_file("*.tscn") var start_scene: String = "res://mockup/mockup.tscn"
+@export_file("*.tscn") var start_scene: String = "res://systems/ui/run/game_run.tscn"
 @export var settings_config_path: String = SettingsConfig.CONFIG_PATH
 @export var input_config_path: String = InputConfig.CONFIG_PATH
 @export var config_path: String = ""
