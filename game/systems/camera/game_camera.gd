@@ -389,8 +389,10 @@ func _on_room_started(_room: Node, room_rect: Rect2) -> void:
 
 
 ## ฟื้นที่จุดเกิด: เลิก bounds เดิม แล้ววาร์ปไปหาผู้เล่น (dungeon จะส่ง room_started ของห้องใหม่ตามมา)
-func _on_player_respawn_requested(_position: Vector2) -> void:
-	set_bounds(Rect2())
+## ฟื้น/พักศาลเจ้า: จุดใหม่ยังอยู่ในขอบห้องเดิม → คงขอบไว้ · อยู่นอก → เลิกขอบ (รอ room_started ของห้องใหม่) · แล้ววาร์ปไปหาผู้เล่น
+func _on_player_respawn_requested(position_: Vector2) -> void:
+	if bounds.size != Vector2.ZERO and not bounds.has_point(position_):
+		set_bounds(Rect2())
 	snap_to_target.call_deferred()
 
 

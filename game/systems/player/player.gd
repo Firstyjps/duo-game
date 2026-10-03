@@ -84,6 +84,9 @@ var knock: Vector2 = Vector2.ZERO
 var swing: float = 0.0
 var manual_control: bool = false
 var lock_target: Node2D = null
+## Hurtbox ของเป้าที่ล็อค (จาก LockArea) — monitorable = false (เช่นโคมจุดแล้ว/ศัตรูตาย) → ปลดล็อค
+var _lock_hurtbox: Hurtbox = null
+var _candidate_hurtboxes: Dictionary = {}
 var test_targets: Array[Node2D] = []
 var _has_lock_target: bool = false
 
@@ -281,7 +284,26 @@ func _physics_process(delta: float) -> void:
 	if not manual_control:
 		_read_input()
 	tick(delta)
+	var before: Vector2 = global_position
 	move_and_slide()
+	_hold_against_pushable(before)
+
+
+## เดินดันวัตถุกลุ่ม "pushable" (บล็อกปริศนา) → ยืนแนบผิว ไม่ไถลตามผิวเพชรหลุดมุม (บล็อกนับเวลาดันได้ครบ)
+## เฉพาะตอนเดินปกติ (MOVE) — dodge/knockback ไม่ถูกหยุด
+static func should_hold_against(move: Vector2, normal: Vector2) -> bool:
+	return move.length_squared() > 0.01 and move.normalized().dot(-normal) > 0.5
+
+
+func _hold_against_pushable(before: Vector2) -> void:
+	if state != State.MOVE or knock.length_squared() > 1.0:
+		return
+	for i: int in get_slide_collision_count():
+		var col: KinematicCollision2D = get_slide_collision(i)
+		var other: Object = col.get_collider()
+		if other is Node and (other as Node).is_in_group(&"pushable") and should_hold_against(move_dir, col.get_normal()):
+			global_position = before
+			return
 
 
 ## Logic 1 เฟรม (ไม่รวม move_and_slide) — เทสต์เรียกตรงได้
@@ -767,6 +789,7 @@ func _set_lock_target(target: Node2D) -> void:
 	if is_instance_valid(lock_target) and lock_target == target:
 		return
 	lock_target = target
+	_lock_hurtbox = _candidate_hurtboxes.get(target, null) if is_instance_valid(target) else null
 	_has_lock_target = is_instance_valid(target)
 	lock_target_changed.emit(lock_target)
 
@@ -774,6 +797,7 @@ func _set_lock_target(target: Node2D) -> void:
 func get_lock_candidates() -> Array[Node2D]:
 	var candidates: Array[Node2D] = []
 	var seen: Dictionary = {}
+	_candidate_hurtboxes.clear()
 
 	if lock_area != null and lock_area.is_inside_tree():
 		for area: Area2D in lock_area.get_overlapping_areas():
@@ -783,6 +807,7 @@ func get_lock_candidates() -> Array[Node2D]:
 					if global_position.distance_to(entity.global_position) <= lock_range:
 						seen[entity] = true
 						candidates.append(entity)
+						_candidate_hurtboxes[entity] = area
 
 	for t: Node2D in test_targets:
 		if is_instance_valid(t) and not seen.has(t):
@@ -808,6 +833,8 @@ func _is_valid_locked_target(t: Node2D) -> bool:
 	if not is_instance_valid(t) or t.is_queued_for_deletion():
 		return false
 	if global_position.distance_to(t.global_position) > lock_range * lock_release_mult:
+		return false
+	if _lock_hurtbox != null and (not is_instance_valid(_lock_hurtbox) or not _lock_hurtbox.monitorable):
 		return false
 	return true
 

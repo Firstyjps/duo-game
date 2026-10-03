@@ -564,3 +564,30 @@ func test_respawn_requested_revives_player() -> bool:
 	player._exit_tree()
 	player.free()
 	return dead and revived and died_again
+
+
+## เป้าที่ Hurtbox ปิด monitorable (โคมจุดแล้ว/ตาย) → ปลดล็อคเอง
+func test_lock_releases_when_hurtbox_unmonitorable() -> bool:
+	var player: Player = _spawn()
+	var enemy := Node2D.new()
+	enemy.position = Vector2(40, 0)
+	var hb := Hurtbox.new()
+	hb.team = Combat.Team.NEUTRAL
+	enemy.add_child(hb)
+	player._candidate_hurtboxes[enemy] = hb
+	player._set_lock_target(enemy)
+	var locked: bool = player.is_locked_on()
+	hb.monitorable = false
+	var released: bool = not player._is_valid_locked_target(enemy)
+	enemy.free()
+	player.free()
+	return locked and released
+
+
+
+## เดินเข้าหาผิว pushable (input สวนทาง normal) = ยืนแนบ · เดินเฉียดผิว = ไถลได้ตามปกติ
+func test_should_hold_against_pushable() -> bool:
+	var into: bool = Player.should_hold_against(Vector2(1, 0.2), Vector2(-1, 0))
+	var graze: bool = Player.should_hold_against(Vector2(0, 1), Vector2(-1, 0))
+	var idle: bool = Player.should_hold_against(Vector2.ZERO, Vector2(-1, 0))
+	return into and not graze and not idle
