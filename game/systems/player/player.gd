@@ -292,7 +292,7 @@ func _physics_process(delta: float) -> void:
 ## เดินดันวัตถุกลุ่ม "pushable" (บล็อกปริศนา) → ยืนแนบผิว ไม่ไถลตามผิวเพชรหลุดมุม (บล็อกนับเวลาดันได้ครบ)
 ## เฉพาะตอนเดินปกติ (MOVE) — dodge/knockback ไม่ถูกหยุด
 static func should_hold_against(move: Vector2, normal: Vector2) -> bool:
-	return move.length_squared() > 0.01 and move.normalized().dot(-normal) > 0.5
+	return move.length_squared() > 0.01 and move.normalized().dot(-normal) > 0.4  # 0.4: เดินแกนตรง E/W เข้าผิวเพชร 2:1 ได้ dot ≈ 0.447
 
 
 func _hold_against_pushable(before: Vector2) -> void:
