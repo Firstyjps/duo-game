@@ -8,6 +8,7 @@ const TEST_INPUT_PATH: String = "user://test_input_roundtrip.cfg"
 
 var _orig_locale: String = ""
 var _orig_input_map: Dictionary = {}
+var _orig_deadzone: Dictionary = {}
 
 
 func _init() -> void:
@@ -18,6 +19,7 @@ func _init() -> void:
 		for ev: InputEvent in InputMap.action_get_events(action):
 			list.append(ev.duplicate() as InputEvent)
 		_orig_input_map[action] = list
+		_orig_deadzone[action] = InputMap.action_get_deadzone(action)
 
 
 func _clean_file(path: String) -> void:
@@ -33,7 +35,7 @@ func _restore_defaults() -> void:
 	for action: StringName in InputMap.get_actions():
 		InputMap.erase_action(action)
 	for action: StringName in _orig_input_map.keys():
-		InputMap.add_action(action)
+		InputMap.add_action(action, _orig_deadzone.get(action, 0.5))
 		for ev: InputEvent in _orig_input_map[action]:
 			InputMap.action_add_event(action, ev.duplicate() as InputEvent)
 	# คืนค่า locale เดิมจริง
@@ -898,3 +900,19 @@ func test_rebind_attack_to_f_rejected_due_to_parry_and_labels() -> bool:
 
 	return (not success) and (conflict_action == &"parry") and ok_labels
 
+
+
+## Reset แล้ว heal ยังมีปุ่ม R/Joy Y · ไม่มี action debug ในรายการ · rebind attack → R ถูกปฏิเสธ (heal ใช้อยู่)
+func test_heal_defaults_and_closed_action_list() -> bool:
+	InputMap.add_action(&"restart_debug_probe")
+	InputConfig.reset_to_defaults()
+	var heal_keys: Array[int] = []
+	for ev: InputEvent in InputMap.action_get_events(&"heal"):
+		if ev is InputEventKey:
+			heal_keys.append((ev as InputEventKey).physical_keycode)
+	var acts: Array[StringName] = InputConfig.get_actions()
+	var closed: bool = acts.has(&"heal") and not acts.has(&"restart_debug_probe")
+	var dup_blocked: bool = not InputConfig.rebind(&"attack", InputConfig.make_key_event(KEY_R), null)
+	InputMap.erase_action(&"restart_debug_probe")
+	_restore_defaults()
+	return heal_keys.has(KEY_R) and closed and dup_blocked

@@ -15,6 +15,7 @@ const ACTIONS: Array[StringName] = [
 	&"dodge",
 	&"parry",
 	&"lock_on",
+	&"heal",
 	&"ui_pause",
 ]
 
@@ -25,23 +26,10 @@ const UI_PROTECTED_ACTIONS: Array[StringName] = [
 ]
 
 
-## อ่านรายชื่อ action จาก ACTIONS ร่วมกับ Player.ensure_input_actions() จริง
+## รายการปิดตาย (ไม่สแกน InputMap — กัน action debug ของ sandbox โผล่/ถูก reset) · เพิ่ม action ใหม่ของ Player ต้องเพิ่มที่ ACTIONS + get_default_events
 static func get_actions() -> Array[StringName]:
 	Player.ensure_input_actions()
-	var list: Array[StringName] = []
-	for act: StringName in ACTIONS:
-		if not list.has(act):
-			list.append(act)
-	for act: StringName in InputMap.get_actions():
-		if act.begins_with("ui_"):
-			continue
-		if not list.has(act):
-			var pause_idx: int = list.find(&"ui_pause")
-			if pause_idx != -1:
-				list.insert(pause_idx, act)
-			else:
-				list.append(act)
-	return list
+	return ACTIONS.duplicate()
 
 
 static func make_key_event(keycode: Key) -> InputEventKey:
@@ -110,6 +98,9 @@ static func get_default_events(action: StringName) -> Array[InputEvent]:
 			list.append(make_key_event(KEY_TAB))
 			list.append(make_mouse_event(MOUSE_BUTTON_MIDDLE))
 			list.append(make_joy_button_event(JOY_BUTTON_RIGHT_SHOULDER))
+		&"heal":
+			list.append(make_key_event(KEY_R))
+			list.append(make_joy_button_event(JOY_BUTTON_Y))
 		&"ui_pause":
 			list.append(make_key_event(KEY_ESCAPE))
 			list.append(make_joy_button_event(JOY_BUTTON_START))
