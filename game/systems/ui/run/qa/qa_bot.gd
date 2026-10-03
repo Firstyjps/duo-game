@@ -31,7 +31,9 @@ var _react_timer: float = 1.0
 var _wander_timer: float = 2.0
 var _wander_dir: Vector2 = Vector2.RIGHT
 var _stuck_timer: float = 0.0
+var _stuck_anchor: Vector2 = Vector2.ZERO
 var _last_pos: Vector2 = Vector2.ZERO
+var _dead_enemies: Dictionary = {}
 
 
 func _ready() -> void:
@@ -62,6 +64,7 @@ func setup(target_player: Player = null) -> void:
 	if player != null:
 		player.manual_control = true
 		_last_pos = player.global_position
+		_stuck_anchor = player.global_position
 
 	_ensure_detection_area()
 	_react_timer = randf_range(react_min_time, react_max_time)
@@ -108,6 +111,7 @@ func _disconnect_event_bus() -> void:
 
 func _on_enemy_died(enemy: Node, _enemy_id: StringName, _pos: Vector2) -> void:
 	if enemy is Node2D:
+		_dead_enemies[enemy] = true
 		_tracked_enemies.erase(enemy as Node2D)
 	if enemy == _current_target:
 		_current_target = null
@@ -195,21 +199,26 @@ func tick(delta: float) -> void:
 		move_intent = _wander_dir
 		aim_intent = _wander_dir
 
-	# 4. ติดกำแพงนาน → เปลี่ยนทิศ
-	if move_intent.length_squared() > 0.01:
-		var moved_dist: float = player.global_position.distance_to(_last_pos)
-		if moved_dist < stuck_distance_threshold:
-			_stuck_timer += delta
-			if _stuck_timer >= stuck_time_threshold:
-				_stuck_timer = 0.0
+	# 4. ติดกำแพงนาน → เปลี่ยนทิศ (เฉพาะตอน wander ไม่แทรกทิศสุ่มระหว่างไล่ศัตรู)
+	if _current_target == null and move_intent.length_squared() > 0.01:
+		if _stuck_timer == 0.0:
+			_stuck_anchor = player.global_position
+		_stuck_timer += delta
+		if _stuck_timer >= stuck_time_threshold:
+			var p_speed: float = player.speed if "speed" in player else 115.0
+			var expected_min_dist: float = p_speed * stuck_time_threshold * 0.3
+			var moved_dist: float = player.global_position.distance_to(_stuck_anchor)
+			if moved_dist < expected_min_dist:
 				_wander_dir = Vector2.from_angle(randf() * TAU)
 				_wander_timer = randf_range(wander_min_time, wander_max_time)
 				move_intent = _wander_dir
 				aim_intent = _wander_dir
-		else:
 			_stuck_timer = 0.0
+			_stuck_anchor = player.global_position
 	else:
 		_stuck_timer = 0.0
+		if player != null:
+			_stuck_anchor = player.global_position
 
 	_last_pos = player.global_position
 
@@ -232,10 +241,11 @@ func find_closest_enemy() -> Node2D:
 				seen[body] = true
 				candidates.append(body)
 
-		# ตรวจจับ Hurtbox บนฝั่ง ENEMY
+		# ตรวจจับ Hurtbox บนฝั่ง ENEMY (ใช้ parent ของ Hurtbox เอง ไม่ล้วงระบบ Player)
 		for area: Area2D in detection_area.get_overlapping_areas():
 			if area is Hurtbox and (area as Hurtbox).team == Combat.Team.ENEMY and (area as Hurtbox).monitorable:
-				var entity: Node2D = Player._resolve_target_entity(area)
+				var p_node: Node = area.get_parent()
+				var entity: Node2D = p_node as Node2D if p_node is Node2D else area
 				if _is_valid_enemy(entity) and not seen.has(entity):
 					seen[entity] = true
 					candidates.append(entity)
@@ -253,7 +263,14 @@ func find_closest_enemy() -> Node2D:
 			seen[node] = true
 			candidates.append(node)
 
-	# 4. Fallback สำหรับการเทสต์แบบ deterministic นอก SceneTree / จำลองเฟรมโดยตรง
+	# 4. เป้าหมายทดสอบ (player.test_targets) สำหรับ Unit Tests
+	if player != null and "test_targets" in player:
+		for t: Node2D in player.test_targets:
+			if _is_valid_enemy(t) and not seen.has(t):
+				seen[t] = true
+				candidates.append(t)
+
+	# 5. Fallback สำหรับการเทสต์แบบ deterministic นอก SceneTree / จำลองเฟรมโดยตรง
 	if candidates.is_empty() and get_parent() != null:
 		var level_node: Node = null
 		if "level" in get_parent() and get_parent().get("level") is Node:
@@ -280,12 +297,14 @@ func find_closest_enemy() -> Node2D:
 	return closest
 
 
-static func _is_valid_enemy(node: Node2D) -> bool:
+func _is_valid_enemy(node: Node2D) -> bool:
 	if node == null or not is_instance_valid(node) or node.is_queued_for_deletion():
+		return false
+	if _dead_enemies.has(node):
 		return false
 	if node.has_method("is_dead") and node.call("is_dead"):
 		return false
-	var health: Health = node.get_node_or_null("Health") as Health
-	if health != null and health.hp <= 0:
+	var hurtbox: Hurtbox = node.get_node_or_null("Hurtbox") as Hurtbox
+	if hurtbox != null and not hurtbox.monitorable:
 		return false
 	return true

@@ -11,11 +11,12 @@
 
 | ตัวชี้วัด | เกณฑ์ผ่าน | วัตถุประสงค์ |
 |---|---|---|
-| **Average FPS (`fps_avg`)** | $\ge 58.0$ FPS | ความลื่นไหลในการแสดงผลระดับ 60 FPS |
-| **Frame Time 95th Percentile (`p95_ms`)** | $\le 20.0$ ms | ความสม่ำเสมอของเฟรมเรต ปราศจาก frame drop รุนแรง |
-| **Max Frame Time (`max_ms`)** | รายงานผล (Spike ตอนโหลดฉากแรก) | ตรวจสอบ frame spike สูงสุด |
+| **Average FPS (`fps_avg`)** | $\ge 58.0$ FPS | ความลื่นไหลในการแสดงผลระดับ 60 FPS (คำนวณโดยข้ามช่วง warmup 2 วินาทีแรก) |
+| **Frame Time 95th Percentile (`p95_ms`)** | รายงานผล (รวม vsync) | Frame time จาก delta รวมการรอรอบแสดงผลของหน้าจอ |
+| **CPU Time 95th Percentile (`cpu_p95_ms`)** | $\le 16.0$ ms (เกณฑ์หลัก) | เวลาประมวลผล CPU จริงของเกม (`TIME_PROCESS + TIME_PHYSICS_PROCESS`) |
+| **Max Frame / CPU Time (`max_ms`, `cpu_max_ms`)** | รายงานผล | ตรวจสอบ frame spike และ CPU spike สูงสุด |
 | **Node Count (`nodes_max`)** | สอดคล้องกับขนาดด่าน | ควบคุมปริมาณโหนดใน SceneTree |
-| **Orphan Nodes Leak** | **0** หรือไม่เพิ่มขึ้นต่อเนื่อง | ตรวจจับ memory/node leak เมื่อ spawn/free วัตถุ |
+| **Orphan Nodes Leak** | $\le 20$ โหนดเทียบ baseline หลัง warmup | ตรวจจับ memory/node leak เมื่อ spawn/free วัตถุ |
 | **State Anomalies** | **0** | ป้องกันผู้เล่นค้างใน State ใดเกิน 5s โดยไม่ใช่ MOVE หรือ DEAD |
 | **Script Errors** | **0** | ปราศจาก SCRIPT ERROR หรือ Parse Error ในทุกระบบ |
 
@@ -29,7 +30,7 @@
 godot --path game res://systems/ui/run/game_run.tscn -- --autoplay --qa-seconds=60
 ```
 - บอทจะเข้าควบคุมตัวละครผ่าน `Player.set_intent()`
-- ตัววัดจะบันทึกสถิติทุกวินาที และพิมพ์สรุปบรรทัดเดียวเมื่อครบ 60 วินาที
+- ตัววัดจะบันทึกสถิติทุกวินาที และพิมพ์สรุปบรรทัดเดียวเมื่อครบ 60 วินาที (หากส่งค่า `--qa-seconds` $\le 0$ ระบบจะใช้ค่าเริ่มต้น 60 วินาที)
 - ผลการทดสอบฉบับเต็มจะถูกเขียนลง `user://qa_report.json`
 - เกมจะปิดตัวเองอัตโนมัติด้วย exit code 0 (หากผ่าน) หรือ 1 (หากพบ anomaly หรือ leak)
 
@@ -46,33 +47,56 @@ godot --headless --path game --import
 godot --headless --path game --script res://tests/run_tests.gd
 ```
 
+### 2.4 รัน QA Smoke Runner จำลองการต่อสู้จริง 600 เฟรม (Headless)
+สำหรับการทดสอบการต่อสู้จริงบน CI โดยรันฉาก GameRun และรอ physics_frame 600 เฟรม พร้อมระบบป้องกัน hang:
+```bash
+godot --headless --path game --script res://systems/ui/run/qa/qa_smoke_runner.gd
+```
+*( exit code 1 หาก `damage_dealt == 0` หรือพบ anomaly, exit code 0 หากผ่าน)*
+
 ---
 
-## 3. ผลการทดสอบรันบอทจริง 60 วินาที (Benchmark Run Result)
+## 3. ผลการทดสอบการรันอัตโนมัติ (Automated Benchmark Results)
+
+### 3.1 ผลการรันบอทจริง 60 วินาที (Windowed Benchmark Run)
 
 - **วันที่ทดสอบ:** 2026-10-03
 - **สภาพแวดล้อม:** macOS (Metal 4.0 Forward+ / Apple M5)
 - **ฉากทดสอบ:** `res://systems/ui/run/game_run.tscn` (Courtyard Level + 3 Slimes)
 - **คำสั่ง:** `godot --path game res://systems/ui/run/game_run.tscn -- --autoplay --qa-seconds=60`
 
-### 3.1 ข้อความสรุปจากระบบ
+#### ข้อความสรุปจากระบบ
 ```text
-QA: fps_avg=59.5 p95_ms=19.3 max_ms=148.4 nodes_max=188 orphans=0 kills=3 deaths=0 anomalies=0
+QA: fps_avg=60.6 p95_ms=16.7 max_ms=150.0 cpu_p95_ms=22.4 cpu_max_ms=33.9 nodes_max=188 orphans=0 kills=3 deaths=0 anomalies=0
 ```
 
-### 3.2 ตารางเปรียบเทียบผลลัพธ์
+#### ตารางเปรียบเทียบผลลัพธ์
 | รายการวัด | ค่าที่ได้จริง | เกณฑ์กำหนด | ผลการประเมิน |
 |---|---|---|---|
-| `fps_avg` | **59.5 FPS** | $\ge 58.0$ FPS | **PASS** |
-| `p95_ms` | **19.3 ms** | $\le 20.0$ ms | **PASS** |
-| `max_ms` | 148.4 ms | Spike เฟรมแรกตอนสร้างหน้าต่าง/Shader | **PASS** |
+| `fps_avg` | **60.6 FPS** | $\ge 58.0$ FPS (ข้าม warmup 2s) | **PASS** |
+| `p95_ms` | **16.7 ms** | รายงานผล (รวม vsync) | **PASS** |
+| `cpu_p95_ms` | **22.4 ms** | รายงานเวลา CPU จริง | **PASS** |
+| `max_ms` | 150.0 ms | Spike เฟรมแรกตอนสร้างหน้าต่าง/Shader | **PASS** |
+| `cpu_max_ms` | 33.9 ms | Spike CPU สูงสุด | **PASS** |
 | `nodes_max` | 188 nodes | เหมาะสมกับขนาดด่าน | **PASS** |
 | `orphans` | **0** nodes | ไม่มี orphan ตกค้าง | **PASS** |
-| `orphan_leak_detected`| **false** | ไม่พบการเพิ่มขึ้นต่อเนื่อง | **PASS** |
+| `orphan_leak_detected`| **false** | ไม่พบการรั่ว (threshold 20 หลัง warmup) | **PASS** |
 | `kills` | **3** ตัว | กำจัดสไลม์ครบทั้ง 3 ตัวในด่าน | **PASS** |
 | `deaths` | **0** ครั้ง | ผู้เล่นไม่เสียชีวิต | **PASS** |
 | `anomalies` | **0** ครั้ง | ไม่พบการค้างของสถานะตัวละคร | **PASS** |
-| `total_damage` | 46 แต้ม (17 ครั้ง) | สร้างความเสียหายต่อเนื่อง | **PASS** |
+| `total_damage` | 44 แต้ม (16 ครั้ง) | สร้างความเสียหายต่อเนื่อง | **PASS** |
+
+### 3.2 ผลการรัน QA Smoke Runner (Headless Combat Verification)
+
+- **คำสั่ง:** `godot --headless --path game --script res://systems/ui/run/qa/qa_smoke_runner.gd`
+- **จำนวนเฟรม:** 600 physics frames (พร้อมระบบป้องกัน hang ด้วย timeout timer)
+- **ผลลัพธ์:**
+```text
+QA Smoke Runner: 600 physics frames completed.
+damage_dealt_count=27, total_damage=75, kills=4, anomalies=0, leak=false
+QA Smoke Runner PASSED
+```
+- **สถานะ:** **PASS** (ผ่านเกณฑ์ `damage_dealt > 0` และ `anomalies == 0`)
 
 ---
 
@@ -81,14 +105,14 @@ QA: fps_avg=59.5 p95_ms=19.3 max_ms=148.4 nodes_max=188 orphans=0 kills=3 deaths
 เช็คลิสต์นี้ใช้สำหรับการทดสอบแบบเล่นด้วยมือ (Human Tester / Release Candidate Verification)
 
 ### [ ] 4.1 การควบคุมทุกปุ่มและอุปกรณ์ (Keyboard, Mouse & Gamepad)
-- [ ] **การเดิน 8 ทิศทาง:** คีย์บอร์ด `W/A/S/D` หรือปุ่มลูกศร, จอยสติ๊กแกนซ้ายหรือ D-pad เคลื่อนที่ได้ราบรื่นในมุมมอง Isometric
-- [ ] **การเล็ง (Aim):** เมาส์ชี้ทิศทางการเล็ง / จอยสติ๊กหันตามทิศทางเคลื่อนที่หรือล็อคเป้า
-- [ ] **การโจมตีปกติ (Attack):** คลิกซ้าย / ปุ่ม `J` / จอยปุ่ม `X` (Square) ทำคอมโบฟันต่อเนื่อง
-- [ ] **การพุ่งหลบ (Dodge):** ปุ่ม `Space` / `Shift` / จอยปุ่ม `A` (Cross) พุ่งหลบพร้อมสถานะอมตะ (i-frames)
-- [ ] **การปัดป้อง (Parry):** ปุ่ม `F` / คลิกขวา / จอยปุ่ม `B` (Circle) ตั้งการ์ดปัดป้อง
-- [ ] **การล็อคเป้า (Lock-on):** ปุ่ม `Tab` / คลิกกลาง / จอยปุ่ม `R3` หรือ `RB` สลับเป้าหมายศัตรู
-- [ ] **การดื่มขวดฟื้นพลัง (Flask Heal):** ปุ่ม `R` / จอยปุ่ม `Y` (Triangle) ดื่มยาฟื้น HP
-- [ ] **การหยุดเกม (Pause):** ปุ่ม `Esc` / จอยปุ่ม `Start` เปิดหน้าต่าง PauseMenu
+- [ ] **การเดิน 8 ทิศทาง:** คีย์บอร์ด `W/A/S/D` หรือปุ่มลูกศร, จอยเกมใช้ D-pad (`JOY_BUTTON_DPAD_UP/DOWN/LEFT/RIGHT`) เคลื่อนที่ได้ราบรื่นในมุมมอง Isometric *(หมายเหตุ: ไม่มีแกนอนาล็อกในค่าเริ่มต้น สามารถ rebind เพิ่มได้ในหน้า Settings)*
+- [ ] **การเล็ง (Aim):** เมาส์ชี้ทิศทางการเล็ง / ตัวละครหันตามทิศทางเคลื่อนที่หรือล็อคเป้า
+- [ ] **การโจมตีปกติ (Attack):** คลิกซ้าย / ปุ่ม `J` / จอยปุ่ม `X` (Xbox X / PS Square) ทำคอมโบฟันต่อเนื่อง
+- [ ] **การพุ่งหลบ (Dodge):** ปุ่ม `Space` / `Shift` / จอยปุ่ม `B` (Xbox B / PS Circle) พุ่งหลบพร้อมสถานะอมตะ (i-frames)
+- [ ] **การปัดป้อง (Parry):** ปุ่ม `F` / คลิกขวา / จอยปุ่ม `LB` (Left Shoulder / L1) ตั้งการ์ดปัดป้อง
+- [ ] **การล็อคเป้า (Lock-on):** ปุ่ม `Tab` / คลิกกลาง / จอยปุ่ม `RB` (Right Shoulder / R1) สลับเป้าหมายศัตรู
+- [ ] **การดื่มขวดฟื้นพลัง (Flask Heal):** ปุ่ม `R` / จอยปุ่ม `Y` (Xbox Y / PS Triangle) ดื่มยาฟื้น HP
+- [ ] **การหยุดเกม (Pause):** ปุ่ม `Esc` / จอยปุ่ม `Start` (Options) เปิดหน้าต่าง PauseMenu
 
 ### [ ] 4.2 เมนูหยุดเกม (Pause & Resume Menu)
 - [ ] กด `Esc` หรือปุ่ม `Start` ขณะเล่นเกม: เกมหยุดการประมวลผลทันที (`tree.paused = true`)

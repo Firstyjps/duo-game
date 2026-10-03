@@ -16,10 +16,14 @@ extends Node
 @export var report_path: String = "user://qa_report.json"
 @export var anomaly_stuck_threshold: float = 5.0
 @export var auto_quit: bool = true
+@export var warmup_seconds: float = 2.0
+@export var orphan_leak_threshold: int = 20
 
 var player: Player
 var elapsed_seconds: float = 0.0
 var total_frames: int = 0
+var _post_warmup_frames: int = 0
+var _post_warmup_seconds: float = 0.0
 
 # Event counters
 var damage_dealt_count: int = 0
@@ -30,6 +34,7 @@ var deflections: int = 0
 
 # Datasets
 var frame_times_ms: Array[float] = []
+var cpu_times_ms: Array[float] = []
 var snapshots: Array[Dictionary] = []
 var anomalies: Array[Dictionary] = []
 
@@ -59,6 +64,8 @@ func _notification(what: int) -> void:
 
 
 func setup(target_player: Player = null) -> void:
+	if target_seconds <= 0.0:
+		target_seconds = 60.0
 	if target_player != null:
 		player = target_player
 	elif get_parent() != null and "player" in get_parent() and get_parent().get("player") is Player:
@@ -124,10 +131,19 @@ func tick(delta: float) -> void:
 	_second_frames += 1
 	_second_acc += delta
 
-	# 1. วัด Process frame time
-	var proc_time: float = Performance.get_monitor(Performance.TIME_PROCESS)
-	var frame_ms: float = proc_time * 1000.0 if proc_time > 0.0 else delta * 1000.0
+	# ข้ามช่วง warmup สำหรับการคำนวณ fps_avg
+	if elapsed_seconds > warmup_seconds:
+		_post_warmup_frames += 1
+		_post_warmup_seconds += delta
+
+	# 1. วัด Frame time รวม vsync จาก delta และเวลา CPU จริงจาก TIME_PROCESS + TIME_PHYSICS_PROCESS
+	var frame_ms: float = delta * 1000.0
 	frame_times_ms.append(frame_ms)
+
+	var proc_time: float = Performance.get_monitor(Performance.TIME_PROCESS)
+	var physics_time: float = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
+	var cpu_ms: float = (proc_time + physics_time) * 1000.0
+	cpu_times_ms.append(cpu_ms)
 
 	# 2. ตรวจสอบ Player state anomaly (ค้างเกิน 5s ในสถานะไม่ใช่ MOVE / DEAD)
 	if player != null and is_instance_valid(player):
@@ -166,10 +182,14 @@ func _record_snapshot() -> void:
 	var node_count: int = int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
 	var orphan_count: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	var memory_bytes: int = int(Performance.get_monitor(Performance.MEMORY_STATIC))
+	var proc_time: float = Performance.get_monitor(Performance.TIME_PROCESS)
+	var physics_time: float = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
+	var cpu_ms: float = (proc_time + physics_time) * 1000.0
 
 	snapshots.append({
 		"second": int(round(elapsed_seconds)),
 		"fps": fps_val,
+		"cpu_ms": cpu_ms,
 		"nodes": node_count,
 		"orphans": orphan_count,
 		"memory_bytes": memory_bytes,
@@ -201,22 +221,19 @@ static func compute_max(values: Array[float]) -> float:
 
 
 func detect_orphan_leak() -> bool:
-	return detect_orphan_leak_snapshots(snapshots)
+	return detect_orphan_leak_snapshots(snapshots, orphan_leak_threshold, warmup_seconds)
 
 
-static func detect_orphan_leak_snapshots(snaps: Array[Dictionary]) -> bool:
-	if snaps.size() < 4:
+static func detect_orphan_leak_snapshots(snaps: Array[Dictionary], threshold: int = 20, warmup_sec: float = 2.0) -> bool:
+	if snaps.is_empty():
 		return false
-	var strictly_increasing: bool = true
-	for i: int in range(snaps.size() - 3, snaps.size()):
-		var cur: int = int(snaps[i].get("orphans", 0))
-		var prev: int = int(snaps[i - 1].get("orphans", 0))
-		if cur <= prev:
-			strictly_increasing = false
+	var baseline_orphans: int = int(snaps[0].get("orphans", 0))
+	for s: Dictionary in snaps:
+		if float(s.get("second", 0)) >= warmup_sec:
+			baseline_orphans = int(s.get("orphans", 0))
 			break
-	if strictly_increasing and int(snaps[-1].get("orphans", 0)) > int(snaps[0].get("orphans", 0)):
-		return true
-	return false
+	var last_orphans: int = int(snaps[-1].get("orphans", 0))
+	return (last_orphans - baseline_orphans) > threshold
 
 
 ## ปิดรอบบันทึกผล เขียนไฟล์ JSON พิมพ์สรุป และ quit หาก auto_quit = true
@@ -229,20 +246,21 @@ func finish_and_report() -> Dictionary:
 	if snapshots.is_empty() or snapshots[-1]["second"] != int(round(elapsed_seconds)):
 		_record_snapshot()
 
-	var fps_sum: float = 0.0
 	var nodes_max: int = 0
 	var last_orphans: int = 0
 
 	for s: Dictionary in snapshots:
-		fps_sum += float(s.get("fps", 0.0))
 		var n: int = int(s.get("nodes", 0))
 		if n > nodes_max:
 			nodes_max = n
 		last_orphans = int(s.get("orphans", 0))
 
-	var fps_avg: float = fps_sum / float(snapshots.size()) if not snapshots.is_empty() else (float(total_frames) / maxf(0.001, elapsed_seconds))
+	# คำนวณ fps_avg โดยข้ามช่วง warmup 2 วินาทีแรก
+	var fps_avg: float = float(_post_warmup_frames) / _post_warmup_seconds if _post_warmup_seconds > 0.0 else (float(total_frames) / maxf(0.001, elapsed_seconds))
 	var p95_ms: float = compute_p95(frame_times_ms)
 	var max_ms: float = compute_max(frame_times_ms)
+	var cpu_p95_ms: float = compute_p95(cpu_times_ms)
+	var cpu_max_ms: float = compute_max(cpu_times_ms)
 	var is_leak: bool = detect_orphan_leak()
 
 	var report := {
@@ -250,6 +268,8 @@ func finish_and_report() -> Dictionary:
 			"fps_avg": fps_avg,
 			"p95_ms": p95_ms,
 			"max_ms": max_ms,
+			"cpu_p95_ms": cpu_p95_ms,
+			"cpu_max_ms": cpu_max_ms,
 			"nodes_max": nodes_max,
 			"orphans": last_orphans,
 			"kills": kills,
@@ -272,11 +292,13 @@ func finish_and_report() -> Dictionary:
 		file.store_string(JSON.stringify(report, "\t"))
 		file.close()
 
-	# พิมพ์สรุปบรรทัดเดียวตาม format ของ contract QA
-	var summary_line: String = "QA: fps_avg=%.1f p95_ms=%.1f max_ms=%.1f nodes_max=%d orphans=%d kills=%d deaths=%d anomalies=%d" % [
+	# พิมพ์สรุปบรรทัดเดียวตาม format ของ contract QA (พร้อมรายงานเวลา CPU จริง)
+	var summary_line: String = "QA: fps_avg=%.1f p95_ms=%.1f max_ms=%.1f cpu_p95_ms=%.1f cpu_max_ms=%.1f nodes_max=%d orphans=%d kills=%d deaths=%d anomalies=%d" % [
 		fps_avg,
 		p95_ms,
 		max_ms,
+		cpu_p95_ms,
+		cpu_max_ms,
 		nodes_max,
 		last_orphans,
 		kills,

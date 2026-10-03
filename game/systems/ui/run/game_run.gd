@@ -84,6 +84,8 @@ func _check_qa_autoplay() -> void:
 
 
 func start_qa(seconds: float = 60.0) -> void:
+	if seconds <= 0.0:
+		seconds = 60.0
 	if qa_bot == null:
 		var bot_scene: GDScript = preload("res://systems/ui/run/qa/qa_bot.gd")
 		qa_bot = bot_scene.new() as Node2D
@@ -114,7 +116,8 @@ static func get_qa_cmdline_args() -> Dictionary:
 		elif arg.begins_with("--qa-seconds="):
 			var val: String = arg.substr("--qa-seconds=".length())
 			if val.is_valid_float():
-				result["qa_seconds"] = val.to_float()
+				var s: float = val.to_float()
+				result["qa_seconds"] = s if s > 0.0 else 60.0
 	return result
 
 
