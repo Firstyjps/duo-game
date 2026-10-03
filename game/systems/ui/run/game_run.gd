@@ -10,7 +10,7 @@ const HUD_SCENE: PackedScene = preload("res://systems/hud/hud.tscn")
 const PAUSE_SCENE: PackedScene = preload("res://systems/ui/pause/pause_menu.tscn")
 const AUDIO_SCENE_PATH: String = "res://systems/audio/audio_director.tscn"
 
-@export var level_scene: PackedScene = preload("res://systems/ui/run/levels/courtyard_level.tscn")
+@export var level_scene: PackedScene = preload("res://systems/ui/run/levels/playtest_dungeon.tscn")  # playtest branch เท่านั้น
 @export var camera_zoom: float = 2.0
 @export var respawn_delay: float = 1.6
 
