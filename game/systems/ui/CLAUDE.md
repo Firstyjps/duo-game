@@ -43,3 +43,6 @@
 
 ## เทสต์
 - `game/tests/test_ui_settings.gd`
+
+## เพิ่ม action ใหม่
+- action ใหม่ของ Player (เช่น `heal`) ต้องเพิ่มใน `InputConfig.ACTIONS` + `get_default_events()` ให้ตรงกับ `Player.ensure_input_actions()` — รายการปิดตาย ไม่สแกน InputMap (กัน action debug ของ sandbox)
