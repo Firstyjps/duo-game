@@ -1,7 +1,7 @@
 extends Node2D
 ## ลานวัดทดสอบ isometric (เฟส 1 · #37) — เดิน 8 ทิศ ดูว่าสไปรต์หันถูกทุกทิศ
 ## WASD/ลูกศร เดิน · Shift วิ่ง · Space กลิ้งหลบ · H โดนตี · K ตาย · R ฟื้น
-## สร้าง TileSet ด้วยโค้ด (tile ชั่วคราวจาก make_tiles.py) ไม่ใช่ระบบดันเจี้ยนจริง
+## สร้าง TileSet ด้วยโค้ด (tile PixelLab จาก make_tiles.py) ไม่ใช่ระบบดันเจี้ยนจริง
 
 const TILES: Texture2D = preload("res://systems/player/debug/iso/iso_tiles.png")
 const FRAMES_PATH: String = "res://systems/player/art/kintsugi_hero/kintsugi_hero_frames.tres"
@@ -47,7 +47,7 @@ func _ready() -> void:
 			else:
 				var r: float = rng.randf()
 				var kind: int = 1 if r < 0.08 else (2 if r < 0.2 else 0)
-				floor_layer.set_cell(Vector2i(x, y), 0, Vector2i(kind, 1))
+				floor_layer.set_cell(Vector2i(x, y), 0, Vector2i(kind, 0))
 
 	hero = CharacterBody2D.new()
 	hero.motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
@@ -108,11 +108,11 @@ func _make_tileset() -> TileSet:
 	src.texture = TILES
 	src.texture_region_size = Vector2i(64, 32)
 	ts.add_source(src, 0)
-	for i: int in 3:  # พื้น = ครึ่งล่างของช่อง 64x64
-		src.create_tile(Vector2i(i, 1))
-	src.create_tile(Vector2i(3, 0), Vector2i(1, 2))  # บล็อก 64x64
+	for i: int in 4:  # ทุก tile สูง 64 = 1×2 ช่อง atlas (ดู make_tiles.py)
+		src.create_tile(Vector2i(i, 0), Vector2i(1, 2))
+		var td: TileData = src.get_tile_data(Vector2i(i, 0), 0)
+		td.texture_origin = Vector2i(0, 16 if i == 3 else 6)  # บล็อก: ฐานกลาง y=48 · พื้นบาง: หน้าบนกลาง y≈38
 	var block: TileData = src.get_tile_data(Vector2i(3, 0), 0)
-	block.texture_origin = Vector2i(0, 16)  # ให้ฐานบล็อกตรงกับเพชรของช่อง
 	block.add_collision_polygon(0)
 	block.set_collision_polygon_points(0, 0, PackedVector2Array([
 		Vector2(0, -16), Vector2(32, 0), Vector2(0, 16), Vector2(-32, 0)]))

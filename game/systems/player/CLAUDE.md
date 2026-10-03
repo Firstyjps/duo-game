@@ -17,7 +17,7 @@
 | `debug/dummy.gd` | หุ่นลองรับดาเมจและสั่งโจมตีปล่อย Hitbox เพื่อทดสอบ parry |
 | `iso/dir8.gd` | `Dir8` เลือก 1 ใน 8 ทิศจากเวกเตอร์บนจอ (+ แบบ sticky กันกระพริบตรงรอยต่อ) · ลำดับ = แถวใน atlas |
 | `iso/dir_sprite.gd` | `DirSprite` (AnimatedSprite2D) เล่น `"<ท่า>_<ทิศ>"` · เลี้ยวกลางท่าเล่นต่อเฟรมเดิม · ท่าที่ไม่มี → idle |
-| `art/kintsugi_hero/` | ตัวเอก isometric 64 px 8 ทิศ: `kintsugi_hero.png` (atlas ช่อง 96) + `_frames.tres` (SpriteFrames) + `.json` · ท่า idle/walk/run/dodge/hurt/death — **สร้างจาก tools/ ห้ามแก้มือ** |
+| `art/kintsugi_hero/` | ตัวเอก isometric 64 px 8 ทิศ: `kintsugi_hero.png` (atlas ช่อง 96) + `_frames.tres` (SpriteFrames) + `.json` · ท่า idle/walk/run/dodge/hurt/death/attack1/attack2/attack3 — **สร้างจาก tools/ ห้ามแก้มือ** · คำสั่ง build ล่าสุด: `--anim idle=idle:5:loop --anim walk=walk:10:loop --anim run=run:14:loop --anim dodge=dodge:16:once --anim hurt=hurt:12:once --anim death=death:8:once --anim attack1=attack1:18:once --anim attack2=attack2:18:once --anim attack3=attack3:14:once --fix-north-hair` |
 | `tools/fetch_pixellab_character.py` → `tools/build_dir_atlas.py` | pipeline PixelLab → atlas (วิธีใช้อยู่หัวไฟล์) · raw เก็บที่ `kintsugi/assets/sprites/hero_iso/` (นอก game/) · PixelLab character id `af4cec7c-aadf-4901-a9cd-136679db32ae` |
 | `debug/iso/iso_courtyard.tscn` | ลานวัด isometric ทดสอบเดิน 8 ทิศ (WASD · Shift วิ่ง · Space พุ่งหลบ · H โดนตี · K ตาย · R ฟื้น) · `-- --shot` ถ่ายภาพครบ 8 ทิศลง `user://` · tile ชั่วคราวจาก `make_tiles.py` |
 
@@ -50,7 +50,7 @@
 - ทิศ north ของ kintsugi_hero ผมออกมาเป็นเบจ → `--fix-north-hair` remap เป็นลาเวนเดอร์ (ใช้ทุกครั้งที่ build)
 - ตัวละครนี้อิง sample Merakintsugi ที่ยังไม่เช็คสิทธิ์ → ใช้ทดสอบเท่านั้น ก่อนขายต้องออกแบบใหม่
 
-- ภาพ: `sprite` = node ภาพ (DirSprite หรือ Sprite2D) ใช้ทำเอฟเฟกต์ scale/สี · `_animate_dir_sprite()` เลือกท่าตาม state (ATTACK/PARRY/DRINK ใช้ idle + เอฟเฟกต์จนกว่าจะมีท่าจริง, DRINK กระพริบเขียวอ่อนตอน heal_at) · เดิน = หันตามทิศเดิน, โจมตี/lock-on = หันตาม aim, โดนตี = คงทิศ
+- ภาพ: `sprite` = node ภาพ (DirSprite หรือ Sprite2D) ใช้ทำเอฟเฟกต์ scale/สี · `_animate_dir_sprite()` เลือกท่าตาม state (ATTACK = `show_frame()` ตามเฟส: ง้าง 1–2 · ฟัน 3–4 · กลับ 5–6 · คอมโบสลับ attack1/attack2 · ชาร์จ/ท่าหนัก = attack3 · PARRY ใช้ idle + เอฟเฟกต์ · DRINK = idle + กระพริบเขียวอ่อนตอน heal_at, หันตามทิศเดินช้า ๆ · stamina ฟื้นระหว่างดื่ม) · เดิน = หันตามทิศเดิน, โจมตี/lock-on = หันตาม aim, โดนตี = คงทิศ
 
 ## เทสต์
 - `game/tests/test_player_combat.gd` (เทสต์พื้นฐานเดิม)

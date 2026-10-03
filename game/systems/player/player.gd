@@ -330,7 +330,8 @@ func tick(delta: float) -> void:
 
 
 func _is_busy_state(s: State) -> bool:
-	return s == State.DODGE or s == State.ATTACK or s == State.DEAD or s == State.PARRY or s == State.DRINK
+	# DRINK ไม่นับเป็น busy → stamina ฟื้นระหว่างดื่ม (แบบ Souls)
+	return s == State.DODGE or s == State.ATTACK or s == State.DEAD or s == State.PARRY
 
 
 func _process(delta: float) -> void:
@@ -664,7 +665,7 @@ func _on_deflected(info: DamageInfo) -> void:
 
 
 ## ฟื้นเต็มที่ตำแหน่งที่ dungeon ส่งมา (EventBus.player_respawn_requested) — ใช้ได้ทั้งตอนตายและยังไม่ตาย
-func revive(at: Vector2 = Vector2.ZERO) -> void:
+func revive(at: Vector2) -> void:
 	global_position = at
 	if health != null:
 		health.reset()
@@ -933,8 +934,8 @@ func _animate_dir_sprite(moving: bool) -> void:
 		face = dodge_dir
 	elif state == State.HURT:
 		face = Vector2.ZERO  # โดนตีแล้วคงทิศเดิม
-	elif state == State.DRINK and moving and not is_locked_on():
-		face = velocity
+	elif state == State.DRINK and not is_locked_on():
+		face = velocity if velocity.length() > 10.0 else Vector2.ZERO  # เดินช้า ๆ ตอนดื่ม = หันตามทางเดิน · ยืน = คงทิศ
 	dir_sprite.set_facing(face)
 	match state:
 		State.MOVE:
@@ -943,10 +944,34 @@ func _animate_dir_sprite(moving: bool) -> void:
 			dir_sprite.play_action(&"dodge")
 		State.HURT:
 			dir_sprite.play_action(&"hurt")
+		State.ATTACK:
+			dir_sprite.show_frame(_attack_anim(), attack_frame_index())
 		State.DRINK:
 			dir_sprite.play_action(&"idle")
 		_:
-			dir_sprite.play_action(&"idle")  # ATTACK/PARRY ใช้ idle + เอฟเฟกต์จนกว่าจะมีท่าฟัน
+			dir_sprite.play_action(&"idle")  # PARRY ใช้ idle + เอฟเฟกต์
+
+
+## ท่าฟันตามคอมโบ: สลับ attack1/attack2 · ท่าหนัก (ชาร์จ) = attack3
+func _attack_anim() -> StringName:
+	if _is_heavy_attack or attack_phase == AttackPhase.CHARGING:
+		return &"attack3"
+	return &"attack1" if _combo_side > 0.0 else &"attack2"
+
+
+## เฟรมของท่าฟัน (7 เฟรม PixelLab: 0 ท่ายืน · 1–2 ง้าง · 3–4 ฟัน (แสงทอง) · 5–6 กลับท่า) ตามเฟสในโค้ด
+func attack_frame_index() -> int:
+	match attack_phase:
+		AttackPhase.WINDUP:
+			return 1 if _state_t < windup_time * 0.5 else 2
+		AttackPhase.CHARGING:
+			return 2
+		AttackPhase.ACTIVE:
+			return 3 if swing < 0.5 else 4
+		AttackPhase.RECOVER:
+			var rec_time: float = recover_time * (charge_recover_mult if _is_heavy_attack else 1.0)
+			return 5 if _state_t < rec_time * 0.5 else 6
+	return 0
 
 
 func _spawn_ghost() -> void:
