@@ -239,7 +239,8 @@ func set_target(node: Node2D) -> void:
 
 func _physics_process(delta: float) -> void:
 	tick(delta)
-	if state != State.LEAP_AIRBORNE:
+	# ลอย/กระแทก: ไม่ให้ physics ดันออกจากจุดตก (AoE ต้องอยู่กลางวงเตือน แม้ลูกสไลม์ยืนตรงนั้น)
+	if state != State.LEAP_AIRBORNE and state != State.LEAP_IMPACT:
 		move_and_slide()
 
 

@@ -197,12 +197,12 @@ func _test_aoe_physics_8_directions_with_player_hurtbox() -> void:
 		root.add_child(h_out)
 		out_hurtboxes.append(h_out)
 
+	boss.set_physics_process(false)  # ไม่ให้หมดช่วง slam_active_time ก่อนตรวจ
 	boss._enter(boss.State.SLAM_ACTIVE)
 
-	# รอ physics frames ให้ Godot physics server ตรวจสอบการทับซ้อนจริง
-	await process_frame
-	await process_frame
-	await process_frame
+	# รอ physics step จริงหลาย step (Hitbox.activate ใช้ set_deferred)
+	for _i: int in 4:
+		await physics_frame
 
 	var overlapping: Array[Area2D] = boss.hitbox.get_overlapping_areas()
 	var in_hits: int = 0
