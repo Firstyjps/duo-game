@@ -2,6 +2,9 @@
 
 ใหม่สุดอยู่บน · 1 เรื่อง 3–5 บรรทัด · เปลี่ยนใจ = เพิ่มรายการใหม่อ้างอันเดิม (ไม่ลบของเก่า)
 
+## 2026-10-03 · main scene = หน้าเริ่ม (#72)
+- ใครตัดสิน: Kron (user) · เปิดเกม → `ui/title/title_screen.tscn` → เริ่ม = `ui/run/game_run.tscn` · เทสต์ใน `test_core_display.gd`
+
 ## 2026-10-03 · contract ใหม่: parry/deflect · สั่นจอ · ห้องเริ่ม/เคลียร์ · ฟื้นผู้เล่น (#51)
 - ใครตัดสิน: Kron (user อนุมัติทั้ง 4) · Few: **รีวิวย้อนหลังใน #51**
 - `damage.md` v2: `Hurtbox.deflecting`/`deflected` + `Hitbox.deflected` + `EventBus.attack_deflected` — parry ไม่ทำให้ผู้ตีได้ `hit_landed` อีกต่อไป
