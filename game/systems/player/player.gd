@@ -846,8 +846,32 @@ func _animate_dir_sprite(moving: bool) -> void:
 			dir_sprite.play_action(&"dodge")
 		State.HURT:
 			dir_sprite.play_action(&"hurt")
+		State.ATTACK:
+			dir_sprite.show_frame(_attack_anim(), attack_frame_index())
 		_:
-			dir_sprite.play_action(&"idle")  # ATTACK/PARRY ใช้ idle + เอฟเฟกต์จนกว่าจะมีท่าฟัน
+			dir_sprite.play_action(&"idle")  # PARRY ใช้ idle + เอฟเฟกต์
+
+
+## ท่าฟันตามคอมโบ: สลับ attack1/attack2 · ท่าหนัก (ชาร์จ) = attack3
+func _attack_anim() -> StringName:
+	if _is_heavy_attack or attack_phase == AttackPhase.CHARGING:
+		return &"attack3"
+	return &"attack1" if _combo_side > 0.0 else &"attack2"
+
+
+## เฟรมของท่าฟัน (7 เฟรม PixelLab: 0 ท่ายืน · 1–2 ง้าง · 3–4 ฟัน (แสงทอง) · 5–6 กลับท่า) ตามเฟสในโค้ด
+func attack_frame_index() -> int:
+	match attack_phase:
+		AttackPhase.WINDUP:
+			return 1 if _state_t < windup_time * 0.5 else 2
+		AttackPhase.CHARGING:
+			return 2
+		AttackPhase.ACTIVE:
+			return 3 if swing < 0.5 else 4
+		AttackPhase.RECOVER:
+			var rec_time: float = recover_time * (charge_recover_mult if _is_heavy_attack else 1.0)
+			return 5 if _state_t < rec_time * 0.5 else 6
+	return 0
 
 
 func _spawn_ghost() -> void:
