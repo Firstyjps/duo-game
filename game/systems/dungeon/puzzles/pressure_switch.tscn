@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://systems/dungeon/puzzles/pressure_switch.gd" id="1_switch"]
+
+[sub_resource type="ConvexPolygonShape2D" id="ConvexPolygonShape2D_col"]
+points = PackedVector2Array(0, -12, 24, 0, 0, 12, -24, 0)
+
+[node name="PressureSwitch" type="Area2D"]
+collision_layer = 0
+collision_mask = 3
+script = ExtResource("1_switch")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("ConvexPolygonShape2D_col")
