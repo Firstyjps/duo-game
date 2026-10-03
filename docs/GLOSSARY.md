@@ -19,12 +19,14 @@
 | i-frames / อมตะชั่วคราว | `Hurtbox.invulnerable` | ช่วงที่โดนตีไม่เข้า เช่นระหว่าง dodge | core/combat |
 | ตัวรับดาเมจ | `Hurtbox` | พื้นที่บนตัวที่โดนตีได้ | core/combat |
 | ตัวทำดาเมจ | `Hitbox` | พื้นที่ของท่าโจมตีที่ทำดาเมจ | core/combat |
+| ตัววัดสถิติ QA / QA Monitor | `QaMonitor` | ตัวเก็บสถิติ FPS, frame time (p95/max), node count, orphan nodes, memory, นับ event จาก EventBus และตรวจจับ anomaly | ui/qa |
 | ตัวจัดการเสียง / ไดเรกเตอร์เสียง | `AudioDirector` | โหนดจัดการระบบเสียงและเพลงในฉากเกม ดูแล Audio Bus, pooling SFX, สุ่ม pitch, และ crossfade เพลงตาม EventBus | audio |
 | เซ / poise | `DamageInfo.stagger` | แรงขัดท่า — ผู้รับตัดสินเองว่าเซไหม | core/combat |
 | สไลม์ | `Slime` · `enemy_id = &"slime"` | ศัตรูตัวแรก: เด้งเข้าหา → ย่อตัว + กระพริบแดง (telegraph) → พุ่งทับ | enemy |
 | นักธนูหมึก | `InkArcher` · `enemy_id = &"ink_archer"` | ศัตรูยิงไกลเฟส 4: รักษาระยะ ถอยเมื่อใกล้ เล็งง้างธนูพร้อมเส้นเล็งจาง ยิงลูกธนูหมึกที่สะท้อนได้ด้วย parry | enemy |
 | ลูกธนูหมึก | `InkArrow` | กระสุนของนักธนูหมึก บินตรง ชนกำแพง/เป้าหมายแล้วหาย โดน parry แล้วสะท้อนกลับเป็นทีม PLAYER | enemy |
 | เงาตามตัว | after-image · `_spawn_afterimage()` | สำเนาสไปรต์จาง ๆ ที่ทิ้งไว้ระหว่างพุ่ง | enemy |
+| บอททดสอบอัตโนมัติ / QA Bot | `QaBot` | บอทควบคุมตัวละครผ่าน Player.set_intent เพื่อทดสอบการเล่น ค้นหาศัตรู โจมตี หลบ แพรี่ ดื่มยา และเดินสำรวจ | ui/qa |
 | บอสมิโนทอร์ | `boss_minotaur` (ยังไม่มีคลาส) | ผู้สมัครบอส MVP: วัวถือขวานสงคราม 8 ทิศ (ยังไม่ได้ตัดสินว่าเป็นบอสตัวจริง) | enemy |
 | บอสสไลม์ | `boss_slime` (ยังไม่มีคลาส) | ผู้สมัครบอสร่างเก่า เก็บไว้ (ยังไม่ได้ตัดสิน) | enemy |
 | เลื่อนกล้องข้ามห้อง | `GameCamera.slide_to` | เลื่อนกล้องข้ามห้องแบบนุ่มนวล โดยไม่ follow ระหว่างเลื่อนและตั้ง bounds เมื่อจบ | camera |
