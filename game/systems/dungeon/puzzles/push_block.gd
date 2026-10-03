@@ -9,7 +9,7 @@ signal moved(new_position: Vector2)
 
 const ART_TEXTURE: Texture2D = preload("res://systems/dungeon/puzzles/art/push_block.png")
 
-@export var push_time: float = 0.35
+@export var push_time: float = 0.22
 @export var push_grace_time: float = 0.12
 @export var move_duration: float = 0.25
 @export var grid_layer: TileMapLayer = null
@@ -41,6 +41,7 @@ func _ready() -> void:
 
 
 func setup() -> void:
+	add_to_group(&"pushable")  # Player (ระบบ A) ยืนแนบผิวไม่ไถล — ดู player/CLAUDE.md
 	if _ready_done:
 		return
 	_ready_done = true
@@ -172,15 +173,16 @@ func tick(delta: float) -> void:
 			_last_player_move_dir = input_dir
 			if to_block.length_squared() > 0.0001:
 				var dot: float = input_dir.dot(to_block.normalized())
-				if dot > 0.5:
+				# ต้องแตะบล็อกจริง (ชน/ชิดผิว) — ไม่ดันจากระยะห่าง · ไม่เขียนตำแหน่งผู้เล่น (ระบบ A) เอง
+				# แตะบล็อกอยู่ หรือเพิ่งหลุดจากผิวไม่เกิน touch_memory (ผู้เล่นไถลตามผิวเพชรเร็ว) — ไม่ยึดตำแหน่งผู้เล่นเอง
+				if is_touching(_pushing_player):
+					_since_touch = 0.0
+				else:
+					_since_touch += delta
+				if dot > 0.5 and _since_touch <= touch_memory:
 					is_pushing = true
 
 		if is_pushing:
-			# ป้องกันการไถลตามผิวข้าวหลามตัดขณะผู้เล่นออกแรงดันบล็อก
-			if p_delta.length_squared() > 0.0001:
-				_pushing_player.global_position -= p_delta
-				_last_player_pos = _pushing_player.global_position
-
 			_grace_timer = 0.0
 			_push_timer += delta
 			if _push_timer >= push_time:
@@ -381,7 +383,26 @@ func is_in_detect_area(pos: Vector2) -> bool:
 				if col != null and col.get_collider() == self:
 					return true
 	var local_p: Vector2 = to_local(pos)
-	return (absf(local_p.x) / 56.0 + absf(local_p.y) / 30.0) <= 1.0
+	return (absf(local_p.x) / 40.0 + absf(local_p.y) / 20.0) <= 1.0
+
+
+## ผู้เล่นแตะบล็อกอยู่จริง: slide collision ชี้มาที่บล็อกนี้ หรือเท้าชิดผิวเพชร (ระยะชน 32×16 + ขอบ 4 px)
+@export var touch_margin: float = 2.0
+## นับการดันต่อได้อีกช่วงนี้หลังหลุดจากผิว (กันไถลตามผิวเพชรหลุดก่อนครบ push_time)
+@export var touch_memory: float = 0.15
+var _since_touch: float = 99.0
+func is_touching(body: Node2D) -> bool:
+	if body is CharacterBody2D:
+		var cb: CharacterBody2D = body as CharacterBody2D
+		for i: int in cb.get_slide_collision_count():
+			var col: KinematicCollision2D = cb.get_slide_collision(i)
+			if col != null and col.get_collider() == self:
+				return true
+	# ขยายเพชรชน (24×12) ออกตามแนวตั้งฉากผิวด้วยรัศมีผู้เล่น (8) + touch_margin: ระยะจากศูนย์ถึงผิว = 24·12/√(24²+12²) ≈ 10.73
+	var lp: Vector2 = to_local(body.global_position)
+	var face_dist: float = 24.0 * 12.0 / sqrt(24.0 * 24.0 + 12.0 * 12.0)
+	var scale_k: float = (face_dist + 8.0 + touch_margin) / face_dist
+	return (absf(lp.x) / 24.0 + absf(lp.y) / 12.0) <= scale_k
 
 
 func set_pushing_player(body: Node2D) -> void:
