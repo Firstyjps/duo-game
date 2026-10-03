@@ -43,6 +43,8 @@
 
 ## เทสต์
 - `game/tests/test_ui_settings.gd`
+- `game/tests/test_ui_game_run.gd`
+- `game/tests/test_ui_qa_smoke.gd`
 
 ## เพิ่ม action ใหม่
 - action ใหม่ของ Player (เช่น `heal`) ต้องเพิ่มใน `InputConfig.ACTIONS` + `get_default_events()` ให้ตรงกับ `Player.ensure_input_actions()` — รายการปิดตาย ไม่สแกน InputMap (กัน action debug ของ sandbox)
@@ -51,3 +53,12 @@
 - `run/game_run.tscn` = ฉากเล่นจริง: `level_scene` (@export) + Player + GameCamera + GameHud + PauseMenu + AudioDirector (ถ้ามี `res://systems/audio/audio_director.tscn`) · TitleScreen เริ่มที่ฉากนี้
 - ด่าน: Marker2D กลุ่ม `player_spawn` = จุดเกิด · มี node กลุ่ม `respawn_handler` (เช่น Dungeon) = ด่านจัดการฟื้นเองผ่าน `EventBus.player_respawn_requested` ไม่งั้น GameRun ฟื้นผู้เล่นที่จุดเกิดหลัง `respawn_delay`
 - ด่านทดสอบตอนนี้ `run/levels/courtyard_level.tscn` (ลานวัด + สไลม์ 3) → สลับเป็น dungeon จริงเมื่อ #39 merge
+
+## QA Bot & Monitor (เฟส 7 · #66)
+- `run/qa/qa_bot.gd` (`QaBot`): โหนดบอทจำลอง input ผ่าน `Player.set_intent()` (ตั้ง `player.manual_control = true`) หาศัตรูใกล้สุดด้วย Area2D mask layer enemy (หรือ EventBus/group) เข้าไปฟัน ล็อคเป้า สุ่ม dodge/parry เมื่ออยู่ในระยะอันตราย ดื่มขวดเมื่อ HP < 40% และเดินสุ่ม/แก้ติดกำแพง
+- `run/qa/qa_monitor.gd` (`QaMonitor`): โหนดเก็บ metrics รายวินาที (FPS, frame time p95/max จาก `TIME_PROCESS`, node count, orphans, memory) บันทึก event จาก EventBus ตรวจจับ Player stuck anomaly (>5s ไม่ใช่ MOVE/DEAD) และ orphan leak บันทึก `user://qa_report.json` + พิมพ์สรุปบรรทัดเดียว `QA: fps_avg=.. p95_ms=.. max_ms=.. nodes_max=.. orphans=.. kills=.. deaths=.. anomalies=..`
+- รันอัตโนมัติ: `godot --path game res://systems/ui/run/game_run.tscn -- --autoplay --qa-seconds=60`
+- กับดัก/ข้อควรระวัง:
+  - การเทสต์ใน headless แบบเรียก `tick(delta)` นอก SceneTree ห้ามเรียก `move_and_slide()` เพราะ physics space ยังไม่ได้ถูกสร้าง ให้เรียก `tick(delta)` ของ Player ตรง ๆ
+  - บอทต้องตั้ง `player.manual_control = true` เพื่อไม่ให้ `Player._read_input()` เขียนทับค่า intent จาก Input จริง
+  - ใน headless test ให้ตั้ง `monitor.auto_quit = false` เพื่อไม่ให้สั่งปิด test runner ก่อนตรวจ assertion

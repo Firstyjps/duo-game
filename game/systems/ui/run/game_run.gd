@@ -21,6 +21,8 @@ var hud: GameHud
 var pause_menu: Node
 var audio: Node
 var _respawn_timer: Timer
+var qa_bot: Node2D
+var qa_monitor: Node
 
 
 func _ready() -> void:
@@ -71,6 +73,49 @@ func setup() -> void:
 	_respawn_timer.one_shot = true
 	_respawn_timer.timeout.connect(_respawn_here)
 	add_child(_respawn_timer)
+
+	_check_qa_autoplay()
+
+
+func _check_qa_autoplay() -> void:
+	var qa_args: Dictionary = get_qa_cmdline_args()
+	if bool(qa_args.get("autoplay", false)):
+		start_qa(float(qa_args.get("qa_seconds", 60.0)))
+
+
+func start_qa(seconds: float = 60.0) -> void:
+	if qa_bot == null:
+		var bot_scene: GDScript = preload("res://systems/ui/run/qa/qa_bot.gd")
+		qa_bot = bot_scene.new() as Node2D
+		add_child(qa_bot)
+		if qa_bot.has_method("setup"):
+			qa_bot.call("setup", player)
+	if qa_monitor == null:
+		var monitor_scene: GDScript = preload("res://systems/ui/run/qa/qa_monitor.gd")
+		var monitor_node: Node = monitor_scene.new()
+		monitor_node.set("target_seconds", seconds)
+		qa_monitor = monitor_node
+		add_child(qa_monitor)
+		if qa_monitor.has_method("setup"):
+			qa_monitor.call("setup", player)
+
+
+static func get_qa_cmdline_args() -> Dictionary:
+	var result: Dictionary = {
+		"autoplay": false,
+		"qa_seconds": 60.0
+	}
+	var all_args: Array[String] = []
+	all_args.append_array(OS.get_cmdline_user_args())
+	all_args.append_array(OS.get_cmdline_args())
+	for arg: String in all_args:
+		if arg == "--autoplay":
+			result["autoplay"] = true
+		elif arg.begins_with("--qa-seconds="):
+			var val: String = arg.substr("--qa-seconds=".length())
+			if val.is_valid_float():
+				result["qa_seconds"] = val.to_float()
+	return result
 
 
 ## จุดเกิด: node แรกในกลุ่ม "player_spawn" ใต้ด่าน (พิกัดเทียบ GameRun ที่อยู่ origin)
