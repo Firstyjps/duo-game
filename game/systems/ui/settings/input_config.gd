@@ -16,6 +16,7 @@ const ACTIONS: Array[StringName] = [
 	&"parry",
 	&"lock_on",
 	&"heal",
+	&"interact",
 	&"ui_pause",
 ]
 
@@ -101,6 +102,9 @@ static func get_default_events(action: StringName) -> Array[InputEvent]:
 		&"heal":
 			list.append(make_key_event(KEY_R))
 			list.append(make_joy_button_event(JOY_BUTTON_Y))
+		&"interact":
+			list.append(make_key_event(KEY_E))
+			list.append(make_joy_button_event(JOY_BUTTON_A))
 		&"ui_pause":
 			list.append(make_key_event(KEY_ESCAPE))
 			list.append(make_joy_button_event(JOY_BUTTON_START))
