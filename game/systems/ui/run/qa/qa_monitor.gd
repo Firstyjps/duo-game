@@ -27,6 +27,8 @@ var _post_warmup_seconds: float = 0.0
 
 # Event counters
 var damage_dealt_count: int = 0
+## ดาเมจที่ผู้เล่นทำได้ (info.team == PLAYER) — ใช้พิสูจน์ว่าบอทสู้จริง
+var player_damage_count: int = 0
 var total_damage: int = 0
 var kills: int = 0
 var deaths: int = 0
@@ -100,8 +102,10 @@ func _disconnect_event_bus() -> void:
 		EventBus.attack_deflected.disconnect(_on_attack_deflected)
 
 
-func _on_damage_dealt(_target: Node, _info: DamageInfo, final_amount: int) -> void:
+func _on_damage_dealt(_target: Node, info: DamageInfo, final_amount: int) -> void:
 	damage_dealt_count += 1
+	if info != null and info.team == Combat.Team.PLAYER:
+		player_damage_count += 1
 	total_damage += final_amount
 
 
@@ -277,6 +281,7 @@ func finish_and_report() -> Dictionary:
 			"anomalies": anomalies.size(),
 			"deflections": deflections,
 			"damage_dealt_count": damage_dealt_count,
+			"player_damage_count": player_damage_count,
 			"total_damage": total_damage,
 			"total_seconds": elapsed_seconds,
 			"total_frames": total_frames,

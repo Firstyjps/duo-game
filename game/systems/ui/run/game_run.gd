@@ -41,6 +41,8 @@ func _exit_tree() -> void:
 
 ## สร้างทุกชิ้น — แยกจาก _ready ให้เทสต์เรียกได้นอก tree
 func setup() -> void:
+	if player != null:
+		return  # เรียกซ้ำ (เช่น runner เรียกก่อน _ready) ห้ามสร้างฉากซ้อน
 	y_sort_enabled = true  # ผู้เล่นเรียงลึกร่วมกับกำแพง/ศัตรูของด่าน (ด่านต้องเปิด y_sort ของตัวเองด้วย)
 	level = level_scene.instantiate() if level_scene != null else Node2D.new()
 	add_child(level)

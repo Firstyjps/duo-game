@@ -67,7 +67,7 @@ func _finish() -> void:
 	if physics_frame.is_connected(_on_physics_frame):
 		physics_frame.disconnect(_on_physics_frame)
 
-	var damage: int = _monitor.get("damage_dealt_count") if _monitor != null else 0
+	var damage: int = _monitor.get("player_damage_count") if _monitor != null else 0
 	var total_dmg: int = _monitor.get("total_damage") if _monitor != null else 0
 	var kills: int = _monitor.get("kills") if _monitor != null else 0
 	var anomalies_arr: Array = _monitor.get("anomalies") if _monitor != null else []
@@ -77,7 +77,7 @@ func _finish() -> void:
 		is_leak = _monitor.call("detect_orphan_leak")
 
 	print("QA Smoke Runner: 600 physics frames completed.")
-	print("damage_dealt_count=%d, total_damage=%d, kills=%d, anomalies=%d, leak=%s" % [
+	print("player_damage_count=%d, total_damage=%d, kills=%d, anomalies=%d, leak=%s" % [
 		damage,
 		total_dmg,
 		kills,
@@ -89,8 +89,9 @@ func _finish() -> void:
 		root.remove_child(_run)
 		_run.queue_free()
 
-	if damage == 0 or anomalies_count > 0:
-		printerr("QA Smoke Runner FAILED: damage_dealt=%d, anomalies=%d" % [damage, anomalies_count])
+	# บอทต้องตีโดนศัตรูจริง (ดาเมจฝั่ง PLAYER) และฆ่าได้อย่างน้อย 1 — ดาเมจที่ศัตรูตีผู้เล่นไม่นับ
+	if damage == 0 or kills == 0 or anomalies_count > 0:
+		printerr("QA Smoke Runner FAILED: player_damage=%d, kills=%d, anomalies=%d" % [damage, kills, anomalies_count])
 		quit(1)
 	else:
 		print("QA Smoke Runner PASSED")

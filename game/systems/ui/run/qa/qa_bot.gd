@@ -21,6 +21,8 @@ extends Node2D
 @export var wander_min_time: float = 1.5
 @export var wander_max_time: float = 3.0
 
+## Hurtbox ของเป้าแต่ละตัว (จาก detection_area) — ใช้เช็ค monitorable โดยไม่ get_node เข้าระบบ enemy
+var _target_hurtboxes: Dictionary = {}
 var player: Player
 var detection_area: Area2D
 var detection_shape: CollisionShape2D
@@ -246,16 +248,10 @@ func find_closest_enemy() -> Node2D:
 			if area is Hurtbox and (area as Hurtbox).team == Combat.Team.ENEMY and (area as Hurtbox).monitorable:
 				var p_node: Node = area.get_parent()
 				var entity: Node2D = p_node as Node2D if p_node is Node2D else area
+				_target_hurtboxes[entity] = area
 				if _is_valid_enemy(entity) and not seen.has(entity):
 					seen[entity] = true
 					candidates.append(entity)
-
-	# 2. ค้นหาจากกลุ่ม "enemy"
-	if is_inside_tree():
-		for node: Node in get_tree().get_nodes_in_group(&"enemy"):
-			if node is Node2D and _is_valid_enemy(node as Node2D) and not seen.has(node):
-				seen[node] = true
-				candidates.append(node as Node2D)
 
 	# 3. ศัตรูที่บันทึกไว้ผ่าน EventBus (เช่น บอส)
 	for node: Node2D in _tracked_enemies:
@@ -269,18 +265,6 @@ func find_closest_enemy() -> Node2D:
 			if _is_valid_enemy(t) and not seen.has(t):
 				seen[t] = true
 				candidates.append(t)
-
-	# 5. Fallback สำหรับการเทสต์แบบ deterministic นอก SceneTree / จำลองเฟรมโดยตรง
-	if candidates.is_empty() and get_parent() != null:
-		var level_node: Node = null
-		if "level" in get_parent() and get_parent().get("level") is Node:
-			level_node = get_parent().get("level") as Node
-		if level_node != null:
-			for child: Node in level_node.get_children():
-				if child is CollisionObject2D and ((child as CollisionObject2D).collision_layer & Combat.LAYER_ENEMY) != 0:
-					if _is_valid_enemy(child as Node2D) and not seen.has(child):
-						seen[child] = true
-						candidates.append(child as Node2D)
 
 	if candidates.is_empty():
 		return null
@@ -304,7 +288,7 @@ func _is_valid_enemy(node: Node2D) -> bool:
 		return false
 	if node.has_method("is_dead") and node.call("is_dead"):
 		return false
-	var hurtbox: Hurtbox = node.get_node_or_null("Hurtbox") as Hurtbox
-	if hurtbox != null and not hurtbox.monitorable:
+	var hb: Hurtbox = _target_hurtboxes.get(node, null)
+	if hb != null and (not is_instance_valid(hb) or not hb.monitorable):
 		return false
 	return true

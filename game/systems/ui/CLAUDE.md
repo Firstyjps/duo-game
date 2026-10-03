@@ -56,8 +56,10 @@
 
 ## QA Bot & Monitor (เฟส 7 · #66)
 - `run/qa/qa_bot.gd` (`QaBot`): โหนดบอทจำลอง input ผ่าน `Player.set_intent()` (ตั้ง `player.manual_control = true`) หาศัตรูใกล้สุดด้วย Area2D mask layer enemy (หรือ EventBus/group) เข้าไปฟัน ล็อคเป้า สุ่ม dodge/parry เมื่ออยู่ในระยะอันตราย ดื่มขวดเมื่อ HP < 40% และเดินสุ่ม/แก้ติดกำแพง
-- `run/qa/qa_monitor.gd` (`QaMonitor`): โหนดเก็บ metrics รายวินาที (FPS, frame time p95/max จาก `TIME_PROCESS`, node count, orphans, memory) บันทึก event จาก EventBus ตรวจจับ Player stuck anomaly (>5s ไม่ใช่ MOVE/DEAD) และ orphan leak บันทึก `user://qa_report.json` + พิมพ์สรุปบรรทัดเดียว `QA: fps_avg=.. p95_ms=.. max_ms=.. nodes_max=.. orphans=.. kills=.. deaths=.. anomalies=..`
+- `run/qa/qa_monitor.gd` (`QaMonitor`): โหนดเก็บ metrics รายวินาที (FPS, frame time p95/max จาก delta ต่อเฟรม, `cpu_*` จาก `TIME_PROCESS` เป็นข้อมูลประกอบเท่านั้น (อัปเดตวินาทีละครั้ง รวม vsync), node count, orphans, memory) บันทึก event จาก EventBus ตรวจจับ Player stuck anomaly (>5s ไม่ใช่ MOVE/DEAD) และ orphan leak บันทึก `user://qa_report.json` + พิมพ์สรุปบรรทัดเดียว `QA: fps_avg=.. p95_ms=.. max_ms=.. nodes_max=.. orphans=.. kills=.. deaths=.. anomalies=..`
 - รันอัตโนมัติ: `godot --path game res://systems/ui/run/game_run.tscn -- --autoplay --qa-seconds=60`
+- smoke (headless, 600 physics frames, exit 1 ถ้าบอทไม่ได้ตีโดนศัตรู/ฆ่าไม่ได้/anomaly): `godot --headless --path game --script res://systems/ui/run/qa/qa_smoke_runner.gd`
+- `GameRun.setup()` เรียกซ้ำได้ (กันฉากซ้อนเมื่อ runner เรียกก่อน `_ready`)
 - กับดัก/ข้อควรระวัง:
   - การเทสต์ใน headless แบบเรียก `tick(delta)` นอก SceneTree ห้ามเรียก `move_and_slide()` เพราะ physics space ยังไม่ได้ถูกสร้าง ให้เรียก `tick(delta)` ของ Player ตรง ๆ
   - บอทต้องตั้ง `player.manual_control = true` เพื่อไม่ให้ `Player._read_input()` เขียนทับค่า intent จาก Input จริง

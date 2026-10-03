@@ -13,7 +13,7 @@
 |---|---|---|
 | **Average FPS (`fps_avg`)** | $\ge 58.0$ FPS | ความลื่นไหลในการแสดงผลระดับ 60 FPS (คำนวณโดยข้ามช่วง warmup 2 วินาทีแรก) |
 | **Frame Time 95th Percentile (`p95_ms`)** | รายงานผล (รวม vsync) | Frame time จาก delta รวมการรอรอบแสดงผลของหน้าจอ |
-| **CPU Time 95th Percentile (`cpu_p95_ms`)** | $\le 16.0$ ms (เกณฑ์หลัก) | เวลาประมวลผล CPU จริงของเกม (`TIME_PROCESS + TIME_PHYSICS_PROCESS`) |
+| `cpu_p95_ms` (ข้อมูลประกอบ) | ไม่ใช้เป็นเกณฑ์ | `Performance.TIME_PROCESS + TIME_PHYSICS_PROCESS` อัปเดตวินาทีละครั้ง (ค่าสูงสุดของวินาทีนั้น) และรวม draw/รอ vsync — ไม่ใช่ p95 ต่อเฟรม · เกณฑ์ perf ใช้ `fps_avg` + `p95_ms` (frame time) |
 | **Max Frame / CPU Time (`max_ms`, `cpu_max_ms`)** | รายงานผล | ตรวจสอบ frame spike และ CPU spike สูงสุด |
 | **Node Count (`nodes_max`)** | สอดคล้องกับขนาดด่าน | ควบคุมปริมาณโหนดใน SceneTree |
 | **Orphan Nodes Leak** | $\le 20$ โหนดเทียบ baseline หลัง warmup | ตรวจจับ memory/node leak เมื่อ spawn/free วัตถุ |
@@ -75,9 +75,9 @@ QA: fps_avg=60.6 p95_ms=16.7 max_ms=150.0 cpu_p95_ms=22.4 cpu_max_ms=33.9 nodes_
 |---|---|---|---|
 | `fps_avg` | **60.6 FPS** | $\ge 58.0$ FPS (ข้าม warmup 2s) | **PASS** |
 | `p95_ms` | **16.7 ms** | รายงานผล (รวม vsync) | **PASS** |
-| `cpu_p95_ms` | **22.4 ms** | รายงานเวลา CPU จริง | **PASS** |
+| `cpu_p95_ms` | 22.4 ms | ข้อมูลประกอบ (ไม่ใช่เกณฑ์) | — |
 | `max_ms` | 150.0 ms | Spike เฟรมแรกตอนสร้างหน้าต่าง/Shader | **PASS** |
-| `cpu_max_ms` | 33.9 ms | Spike CPU สูงสุด | **PASS** |
+| `cpu_max_ms` | 33.9 ms | ข้อมูลประกอบ | — |
 | `nodes_max` | 188 nodes | เหมาะสมกับขนาดด่าน | **PASS** |
 | `orphans` | **0** nodes | ไม่มี orphan ตกค้าง | **PASS** |
 | `orphan_leak_detected`| **false** | ไม่พบการรั่ว (threshold 20 หลัง warmup) | **PASS** |

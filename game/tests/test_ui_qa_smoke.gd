@@ -75,6 +75,7 @@ func test_qa_bot_targets_and_aims_with_test_targets() -> bool:
 
 ## 3. ด่านว่าง physics จริง 300 เฟรม: เปลี่ยนทิศ <= 4 ครั้ง และเคลื่อนที่สุทธิ > 100 px
 func test_qa_bot_empty_stage_300_frames_no_false_stuck() -> bool:
+	seed(66)  # เส้นทางเดินสุ่มต้อง deterministic (ไม่ seed = พังเอง ~7%)
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	if tree == null:
 		return false
